@@ -1,4 +1,4 @@
-/* Estructura de datos en SharePoint y catálogos de la aplicación */
+/* Estructura de datos (colecciones de Firebase) y catálogos de la aplicación */
 (function () {
   'use strict';
   var AP = (window.AP = window.AP || {});
@@ -55,33 +55,19 @@
         ['Observaciones', 'note']
       ]
     },
-    AP_Usuarios: {
-      titulo: 'Correo (usuario de Microsoft 365)',
-      desc: 'Usuarios de la aplicación y su rol',
-      cols: [['Nombre', 'text'], ['Rol', 'text'], ['Activo', 'bool'], ['Empresa', 'text'], ['Observaciones', 'note']]
-    },
     AP_Vigilantes: {
       titulo: 'Nombre completo',
-      desc: 'Vigilantes y supervisores que operan el celular de portería con usuario y PIN',
+      desc: 'Usuarios de la aplicación (todos los roles): ingresan solo con usuario y contraseña o PIN',
       cols: [
         ['Usuario', 'text', UNQ], ['TipoDoc', 'text'], ['NumDoc', 'text', IDX], ['Empresa', 'text'], ['Cargo', 'text'], ['Telefono', 'text'],
-        ['Rol', 'text'], ['Activo', 'bool'], ['PinHash', 'text'], ['PinSalt', 'text'], ['PinIter', 'number'], ['PinVersion', 'number'],
+        ['Rol', 'text'], ['Activo', 'bool'], ['Uid', 'text'], ['PinVersion', 'number'], ['PinTemporal', 'bool'], ['PinPersonalDesde', 'datetime'],
         ['PinFecha', 'datetime'], ['PinPor', 'text'], ['SolicitadoPor', 'text'], ['Soporte', 'text'], ['FechaAlta', 'datetime'],
         ['AltaPor', 'text'], ['FechaBaja', 'datetime'], ['BajaPor', 'text'], ['MotivoBaja', 'text'], ['Observaciones', 'note']
       ]
     },
-    AP_CambiosPin: {
-      titulo: 'Usuario',
-      desc: 'PIN personal definido por cada vigilante (solo la huella; no se edita ni se borra)',
-      cols: [
-        ['IdLocal', 'text', UNQ], ['VigilanteId', 'text', IDX], ['BaseVersion', 'number'], ['PinHash', 'text'], ['PinSalt', 'text'],
-        ['PinIter', 'number'], ['FechaHora', 'datetime', IDX], ['Dispositivo', 'text'], ['AceptaCondiciones', 'bool'],
-        ['VersionAviso', 'text'], ['Hash', 'text']
-      ]
-    },
     AP_Turnos: {
       titulo: 'Nombre del vigilante',
-      desc: 'Inicio y cierre de turnos en el celular de portería (no se edita ni se borra)',
+      desc: 'Inicio y cierre de turnos de vigilantes y supervisores (no se edita ni se borra)',
       cols: [
         ['IdLocal', 'text', UNQ], ['Evento', 'text'], ['TurnoId', 'text', IDX], ['VigilanteId', 'text', IDX], ['VigilanteUsuario', 'text'],
         ['Rol', 'text'], ['FechaHora', 'datetime', IDX], ['InicioTurno', 'datetime'], ['Registros', 'number'], ['Pendientes', 'number'],
@@ -123,10 +109,10 @@
     tiposPersona: ['Personal propio', 'Contratista', 'Conductor / transportador'],
     tiposDoc: ['CC', 'CE', 'PA', 'PPT', 'TI', 'NIT', 'Otro'],
     vehiculos: ['', 'Automóvil', 'Camioneta', 'Motocicleta', 'Bicicleta', 'Camión', 'Tractocamión', 'Furgón', 'Otro'],
-    roles: ['Administrador', 'Analista', 'Supervisor', 'Vigilante', 'Dispositivo de portería'],
+    roles: ['Administrador', 'Analista', 'Supervisor', 'Vigilante'],
     rolesPin: ['Vigilante', 'Supervisor'],
     motivosBaja: ['Retiro del servicio informado por el contratista', 'Cambio de puesto o rotación informado por el contratista',
-      'Terminación del contrato de vigilancia', 'Credencial comprometida (PIN conocido por terceros)', 'Otro'],
+      'Terminación del contrato de vigilancia', 'Retiro o cambio de cargo del trabajador de Avo Pak', 'Credencial comprometida (PIN conocido por terceros)', 'Otro'],
     estadosVisita: ['Pendiente', 'Aprobada', 'Rechazada', 'Cancelada'],
     categoriasManual: ['Visitante no anunciado', 'Autoridad', 'Personal propio sin carné', 'Contratista sin carné', 'Conductor / transportador'],
     tiposVisitaAutoridad: ['Inspección', 'Verificación', 'Registro / requisa', 'Notificación', 'Apoyo operativo',
@@ -154,8 +140,8 @@
     Administrador: { consola: true, porteria: true, admin: true },
     Analista: { consola: true, porteria: true, admin: false },
     Supervisor: { consola: false, porteria: true, historial: true },
-    Vigilante: { consola: false, porteria: true },
-    // Cuenta de servicio del celular de portería: no opera por sí misma; exige usuario y PIN del vigilante.
-    'Dispositivo de portería': { consola: false, porteria: true, dispositivo: true }
+    Vigilante: { consola: false, porteria: true }
   };
+  // Roles que operan la portería por turnos (abren turno al ingresar y lo cierran al salir)
+  AP.ROLES_TURNO = ['Vigilante', 'Supervisor'];
 })();

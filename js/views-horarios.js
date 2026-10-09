@@ -5,8 +5,8 @@
   var U = AP.U, h = AP.h;
 
   function errBox(e) {
-    if (e && e.missingList) return AP.empty('settings', 'Falta crear la estructura en SharePoint', e.message, h('a', { class: 'btn primary', href: '#/consola/instalacion' }, 'Ir a instalación'));
-    return AP.empty(e && e.offline ? 'offline' : 'alert', e && e.offline ? 'Sin conexión con Microsoft 365' : 'No fue posible cargar la información', e && e.message);
+    if (e && e.missingList) return AP.empty('settings', 'Falta configurar la base de datos', e.message, h('a', { class: 'btn primary', href: '#/consola/instalacion' }, 'Ir a instalación'));
+    return AP.empty(e && e.offline ? 'offline' : 'alert', e && e.offline ? 'Sin conexión con el servidor' : 'No fue posible cargar la información', e && e.message);
   }
   function tabla(cols, rows) {
     return h('div', { class: 'tbl-scroll' }, h('table', { class: 'tbl' },

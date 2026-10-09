@@ -76,7 +76,7 @@
       var file = await AP.pickImage('environment');
       if (!file) return;
       try {
-        var r = await U.processImage(file, { max: 1600, quality: 0.78 });
+        var r = await U.fotoEvidencia(file);
         var sha = await U.sha256(r.blob);
         var name = String(fotos.length + 1).padStart(2, '0') + '_' + U.safeName(label) + '.jpg';
         var f = { name: name, label: label, blob: r.blob, url: URL.createObjectURL(r.blob), sha256: sha };

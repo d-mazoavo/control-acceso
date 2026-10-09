@@ -6,8 +6,8 @@
 
   function guard(perm) { if (!AP.Session.can(perm || 'consola')) { AP.go('/porteria'); return false; } return true; }
   function errBox(e) {
-    if (e && e.missingList) return AP.empty('settings', 'Falta crear la estructura en SharePoint', e.message, AP.Session.can('admin') ? h('a', { class: 'btn primary', href: '#/consola/instalacion' }, 'Ir a instalación') : null);
-    return AP.empty(e && e.offline ? 'offline' : 'alert', e && e.offline ? 'Sin conexión con Microsoft 365' : 'No fue posible cargar la información', e && e.message);
+    if (e && e.missingList) return AP.empty('settings', 'Falta configurar la base de datos', e.message, AP.Session.can('admin') ? h('a', { class: 'btn primary', href: '#/consola/instalacion' }, 'Ir a instalación') : null);
+    return AP.empty(e && e.offline ? 'offline' : 'alert', e && e.offline ? 'Sin conexión con el servidor' : 'No fue posible cargar la información', e && e.message);
   }
   function simpleTable(cols, rows, onRow) {
     return h('div', { class: 'tbl-scroll' }, h('table', { class: 'tbl' },
@@ -101,10 +101,10 @@
                 if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) return AP.toast('Escriba un correo válido.', 'warn');
                 try {
                   await enviarPase(v, to, await blobP);
-                  AP.toast('Pase enviado a ' + to);
+                  AP.toast('Pase preparado para ' + to);
                   close(); pintar();
                 } catch (e) { AP.toast('No se pudo enviar: ' + e.message, 'error', 8000); }
-              } }, AP.icon('mail', 18), 'Enviar por correo'),
+              } }, AP.icon('mail', 18), 'Enviar (correo o WhatsApp)'),
               h('button', { class: 'btn', type: 'button', onclick: async function () { U.download(await blobP, 'Pase_' + U.safeName(v.Title) + '.png'); } }, AP.icon('download', 18), 'Descargar'),
               navigator.canShare ? h('button', { class: 'btn', type: 'button', onclick: async function () {
                 var file = new File([await blobP], 'Pase_' + U.safeName(v.Title) + '.png', { type: 'image/png' });
@@ -231,7 +231,7 @@
     ['Estado mostrado', function (m) { return m.EstadoMostrado; }, 20], ['Novedad', function (m) { return m.Novedad; }, 30], ['Turno programado', function (m) { return m.HorarioInfo; }, 24], ['Excepción', function (m) { return U.yesNo(m.Excepcion); }, 9],
     ['Autorizado por', function (m) { return m.AutorizadoPor; }, 22], ['Motivo excepción / negación', function (m) { return m.MotivoExcepcion || m.MotivoNegacion; }, 30],
     ['Origen', function (m) { return m.Origen; }, 14], ['Vigilante', function (m) { return m.Vigilante; }, 22], ['Usuario vigilante', function (m) { return m.VigilanteUsuario; }, 14],
-    ['Cuenta Microsoft 365', function (m) { return m.VigilanteCorreo; }, 26], ['Dispositivo', function (m) { return m.Dispositivo; }, 12],
+    ['Usuario que envió (verificado por el servidor)', function (m) { return m._createdBy || ''; }, 20], ['Dispositivo', function (m) { return m.Dispositivo; }, 12],
     ['Sin conexión', function (m) { return U.yesNo(m.SinConexion); }, 9], ['Observaciones', function (m) { return m.Observaciones; }, 30],
     ['Fecha de recepción en servidor', function (m) { return m._created ? U.fDateTime(m._created) : ''; }, 18], ['Id. registro', function (m) { return m.IdLocal; }, 38],
     ['Huella SHA-256', function (m) { return m.Hash; }, 66]
@@ -310,7 +310,7 @@
         ['Documento', 'Historial de ingresos y salidas — ' + AP.CFG.porteria],
         ['Periodo', desde.value + ' a ' + hasta.value], ['Filtros', [cat.value, mov.value, txt.value].filter(Boolean).join(' · ') || 'ninguno'],
         ['Generado por', AP.Session.user.nombre + ' (' + AP.Session.user.upn + ')'], ['Fecha de generación', U.fDateTime(new Date())],
-        ['Registros', rows.length], ['Fuente', AP.CFG.modo === 'demo' ? 'Datos de demostración' : 'SharePoint — lista AP_Movimientos']
+        ['Registros', rows.length], ['Fuente', 'Base de datos Firebase — colección AP_Movimientos']
       ]);
     }
     [cat, mov].forEach(function (s) { s.addEventListener('change', pintar); });
@@ -399,64 +399,6 @@
     consultar();
   });
 
-  // =================== USUARIOS ===================
-  AP.route('/consola/usuarios', function () {
-    if (!guard('admin')) return;
-    var content = h('div', { class: 'stack' });
-    var usuarios = [];
-    AP.consolaShell('/consola/usuarios', 'Usuarios y roles', content,
-      h('button', { class: 'btn primary', type: 'button', onclick: function () { editar(null); } }, AP.icon('plus', 18), 'Agregar usuario'));
-    async function cargar() {
-      content.replaceChildren(AP.spinner());
-      try { usuarios = await AP.B.listAll('AP_Usuarios'); pintar(); } catch (e) { content.replaceChildren(errBox(e)); }
-    }
-    function pintar() {
-      content.replaceChildren(
-        h('div', { class: 'banner info' }, AP.icon('shield', 18), h('span', null,
-          'Aquí se registran las cuentas de Microsoft 365 que usan la aplicación. Los vigilantes que operan con usuario y PIN se gestionan en "Vigilantes"; ' +
-          'el celular de portería se registra aquí con su cuenta de servicio y el rol "Dispositivo de portería". ' +
-          'El rol define qué pantallas ve cada cuenta; los permisos efectivos sobre los datos los define el sitio de SharePoint (ver Instalación).')),
-        h('div', { class: 'kv-grid roles' },
-          h('div', { class: 'kv' }, h('span', null, 'Administrador'), h('strong', null, 'Consola completa, usuarios, instalación y portería')),
-          h('div', { class: 'kv' }, h('span', null, 'Analista'), h('strong', null, 'Consola (personas, visitas, historial, inspecciones) y portería')),
-          h('div', { class: 'kv' }, h('span', null, 'Supervisor'), h('strong', null, 'Portería e historial de ingresos y salidas')),
-          h('div', { class: 'kv' }, h('span', null, 'Vigilante'), h('strong', null, 'Solo portería')),
-          h('div', { class: 'kv' }, h('span', null, 'Dispositivo de portería'), h('strong', null, 'Cuenta de servicio del celular; exige usuario y PIN de un vigilante para operar'))),
-        simpleTable([
-          ['Usuario (correo)', function (u) { return u.Title; }], ['Nombre', function (u) { return u.Nombre; }], ['Rol', function (u) { return u.Rol; }],
-          ['Empresa', function (u) { return u.Empresa; }], ['Activo', function (u) { return u.Activo === false ? AP.pill('Inactivo', 'deny') : AP.pill('Activo', 'ok'); }],
-          ['', function (u) { return h('button', { class: 'btn small', type: 'button', onclick: function () { editar(u); } }, AP.icon('edit', 16), 'Editar'); }]
-        ], usuarios, editar),
-        h('p', { class: 'muted small' }, 'Administradores fijos (config.js): ' + (AP.CFG.administradores || []).join(', ')));
-    }
-    function editar(u) {
-      var nuevo = !u; var d0 = u || { Rol: 'Vigilante', Activo: true };
-      AP.modal({
-        title: nuevo ? 'Agregar usuario' : u.Title,
-        body: function (close) {
-          var form = h('div', { class: 'stack' },
-            AP.field('Correo con el que inicia sesión en Microsoft 365 *', AP.input('Title', d0.Title, { type: 'email', disabled: !nuevo })),
-            AP.field('Nombre', AP.input('Nombre', d0.Nombre)),
-            AP.field('Rol', AP.select('Rol', AP.CAT.roles, d0.Rol)),
-            AP.field('Empresa', AP.input('Empresa', d0.Empresa, { placeholder: 'Avo Pak S.A.S. o contratista' })),
-            AP.check('Activo', 'Usuario activo', d0.Activo !== false),
-            AP.field('Observaciones (p. ej., soporte de la solicitud)', AP.textarea('Observaciones', d0.Observaciones)));
-          return h('div', { class: 'stack' }, form, h('button', { class: 'btn primary', type: 'button', onclick: async function () {
-            var d = AP.formData(form);
-            if (nuevo) d.Title = String(d.Title || '').toLowerCase().trim(); else delete d.Title;
-            if (nuevo && !/^[^@\s]+@[^@\s]+$/.test(d.Title)) return AP.toast('Escriba el correo del usuario.', 'warn');
-            try {
-              if (nuevo) { await AP.B.create('AP_Usuarios', d); } else { await AP.B.update('AP_Usuarios', u.id, d); }
-              await AP.Audit.log(nuevo ? 'Alta de usuario' : 'Modificación de usuario', nuevo ? d.Title : u.Title, 'Rol: ' + d.Rol + '; activo: ' + U.yesNo(d.Activo));
-              close(); AP.toast('Usuario guardado.'); cargar(); AP.Sync.run();
-            } catch (e) { AP.toast(e.message, 'error'); }
-          } }, 'Guardar'));
-        }
-      });
-    }
-    cargar();
-  });
-
   // =================== BITÁCORA ===================
   AP.route('/consola/bitacora', function () {
     if (!guard('admin')) return;
@@ -466,9 +408,9 @@
     AP.B.listRange('AP_Bitacora', 'FechaHora', U.addDays(new Date(), -90), null).then(function (rows) {
       rows.sort(function (a, b) { return a.FechaHora < b.FechaHora ? 1 : -1; });
       var COLS = [['Fecha', function (r) { return U.fDateTime(r.FechaHora); }, 16], ['Acción', function (r) { return r.Accion; }, 22], ['Referencia', function (r) { return r.Referencia; }, 30],
-        ['Usuario', function (r) { return r.Usuario; }, 28], ['Detalle', function (r) { return r.Detalle; }, 50], ['Huella SHA-256', function (r) { return r.Hash; }, 66]];
+        ['Usuario (verificado por el servidor)', function (r) { return r._createdBy || ''; }, 18], ['Detalle del usuario', function (r) { return r.Usuario; }, 28], ['Detalle', function (r) { return r.Detalle; }, 50], ['Huella SHA-256', function (r) { return r.Hash; }, 66]];
       content.replaceChildren(
-        h('div', { class: 'row between wrap gap' }, h('p', { class: 'muted' }, 'Últimos 90 días. La lista conserva el historial de versiones de SharePoint.'),
+        h('div', { class: 'row between wrap gap' }, h('p', { class: 'muted' }, 'Últimos 90 días. Las anotaciones de la bitácora no pueden modificarse ni borrarse (las reglas del servidor lo impiden).'),
           h('button', { class: 'btn', type: 'button', onclick: function () { AP.exportar('Bitacora', COLS, rows, 'xlsx', [['Generado por', AP.Session.user.nombre], ['Fecha', U.fDateTime(new Date())]]); } }, AP.icon('download', 18), 'Exportar')),
         simpleTable(COLS.map(function (c) { return [c[0], c[0] === 'Huella SHA-256' ? function (r) { return r.Hash ? h('code', { class: 'mono small' }, r.Hash.slice(0, 16) + '…') : ''; } : c[1]]; }), rows));
     }).catch(function (e) { content.replaceChildren(errBox(e)); });
@@ -479,41 +421,33 @@
     if (!guard('admin')) return;
     var content = h('div', { class: 'stack' });
     AP.consolaShell('/consola/instalacion', 'Instalación y configuración', content);
-    var log = h('pre', { class: 'log' });
     var estado = h('div', { class: 'stack sm' }, AP.spinner('Verificando…'));
-    function L(t) { log.textContent += t + '\n'; log.scrollTop = log.scrollHeight; }
     async function verificar() {
       estado.replaceChildren(AP.spinner('Verificando…'));
       try {
-        var s = await AP.B.status();
+        await AP.B.status();
+        var fc = AP.CFG.firebase || {};
         estado.replaceChildren(
-          h('div', { class: 'kv' }, h('span', null, 'Sitio de SharePoint'), h('strong', null, AP.CFG.modo === 'demo' ? 'Local (demostración)' : AP.CFG.sitioSharePoint), AP.pill('Conectado', 'ok')),
-          Object.keys(s.lists).map(function (n) { return h('div', { class: 'kv' }, h('span', null, n), h('strong', null, AP.SCHEMA[n].desc), AP.pill(s.lists[n] ? 'Creada' : 'Falta', s.lists[n] ? 'ok' : 'deny')); }));
+          h('div', { class: 'kv' }, h('span', null, 'Proyecto de Firebase'), h('strong', null, fc.projectId || '—'), AP.pill('Conectado', 'ok')),
+          h('div', { class: 'kv' }, h('span', null, 'Inicio de sesión'), h('strong', null, 'Usuario y contraseña o PIN (sin correo)')),
+          h('div', { class: 'kv' }, h('span', null, 'Colecciones'), h('strong', null, Object.keys(AP.SCHEMA).join(', '))));
       } catch (e) {
-        estado.replaceChildren(h('div', { class: 'banner deny' }, AP.icon('alert', 18), h('span', null, 'No fue posible conectarse al sitio: ' + e.message)));
+        estado.replaceChildren(h('div', { class: 'banner deny' }, AP.icon('alert', 18), h('span', null, 'No fue posible conectarse a Firebase: ' + e.message)));
       }
     }
-    var permisos = [
-      'Cree un sitio de comunicación privado (p. ej., "Seguridad Integral — Control de Acceso"). Usted queda como propietario.',
-      'Pulse "Crear o verificar estructura" (abajo). Se crean las listas AP_Personas, AP_Visitas, AP_Movimientos, AP_Inspecciones, AP_Usuarios, AP_Vigilantes, AP_CambiosPin, AP_Turnos, AP_Horarios, AP_Permisos, AP_Verificaciones y AP_Bitacora (si actualiza desde una versión anterior, vuelva a pulsarlo para crear las nuevas listas y columnas).',
-      'En Configuración del sitio > Permisos > Niveles de permisos, cree el nivel "Agregar sin editar" copiando "Lectura" y marcando "Agregar elementos".',
-      'Agregue la cuenta de servicio del celular de portería (y, si las hubiere, las cuentas personales de vigilantes y supervisores) al grupo "Visitantes" del sitio (solo lectura).',
-      'En AP_Movimientos, AP_Inspecciones, AP_Turnos, AP_CambiosPin y la biblioteca Documentos (AP_Horarios, AP_Permisos y AP_Verificaciones quedan de solo lectura para el grupo Visitantes: solo el Director las modifica): Configuración > Permisos de esta lista > Dejar de heredar; asigne al grupo Visitantes el nivel "Agregar sin editar".',
-      'Verifique en cada lista que el control de versiones esté activo (Configuración de la lista > Configuración de versiones).',
-      'Registre en "Usuarios" la cuenta de servicio con el rol "Dispositivo de portería", inicie sesión con ella una vez en el celular de portería y cree en "Vigilantes" el usuario de cada vigilante.'
+    var reglas = [
+      'Las reglas de seguridad de Firestore (archivo firestore.rules de la entrega) deben estar publicadas en la consola de Firebase: Firestore Database → Reglas.',
+      'Con esas reglas, el servidor exige un usuario activo para leer o escribir; solo el Administrador crea usuarios, horarios, permisos y verificaciones; el Analista administra personas y visitas.',
+      'Los registros de ingresos, salidas, inspecciones, turnos, verificaciones y bitácora no pueden modificarse ni borrarse por nadie, y cada uno queda firmado por el servidor con el usuario que lo hizo y la hora del servidor.',
+      'Cuando un usuario se da de baja o se le restablece el PIN, su sesión anterior deja de tener acceso de inmediato.',
+      'Si vuelve a publicar las reglas, use siempre la última versión entregada.'
     ];
-    AP.add(content, 
+    AP.add(content,
       h('section', { class: 'card stack' }, h('h3', null, '1. Conexión'), estado,
         h('div', { class: 'row gap wrap' },
-          h('button', { class: 'btn', type: 'button', onclick: verificar }, AP.icon('sync', 18), 'Verificar'),
-          h('button', { class: 'btn primary', type: 'button', onclick: async function () {
-            log.textContent = '';
-            try { await AP.B.provision(L); await AP.Audit.log('Instalación', 'Estructura de listas', log.textContent.slice(0, 2000)); AP.toast('Estructura lista.'); verificar(); AP.Sync.run(); }
-            catch (e) { L('ERROR: ' + e.message); if (e.status === 403) L('Su cuenta no tiene permiso para crear listas en el sitio, o la aplicación no tiene el permiso Sites.ReadWrite.All aprobado.'); }
-          } }, AP.icon('settings', 18), 'Crear o verificar estructura')), log),
-      h('section', { class: 'card stack' }, h('h3', null, '2. Permisos en SharePoint (se hace una vez)'),
-        h('ol', { class: 'steps' }, permisos.map(function (p) { return h('li', null, p); })),
-        h('p', { class: 'muted small' }, 'Con esta configuración los vigilantes pueden consultar a quién dejar entrar y agregar registros, pero no pueden modificar ni borrar registros, ni habilitar personas.')),
+          h('button', { class: 'btn', type: 'button', onclick: verificar }, AP.icon('sync', 18), 'Verificar'))),
+      h('section', { class: 'card stack' }, h('h3', null, '2. Seguridad en el servidor'),
+        h('ol', { class: 'steps' }, reglas.map(function (p) { return h('li', null, p); }))),
       h('section', { class: 'card stack' }, h('h3', null, '3. Este dispositivo'),
         h('div', { class: 'kv' }, h('span', null, 'Identificador'), h('strong', null, U.deviceId())),
         h('div', { class: 'kv' }, h('span', null, 'Almacenamiento sin conexión'), h('strong', null, AP.Store.isMemory() ? 'Temporal (este navegador no permite guardar datos)' : 'Disponible')),
@@ -524,12 +458,9 @@
           h('button', { class: 'btn', type: 'button', onclick: function () { AP.Sync.run().then(function () { AP.toast('Sincronizado.'); AP.render(); }); } }, AP.icon('sync', 18), 'Sincronizar ahora'),
           h('button', { class: 'btn danger-outline', type: 'button', onclick: async function () {
             if (AP.Sync.pendingCount()) return AP.toast('Hay registros pendientes de envío; sincronice antes de borrar.', 'warn');
-            if (!(await AP.confirm('Borrar datos locales', 'Se eliminan del dispositivo las copias de personas, visitas y movimientos. No afecta los datos en SharePoint.', 'Borrar', 'danger'))) return;
+            if (!(await AP.confirm('Borrar datos locales', 'Se eliminan del dispositivo las copias de personas, visitas y movimientos. No afecta los datos guardados en el servidor.', 'Borrar', 'danger'))) return;
             await AP.Store.clearAll(); AP.toast('Datos locales eliminados.'); setTimeout(function () { location.reload(); }, 800);
-          } }, AP.icon('trash', 18), 'Borrar datos locales'))),
-      AP.CFG.modo === 'demo' ? h('section', { class: 'card stack' }, h('h3', null, 'Demostración'),
-        AP.check('off', 'Simular pérdida de internet', AP.Demo.offline, { onchange: function (e) { AP.Demo.offline = e.target.checked; AP.Sync.state.online = !e.target.checked; AP.Sync.emit(); AP.toast(e.target.checked ? 'Sin conexión simulada.' : 'Conexión restablecida.'); if (!e.target.checked) AP.Sync.run(); } }),
-        h('button', { class: 'btn danger-outline', type: 'button', onclick: function () { AP.Demo.reset(); } }, AP.icon('trash', 18), 'Restablecer datos de demostración')) : null);
+          } }, AP.icon('trash', 18), 'Borrar datos locales'))));
     verificar();
   });
 

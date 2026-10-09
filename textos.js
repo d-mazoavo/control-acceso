@@ -15,6 +15,7 @@ window.AP_TEXTOS = {
       'y atender los requerimientos de las autoridades y de los programas de seguridad a los que la compañía pertenece. ' +
       'La fotografía, cuando se recolecte, se emplea únicamente para el cotejo visual de identidad por el personal de seguridad; ' +
       'su suministro es facultativo y puede optarse por la verificación con documento de identidad. No se realiza reconocimiento facial automatizado. ' +
+      'La información se almacena en la plataforma Firebase de Google, que actúa como encargado del tratamiento, en servidores ubicados fuera de Colombia. ' +
       'Como titular, usted puede conocer, actualizar, rectificar y solicitar la supresión de sus datos, solicitar prueba de la autorización, ' +
       'ser informado del uso dado a sus datos, revocar la autorización y presentar quejas ante la Superintendencia de Industria y Comercio, ' +
       'en los términos del artículo 8 de la Ley 1581 de 2012. Canal de atención: ' + r.correoDatos + '.' +
@@ -50,17 +51,17 @@ window.AP_TEXTOS = {
     'Queda registrado y es objeto de revisión.',
 
   // Lo que acepta el vigilante al definir su PIN personal (primer ingreso o restablecimiento).
-  versionAvisoVigilante: 'AUT-PIN-01',
+  versionAvisoVigilante: 'AUT-PIN-02',
   avisoVigilante: function (c) {
     var r = c.responsable;
     return '' +
-      'El usuario y el PIN que usted define son personales e intransferibles. Todo registro de ingreso, salida, negación o inspección ' +
-      'que se haga mientras su turno esté abierto en este celular quedará asociado a su nombre, con fecha y hora. ' +
+      'El usuario y el PIN o contraseña que usted define son personales e intransferibles. Todo registro de ingreso, salida, negación o inspección ' +
+      'que se haga con su sesión quedará asociado a su nombre, con la fecha y hora del celular y la del servidor. ' +
       'No comparta su PIN, no lo anote en lugar visible y cierre su turno al terminar. Si cree que otra persona lo conoce, ' +
       'informe a su supervisor para que se solicite el restablecimiento. ' +
       r.razonSocial + ' trata su nombre, documento, empresa, usuario y los registros de su turno con la finalidad de identificar ' +
       'a quién corresponde cada actuación en la aplicación de control de acceso y conservar su trazabilidad, conforme a la Ley 1581 de 2012. ' +
-      'El PIN no se conserva en claro: solo se guarda una huella criptográfica que no permite leerlo. ' +
+      'El PIN o la contraseña no se conservan en claro: el servicio de autenticación de Google (Firebase), encargado del tratamiento, guarda solo una huella cifrada que no permite leerlos. ' +
       'Puede ejercer los derechos del artículo 8 de la Ley 1581 de 2012 en ' + r.correoDatos + '.';
   },
 

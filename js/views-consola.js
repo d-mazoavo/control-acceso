@@ -9,12 +9,12 @@
     return true;
   }
   function offlineBox() {
-    return AP.empty('offline', 'Sin conexión con Microsoft 365', 'La consola consulta los datos en línea. Verifique la conexión e intente de nuevo.',
+    return AP.empty('offline', 'Sin conexión con el servidor', 'La consola consulta los datos en línea. Verifique la conexión e intente de nuevo.',
       h('button', { class: 'btn', type: 'button', onclick: function () { AP.render(); } }, AP.icon('sync', 18), 'Reintentar'));
   }
   function errorBox(e) {
     if (e && e.offline) return offlineBox();
-    if (e && e.missingList) return AP.empty('settings', 'Falta crear la estructura en SharePoint', e.message, AP.Session.can('admin') ? h('a', { class: 'btn primary', href: '#/consola/instalacion' }, 'Ir a instalación') : null);
+    if (e && e.missingList) return AP.empty('settings', 'Falta configurar la base de datos', e.message, AP.Session.can('admin') ? h('a', { class: 'btn primary', href: '#/consola/instalacion' }, 'Ir a instalación') : null);
     return AP.empty('alert', 'No fue posible cargar la información', e && e.message);
   }
   async function load(content, fn) {

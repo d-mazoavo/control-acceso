@@ -58,7 +58,7 @@
           AP.Session.can('consola') ? h('a', { class: 'btn small', href: '#/consola/panel' }, AP.icon('chart', 16), 'Consola') : null,
           !AP.Session.can('consola') && AP.Session.can('historial') ? h('a', { class: 'btn small', href: '#/consola/historial' }, AP.icon('history', 16), 'Historial') : null,
           AP.State.installPrompt ? h('button', { class: 'btn small', type: 'button', onclick: function () { AP.State.installPrompt.prompt(); } }, AP.icon('download', 16), 'Instalar app') : null,
-          h('button', { class: 'btn small', type: 'button', onclick: AP.Views.logout }, AP.icon('logout', 16), AP.Session.dispositivo ? 'Cerrar turno' : 'Salir'))));
+          h('button', { class: 'btn small', type: 'button', onclick: AP.Views.logout }, AP.icon('logout', 16), AP.Session.turno ? 'Cerrar turno' : 'Salir'))));
     AP.porteriaShell('Control de Acceso', content);
     AP.onLeave(AP.Sync.on(U.debounce(function () {
       var t = document.querySelector('a.tile[href="#/dentro"] small');
@@ -522,15 +522,14 @@
     var mios = AP.Sync.allMovs().filter(function (m) { return m.Dispositivo === dev && new Date(m.FechaHora).getTime() >= desde; });
     var insp = AP.Sync.outbox.filter(function (o) { return o.kind === 'insp'; });
     var t = AP.Session.turno;
-    var tv = t ? AP.Sync.vigilantes.find(function (x) { return String(x.id) === t.vigilanteId; }) : null;
     var cont = h('div', { class: 'stack' },
       t ? h('div', { class: 'card stack sm' },
         h('div', { class: 'row gap wrap between' },
           h('div', null, h('strong', null, t.nombre), h('small', { class: 'muted block' }, 'Usuario ' + t.usuario + ' · ' + t.rol + ' · turno desde ' + U.fDateTime(t.inicio) + ' (' + U.duracion(t.inicio) + ')')),
           (function (n) { return AP.pill(n + (n === 1 ? ' registro' : ' registros') + ' en el turno', 'brand'); })(AP.Pin.resumenTurno(t).registros)),
         h('div', { class: 'row gap wrap' },
-          tv ? h('button', { class: 'btn', type: 'button', onclick: function () { AP.Views.definirPin(tv, { temporal: false }); } }, AP.icon('lock', 18), 'Cambiar mi PIN') : null,
-          h('button', { class: 'btn primary', type: 'button', onclick: AP.Views.cerrarTurno }, AP.icon('logout', 18), 'Cerrar turno'))) : null,
+          h('button', { class: 'btn', type: 'button', onclick: function () { AP.Views.definirPin(); } }, AP.icon('lock', 18), 'Cambiar mi PIN'),
+          h('button', { class: 'btn primary', type: 'button', onclick: AP.Views.cerrarTurno }, AP.icon('logout', 18), 'Cerrar turno y salir'))) : null,
       h('div', { class: 'card row gap wrap between' },
         h('div', null, h('strong', null, AP.Sync.pendingCount() + ' por enviar'), h('small', { class: 'muted block' }, 'Dispositivo ' + dev + (AP.Store.isMemory() ? ' · almacenamiento temporal' : ''))),
         h('button', { class: 'btn primary', type: 'button', onclick: function () { AP.Sync.run().then(function () { AP.render(); }); } }, AP.icon('sync', 18), 'Enviar ahora')),

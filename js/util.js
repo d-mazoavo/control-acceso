@@ -169,6 +169,17 @@
       return { blob: blob, dataUrl: dataUrl, w: dw, h: dh };
     } finally { URL.revokeObjectURL(url); }
   };
+  // Fotografía de evidencia: se reduce hasta que pese menos de ~450 KB (límite de un registro en la base de datos).
+  // La huella SHA-256 se calcula después, sobre la imagen exacta que se guarda.
+  U.fotoEvidencia = async function (file) {
+    var pasos = [[1600, 0.78], [1280, 0.72], [1024, 0.66], [800, 0.6]];
+    var r = null;
+    for (var i = 0; i < pasos.length; i++) {
+      r = await U.processImage(file, { max: pasos[i][0], quality: pasos[i][1] });
+      if (r.blob.size <= 450000) break;
+    }
+    return r;
+  };
   // Foto de persona para cotejo visual: baja resolución deliberada (minimización de datos).
   U.personPhoto = function (file) {
     return U.processImage(file, { mode: 'cover', w: 240, h: 300, quality: 0.72, dataUrl: true })

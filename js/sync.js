@@ -7,7 +7,7 @@
   // ======================= SINCRONIZACIÓN =======================
   var listeners = [];
   var Sync = (AP.Sync = {
-    personas: [], visitas: [], movs: [], usuarios: [], vigilantes: [], cambiosPin: [], horarios: [], permisos: [], outbox: [],
+    personas: [], visitas: [], movs: [], vigilantes: [], horarios: [], permisos: [], outbox: [],
     byToken: new Map(),
     state: { online: navigator.onLine, syncing: false, lastPull: null, lastPush: null, lastError: null, authProblem: false, skew: null, pullErrors: {} },
     on: function (fn) { listeners.push(fn); return function () { listeners = listeners.filter(function (f) { return f !== fn; }); }; },
@@ -18,9 +18,7 @@
       Sync.personas = (await S.get('c:personas')) || [];
       Sync.visitas = (await S.get('c:visitas')) || [];
       Sync.movs = (await S.get('c:movs')) || [];
-      Sync.usuarios = (await S.get('c:usuarios')) || [];
       Sync.vigilantes = (await S.get('c:vigilantes')) || [];
-      Sync.cambiosPin = (await S.get('c:cambiosPin')) || [];
       Sync.horarios = (await S.get('c:horarios')) || [];
       Sync.permisos = (await S.get('c:permisos')) || [];
       var meta = (await S.get('c:meta')) || {};
@@ -79,6 +77,7 @@
     },
     _run: async function (opts) {
       var B = AP.B;
+      if (!AP.Session || !AP.Session.user) return;   // sin sesión no se sincroniza
       Sync.state.syncing = true; Sync.emit();
       try {
         await Sync.push();
@@ -108,13 +107,21 @@
           Sync.outbox = Sync.outbox.filter(function (o) { return o.id !== it.id; });
           Sync.state.lastPush = new Date().toISOString();
           Sync.state.authProblem = false;
-          if (AP.Graph.skewSeconds != null && B.name === 'm365') Sync.state.skew = AP.Graph.skewSeconds;
+          if (B.skewSeconds != null) Sync.state.skew = B.skewSeconds;
           await Sync.saveMeta();
           Sync.emit();
         } catch (e) {
+          // Una inspección con fotos en conexión lenta no detiene el envío de los demás registros
+          if (e.timeout && navigator.onLine !== false && it.kind === 'insp') {
+            it.error = 'Envío lento de fotografías: se reintentará automáticamente.';
+            await AP.Store.outboxPut(it);
+            Sync.outbox = Sync.outbox.map(function (o) { return o.id === it.id ? it : o; });
+            Sync.emit();
+            continue;
+          }
           if (e.offline || e.authRequired) throw e;
           it.attempts = (it.attempts || 0) + 1;
-          it.error = (e.status === 403 ? 'Sin permiso para registrar en SharePoint. ' : '') + e.message;
+          it.error = (e.status === 403 ? 'El servidor rechazó el registro. ' : '') + e.message;
           await AP.Store.outboxPut(it);
           Sync.outbox = Sync.outbox.map(function (o) { return o.id === it.id ? it : o; });
           Sync.emit();
@@ -166,7 +173,7 @@
         throw e;
       }
     },
-    // Registros de solo agregar (turnos y cambios de PIN), con la misma protección contra duplicados
+    // Registros de solo agregar (turnos), con la misma protección contra duplicados
     _pushSimple: async function (list, it) {
       var B = AP.B;
       if (it.attempts > 0) {
@@ -179,12 +186,7 @@
         throw e;
       }
     },
-    _afterSimple: function (list, rec) {
-      if (list !== 'AP_CambiosPin') return;
-      Sync.cambiosPin = Sync.cambiosPin.filter(function (c) { return c.IdLocal !== rec.IdLocal; });
-      Sync.cambiosPin.push(rec);
-      AP.Store.set('c:cambiosPin', Sync.cambiosPin);
-    },
+    _afterSimple: function () { /* sin copia local de turnos */ },
     _addServerMov: function (rec) {
       Sync.movs = Sync.movs.filter(function (m) { return m.IdLocal !== rec.IdLocal; });
       Sync.movs.push(rec);
@@ -225,18 +227,11 @@
         await S.set('c:movs', movs);
       } catch (e) { if (e.offline || e.authRequired) throw e; errs.movs = e.message; }
 
+      // Usuarios: el administrador los ve todos; los demás, solo su propio perfil (para detectar bajas y restablecimientos)
       try {
-        var us = await B.listAll('AP_Usuarios');
-        Sync.usuarios = us;
-        await S.set('c:usuarios', us);
-      } catch (e) { if (e.offline || e.authRequired) throw e; errs.usuarios = e.message; }
-
-      // Vigilantes con usuario y PIN, y los PIN personales que ellos mismos definieron
-      try {
-        var vg = await B.listAll('AP_Vigilantes');
-        var cp = await B.listAll('AP_CambiosPin');
-        Sync.vigilantes = vg; Sync.cambiosPin = cp;
-        await S.set('c:vigilantes', vg); await S.set('c:cambiosPin', cp);
+        var vg = AP.Session.can('admin') ? await B.listAll('AP_Vigilantes') : [await B.miPerfil()].filter(Boolean);
+        Sync.vigilantes = vg;
+        await S.set('c:vigilantes', vg);
       } catch (e) { if (e.offline || e.authRequired) throw e; errs.vigilantes = e.message; }
 
       // Horarios programados y permisos (los registra el Director; el celular solo los lee)
@@ -260,6 +255,16 @@
       }
     },
 
+    // Borra la copia local de datos (no los registros pendientes de envío)
+    limpiarLocal: async function () {
+      var S = AP.Store;
+      var keys = ['c:personas', 'c:visitas', 'c:movs', 'c:vigilantes', 'c:horarios', 'c:permisos', 'c:meta'];
+      for (var i = 0; i < keys.length; i++) await S.del(keys[i]);
+      Sync.personas = []; Sync.visitas = []; Sync.movs = []; Sync.vigilantes = []; Sync.horarios = []; Sync.permisos = [];
+      Sync.state.lastPull = null; Sync.state.pullErrors = {};
+      Sync.reindex();
+    },
+
     _timer: null,
     start: function () {
       if (Sync._timer) return;
@@ -273,7 +278,7 @@
     }
   });
 
-  var SIMPLE = { turno: 'AP_Turnos', pin: 'AP_CambiosPin' };
+  var SIMPLE = { turno: 'AP_Turnos' };
 
   // ======================= REGLAS DE ACCESO =======================
   var A = (AP.Access = {});

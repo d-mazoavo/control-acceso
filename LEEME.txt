@@ -1,48 +1,45 @@
-AVO PAK S.A.S. — Control de Acceso de Personas y Vehículos (versión 1.2.0)
+AVO PAK S.A.S. — Control de Acceso de Personas y Vehículos (versión 2.0.0)
 Dirección de Seguridad Integral
 
 Contenido de esta carpeta
   index.html, js/, css/, img/, sw.js, manifest.webmanifest  -> la aplicación (no modificar)
-  config.js   -> archivo a editar para la conexión: identificadores de Microsoft 365, sitio de
-                 SharePoint, administradores, teléfonos, duración máxima del turno, vigencia del
-                 PIN temporal y datos del responsable del tratamiento.
-  css/app.css -> colores (variables al inicio del archivo: --brand, --fill, --lime, etc.).
-  img/        -> logos e íconos (reemplazar conservando nombre y tamaño).
+  config.js   -> ÚNICO archivo a editar: bloque de conexión con Firebase, teléfonos, duración
+                 máxima del turno, vigencia del PIN temporal y datos del responsable del tratamiento.
   textos.js   -> aviso de privacidad y textos legales (revisar con el responsable de
                  protección de datos antes de operar).
 
-Pasos (detallados en la Guía de instalación):
-  1. Crear el sitio de SharePoint "Seguridad Integral".
-  2. Registrar la aplicación en Microsoft Entra (tipo "Aplicación de página única").
-  3. Publicar esta carpeta en GitHub Pages (gratuito).
-  4. Completar config.js con los tres identificadores y volver a subirlo.
-  5. Abrir la dirección publicada, iniciar sesión y, en Consola > Instalación,
-     pulsar "Crear o verificar estructura".
-  6. Configurar permisos del sitio y registrar usuarios y roles. Para el celular de portería:
-     crear una cuenta de servicio de Microsoft 365, registrarla en Consola > Usuarios con el
-     rol "Dispositivo de portería", iniciar sesión con ella una vez en el celular y crear en
-     Consola > Vigilantes el usuario de cada vigilante (el PIN temporal se muestra una sola vez).
-  7. Piloto de 4 semanas en paralelo con la planilla AP-SG-FT-001.
+Funcionamiento (versión 2.0.0)
+  - Base de datos e inicio de sesión: Firebase (Google), plan gratuito. Ya no se usa Microsoft 365.
+  - Todos, incluido el administrador, ingresan SOLO con usuario y contraseña o PIN. Nadie usa correo.
+  - El administrador crea, edita, restablece y da de baja usuarios en Consola > Usuarios.
+    Roles: Administrador, Analista, Supervisor y Vigilante.
+  - Cada vigilante o supervisor ingresa desde su propio celular; al ingresar se abre su turno y al
+    cerrar el turno se cierra la sesión. El primer ingreso se hace con un PIN temporal (vence en 72 h)
+    y la aplicación obliga a definir un PIN personal que nadie más conoce.
+  - Los registros se guardan en el celular si no hay internet y se envían solos al volver la señal.
+  - Las reglas de seguridad del servidor (archivo firestore.rules, que NO va en GitHub) impiden
+    modificar o borrar registros, falsificar la hora o el autor, y que un vigilante vea usuarios,
+    bitácora o cree personas. Dar de baja o restablecer el PIN corta de inmediato la sesión anterior.
 
-Librerías de terceros incluidas (js/vendor): MSAL Browser 4.30.0 (Microsoft, MIT),
+Pasos de instalación (resumen)
+  1. Crear una cuenta de Google con el correo corporativo del Director de Seguridad Integral.
+  2. En console.firebase.google.com: crear el proyecto; activar Authentication > Correo
+     electrónico/contraseña; agregar el dominio d-mazoavo.github.io en dominios autorizados.
+  3. Crear Firestore Database (ubicación en Estados Unidos, modo producción) y publicar en la
+     pestaña Reglas el contenido de firestore.rules.
+  4. Registrar una app web en Configuración del proyecto y copiar el bloque firebaseConfig
+     en config.js (reemplazando el bloque marcado).
+  5. Subir esta carpeta a GitHub Pages.
+  6. Abrir la dirección publicada: aparece "Instalación inicial". Escribir el código de
+     instalación (está en firestore.rules) y crear el usuario administrador.
+  7. Consola > Usuarios: crear vigilantes, supervisores y analistas (el PIN temporal se muestra
+     una sola vez).
+  8. Piloto de 4 semanas en paralelo con la planilla AP-SG-FT-001.
+
+Cuota gratuita de Firebase (plan Spark; verificar valores vigentes en firebase.google.com/pricing)
+  La aplicación descarga solo lo que cambió: una sincronización sin cambios consume 2 lecturas.
+  Las fotografías de inspección se guardan reducidas (máximo ~600 KB cada una) con su huella SHA-256.
+
+Librerías de terceros incluidas (js/vendor): Firebase JS SDK 12.19.0 (Google, Apache-2.0),
 jsQR 1.4.0 (Apache-2.0), qrcode-generator 2.0.4 (MIT), read-excel-file 9.3.10 (MIT),
 write-excel-file 4.1.1 (MIT).
-
-NOVEDADES DE LA VERSIÓN 1.2.0 (horarios, permisos y salida por QR)
-  - El vigilante ve "Personas dentro" solo como consulta y ya no registra salidas a mano: la salida se registra solo
-    leyendo el QR. El sentido (ingreso/salida) lo determina el sistema por el último registro.
-  - Consola > Horarios: turno de cada persona (días, hora de entrada y de salida, vigencia). Reglas
-    (config.js > puntualidad): a tiempo hasta la hora de entrada; 1 a 9 minutos tarde = ingreso
-    PENDIENTE (se registra y queda para verificación); 10 minutos o más = ingreso DENEGADO hasta que
-    el Director verifique (no admite excepción en portería).
-  - Consola > Permisos: ingreso tardío, salida anticipada, salida temporal (cita) o ingreso y salida
-    fuera de horario, con lapso de vigencia. Salir antes de la hora de fin sin permiso se muestra
-    como SALIDA NO AUTORIZADA: se registra como novedad y se avisa al Director, pero el vigilante
-    NO retiene ni impide físicamente la salida.
-  - Personas dentro: el vigilante la ve pero no puede modificarla; solo el Director registra salidas desde ahí.
-  - Consola > Novedades: llegadas tardías, ingresos pendientes o denegados, salidas no autorizadas,
-    salidas sin QR y excepciones, con verificación del Director y botón "Habilitar ingreso".
-  - Visitantes: el QR vale exactamente entre la hora de inicio y la de fin que programe el Director.
-  - Para actualizar desde 1.1.0: subir los archivos, abrir Consola > Instalación y pulsar
-    "Crear o verificar estructura" (crea AP_Horarios, AP_Permisos, AP_Verificaciones y columnas nuevas
-    de AP_Movimientos).

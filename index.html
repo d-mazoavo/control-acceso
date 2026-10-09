@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#66754e">
   <meta name="robots" content="noindex, nofollow">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.sharepoint.com https://*.svc.ms; connect-src 'self' https://graph.microsoft.com https://login.microsoftonline.com https://*.sharepoint.com; frame-src https://login.microsoftonline.com; worker-src 'self' blob:; base-uri 'self'; form-action 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://apis.google.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://*.googleapis.com https://apis.google.com; frame-src https://*.firebaseapp.com https://*.web.app; worker-src 'self' blob:; base-uri 'self'; form-action 'self'">
   <title>Control de Acceso · Avo Pak</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" type="image/png" href="img/favicon.png">
@@ -21,7 +21,9 @@
   <noscript>Esta aplicación requiere JavaScript.</noscript>
   <script src="config.js"></script>
   <script src="textos.js"></script>
-  <script src="js/vendor/msal-browser.min.js"></script>
+  <script src="js/vendor/firebase-app-compat.js"></script>
+  <script src="js/vendor/firebase-auth-compat.js"></script>
+  <script src="js/vendor/firebase-firestore-compat.js"></script>
   <script src="js/vendor/jsQR.js"></script>
   <script src="js/vendor/qrcode.js"></script>
   <script src="js/vendor/read-excel-file.min.js"></script>
@@ -29,8 +31,7 @@
   <script src="js/util.js"></script>
   <script src="js/store.js"></script>
   <script src="js/schema.js"></script>
-  <script src="js/backend-graph.js"></script>
-  <script src="js/backend-demo.js"></script>
+  <script src="js/backend-firebase.js"></script>
   <script src="js/sync.js"></script>
   <script src="js/pin.js"></script>
   <script src="js/horarios.js"></script>
