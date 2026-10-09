@@ -1,0 +1,16 @@
+{
+  "name": "Control de Acceso — Avo Pak S.A.S.",
+  "short_name": "Acceso Avo Pak",
+  "description": "Registro de ingresos y salidas de personas y vehículos — Dirección de Seguridad Integral",
+  "lang": "es-CO",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f4f5f0",
+  "theme_color": "#66754e",
+  "icons": [
+    { "src": "img/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "img/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

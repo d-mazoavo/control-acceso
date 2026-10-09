@@ -1,0 +1,48 @@
+AVO PAK S.A.S. — Control de Acceso de Personas y Vehículos (versión 1.2.0)
+Dirección de Seguridad Integral
+
+Contenido de esta carpeta
+  index.html, js/, css/, img/, sw.js, manifest.webmanifest  -> la aplicación (no modificar)
+  config.js   -> archivo a editar para la conexión: identificadores de Microsoft 365, sitio de
+                 SharePoint, administradores, teléfonos, duración máxima del turno, vigencia del
+                 PIN temporal y datos del responsable del tratamiento.
+  css/app.css -> colores (variables al inicio del archivo: --brand, --fill, --lime, etc.).
+  img/        -> logos e íconos (reemplazar conservando nombre y tamaño).
+  textos.js   -> aviso de privacidad y textos legales (revisar con el responsable de
+                 protección de datos antes de operar).
+
+Pasos (detallados en la Guía de instalación):
+  1. Crear el sitio de SharePoint "Seguridad Integral".
+  2. Registrar la aplicación en Microsoft Entra (tipo "Aplicación de página única").
+  3. Publicar esta carpeta en GitHub Pages (gratuito).
+  4. Completar config.js con los tres identificadores y volver a subirlo.
+  5. Abrir la dirección publicada, iniciar sesión y, en Consola > Instalación,
+     pulsar "Crear o verificar estructura".
+  6. Configurar permisos del sitio y registrar usuarios y roles. Para el celular de portería:
+     crear una cuenta de servicio de Microsoft 365, registrarla en Consola > Usuarios con el
+     rol "Dispositivo de portería", iniciar sesión con ella una vez en el celular y crear en
+     Consola > Vigilantes el usuario de cada vigilante (el PIN temporal se muestra una sola vez).
+  7. Piloto de 4 semanas en paralelo con la planilla AP-SG-FT-001.
+
+Librerías de terceros incluidas (js/vendor): MSAL Browser 4.30.0 (Microsoft, MIT),
+jsQR 1.4.0 (Apache-2.0), qrcode-generator 2.0.4 (MIT), read-excel-file 9.3.10 (MIT),
+write-excel-file 4.1.1 (MIT).
+
+NOVEDADES DE LA VERSIÓN 1.2.0 (horarios, permisos y salida por QR)
+  - El vigilante ve "Personas dentro" solo como consulta y ya no registra salidas a mano: la salida se registra solo
+    leyendo el QR. El sentido (ingreso/salida) lo determina el sistema por el último registro.
+  - Consola > Horarios: turno de cada persona (días, hora de entrada y de salida, vigencia). Reglas
+    (config.js > puntualidad): a tiempo hasta la hora de entrada; 1 a 9 minutos tarde = ingreso
+    PENDIENTE (se registra y queda para verificación); 10 minutos o más = ingreso DENEGADO hasta que
+    el Director verifique (no admite excepción en portería).
+  - Consola > Permisos: ingreso tardío, salida anticipada, salida temporal (cita) o ingreso y salida
+    fuera de horario, con lapso de vigencia. Salir antes de la hora de fin sin permiso se muestra
+    como SALIDA NO AUTORIZADA: se registra como novedad y se avisa al Director, pero el vigilante
+    NO retiene ni impide físicamente la salida.
+  - Personas dentro: el vigilante la ve pero no puede modificarla; solo el Director registra salidas desde ahí.
+  - Consola > Novedades: llegadas tardías, ingresos pendientes o denegados, salidas no autorizadas,
+    salidas sin QR y excepciones, con verificación del Director y botón "Habilitar ingreso".
+  - Visitantes: el QR vale exactamente entre la hora de inicio y la de fin que programe el Director.
+  - Para actualizar desde 1.1.0: subir los archivos, abrir Consola > Instalación y pulsar
+    "Crear o verificar estructura" (crea AP_Horarios, AP_Permisos, AP_Verificaciones y columnas nuevas
+    de AP_Movimientos).
