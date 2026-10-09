@@ -46,9 +46,9 @@ window.AP_CONFIG = {
 
   responsable: {
     razonSocial: 'Avo Pak S.A.S.',
-    nit: '[COMPLETAR NIT]',
+    nit: '901.557.939-1',
     domicilio: 'Km 5 vía La Ceja – Abejorral, La Ceja (Antioquia)',
-    correoDatos: '[COMPLETAR CORREO DE ATENCIÓN DE PETICIONES SOBRE DATOS PERSONALES]',
+    correoDatos: 'info@avo-pak.com',
     politicaUrl: ''
   },
   versionAutorizacion: 'AUT-ACC-01'
