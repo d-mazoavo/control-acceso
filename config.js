@@ -15,7 +15,7 @@ window.AP_CONFIG = {
   sitioSharePoint: 'netorgft10279123.sharepoint.com/sites/ComprehensiveSecurityManagementStatementAvo-PakS.A.S',
 
   // Cuentas que siempre tendrán rol de Administrador.
-  administradores: ['dmazo@avo-pak.com'],
+  administradores: ['david1mazo@hotmail.com'],
 
   // ---- Datos de la sede ----
   empresa: 'Avo Pak S.A.S.',
