@@ -174,6 +174,7 @@
         }
         // La inspección se encola antes que el movimiento ya encolado no importa: ambos se envían en orden de creación.
         await AP.Sync.enqueue('insp', fields, photos);
+        if (AP.Notif) AP.Notif.inspeccion(fields, r.conforme);
         U.beep(r.conforme ? 'ok' : 'deny');
         AP.toast(r.conforme ? 'Inspección registrada.' : 'Inspección NO CONFORME registrada. Informe al supervisor y al Director.', r.conforme ? '' : 'error', 6000);
         fotos.forEach(function (f) { URL.revokeObjectURL(f.url); });

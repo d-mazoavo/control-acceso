@@ -520,6 +520,84 @@
   };
   var PLANTILLA = ['Nombre completo', 'Tipo', 'Tipo de documento', 'Número de documento', 'Teléfono', 'Correo', 'Empresa', 'Cargo', 'Área', 'Estado', 'Vigente hasta', 'Placa', 'Tipo de vehículo', 'Autoriza datos', 'Autoriza foto', 'Observaciones'];
 
+  // =================== NOTIFICACIONES ===================
+  AP.route('/consola/notificaciones', function () {
+    if (!guard('admin')) return;
+    var content = h('div', { class: 'stack' });
+    AP.consolaShell('/consola/notificaciones', 'Notificaciones y alertas', content);
+
+    /* Estado actual de permisos push */
+    var pushStatus = !('Notification' in window)
+      ? '❌ Este navegador no soporta notificaciones push.'
+      : Notification.permission === 'granted'
+        ? '✅ Notificaciones push activadas en este dispositivo.'
+        : Notification.permission === 'denied'
+          ? '⛔ Bloqueadas por el navegador. Vaya a Configuración del navegador → Permisos de este sitio → Notificaciones → Permitir.'
+          : '⚠️ Permiso pendiente. Pulse "Activar notificaciones" abajo.';
+
+    var estadoPush = h('div', { class: 'kv' }, h('span', null, 'Estado push'), h('strong', null, pushStatus));
+
+    /* EmailJS */
+    var cfgGuardada = AP.Notif ? AP.Notif.emailConfigurado() : false;
+    var svcIn = AP.input('serviceId', '', { placeholder: 'service_xxxxxxx' });
+    var tplIn = AP.input('templateId', '', { placeholder: 'template_xxxxxxx' });
+    var keyIn = AP.input('publicKey', '', { placeholder: 'clave pública de EmailJS' });
+    var destino = h('div', { class: 'kv' }, h('span', null, 'Destinatario'), h('strong', null, 'dmazo@avo-pak.com'));
+    var cfgMsg = h('div', { class: 'banner ' + (cfgGuardada ? 'info' : 'warn') },
+      AP.icon(cfgGuardada ? 'check' : 'alert', 16),
+      h('span', null, cfgGuardada ? 'EmailJS configurado. Los correos de alerta están activos.' : 'EmailJS no configurado. Configure abajo para activar los correos de alerta.'));
+
+    var instrucciones = [
+      'Entre a emailjs.com y cree una cuenta gratuita (hasta 200 correos/mes, sin tarjeta).',
+      'En "Email Services" conecte su cuenta Gmail o Outlook institucional.',
+      'En "Email Templates" cree una plantilla nueva. En el cuerpo use las variables: {{asunto}}, {{tipo}}, {{hora}}, {{nombre}}, {{empresa}}, {{placa}}, {{vigilante}}, {{porteria}}, {{detalle}}, {{observaciones}}.',
+      'En la plantilla configure: To Email = {{to_email}} (así los correos van a dmazo@avo-pak.com).',
+      'Copie el Service ID, Template ID y Public Key de "Account → API Keys" y péguelos abajo.'
+    ];
+
+    AP.add(content,
+      h('section', { class: 'card stack' },
+        h('h3', null, 'Notificaciones push (en este dispositivo)'),
+        h('p', { class: 'muted' }, 'Las notificaciones push aparecen en la pantalla de este celular/computador cada vez que un vigilante registra un ingreso, salida, novedad o inspección.'),
+        estadoPush,
+        Notification.permission !== 'granted'
+          ? h('button', { class: 'btn primary', type: 'button', onclick: function () {
+              Notification.requestPermission().then(function (p) {
+                AP.toast(p === 'granted' ? '✅ Notificaciones activadas.' : '⛔ No se otorgó el permiso.', p === 'granted' ? 'ok' : 'err');
+                AP.render();
+              });
+            } }, AP.icon('bell', 18), 'Activar notificaciones en este dispositivo')
+          : h('button', { class: 'btn', type: 'button', onclick: function () {
+              new Notification('✅ Prueba Avo Pak', { body: 'Las notificaciones push están funcionando correctamente.', icon: '/app/img/icon-192.png' });
+            } }, AP.icon('bell', 18), 'Enviar notificación de prueba')),
+
+      h('section', { class: 'card stack' },
+        h('h3', null, 'Correo de alerta (EmailJS)'),
+        h('p', { class: 'muted' }, 'Se envía un correo automático a ', h('strong', null, 'dmazo@avo-pak.com'), ' cuando se registra un ingreso negado, una novedad o una inspección no conforme.'),
+        cfgMsg,
+        destino,
+        h('ol', { class: 'steps' }, instrucciones.map(function (s) { return h('li', null, s); })),
+        AP.field('Service ID', svcIn),
+        AP.field('Template ID', tplIn),
+        AP.field('Public Key', keyIn),
+        h('div', { class: 'row gap wrap' },
+          h('button', { class: 'btn primary', type: 'button', onclick: function () {
+            var svc = svcIn.querySelector('input').value.trim();
+            var tpl = tplIn.querySelector('input').value.trim();
+            var key = keyIn.querySelector('input').value.trim();
+            if (!svc || !tpl || !key) return AP.toast('Complete los tres campos.', 'warn');
+            if (AP.Notif) AP.Notif.configurar({ serviceId: svc, templateId: tpl, publicKey: key });
+            AP.toast('✅ EmailJS configurado y guardado.', 'ok');
+            AP.render();
+          } }, AP.icon('check', 18), 'Guardar configuración'),
+          cfgGuardada ? h('button', { class: 'btn danger-outline', type: 'button', onclick: async function () {
+            if (!(await AP.confirm('Borrar configuración EmailJS', '¿Confirma borrar la configuración de correo? Los correos de alerta quedarán desactivados.', 'Borrar', 'danger'))) return;
+            try { localStorage.removeItem('ap_emailjs'); } catch (e) {}
+            AP.toast('Configuración de correo eliminada.', 'ok');
+            AP.render();
+          } }, AP.icon('trash', 18), 'Borrar configuración') : null)));
+  });
+
   AP.plantillaPersonas = async function () {
     var ejemplo = ['Nombre Apellido Apellido', 'Contratista', 'CC', '1234567890', '3000000000', 'correo@empresa.com', 'Empresa contratista S.A.S.', 'Técnico', 'Mantenimiento', 'Habilitado', '2026-12-31', 'ABC123', 'Camioneta', 'Sí', 'Sí', ''];
     var guia = [

@@ -116,7 +116,8 @@
     ['/consola/novedades', 'alert', 'Novedades', 'admin'],
     ['/consola/vigilantes', 'badge', 'Usuarios', 'admin'],
     ['/consola/bitacora', 'file', 'Bitácora', 'admin'],
-    ['/consola/instalacion', 'settings', 'Instalación', 'admin']
+    ['/consola/instalacion', 'settings', 'Instalación', 'admin'],
+    ['/consola/notificaciones', 'bell', 'Notificaciones', 'admin']
   ];
   AP.consolaShell = function (active, title, content, actions) {
     var nav = h('nav', { class: 'side', 'aria-label': 'Consola' },
@@ -293,6 +294,7 @@
       if (e.config) AP.State.configError = true;
     }
     if (logged) await startSession();
+    if (AP.Notif) AP.Notif.init();
     window.addEventListener('hashchange', render);
     render();
     registerSW();

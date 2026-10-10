@@ -78,7 +78,8 @@
     share: 'M18 8a3 3 0 1 0 0-.01M6 15a3 3 0 1 0 0-.01M18 22a3 3 0 1 0 0-.01M8.6 13.5l6.8-4M8.6 16.5l6.8 4',
     seal: 'M8 3h8v6l-4 3l-4-3zM12 12v9M9 18h6',
     keyboard: 'M3 6h18v12H3zM7 10h.01M11 10h.01M15 10h.01M7 14h10',
-    trash: 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13'
+    trash: 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13',
+    bell: 'M6 10a6 6 0 0 1 12 0c0 5 2 7 2 7H4s2-2 2-7M10 21a2 2 0 0 0 4 0'
   };
   AP.icon = function (name, size, cls) {
     var ns = 'http://www.w3.org/2000/svg';

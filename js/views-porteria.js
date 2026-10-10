@@ -322,7 +322,8 @@
         if ((esVisita || esManual) && sent === 'Salida') f.CarneDevuelto = devuelto.querySelector('input').checked;
         if (manualExtra && sent === 'Ingreso') Object.assign(f, manualExtra);
         Object.assign(f, extra || {});
-        await registrar(f);
+        var mov = await registrar(f);
+        if (AP.Notif) AP.Notif.movimiento(mov);
         await flash(resultado === 'Permitido', resultado === 'Negado' ? 'INGRESO NEGADO' : sent === 'Ingreso' ? 'INGRESO REGISTRADO' : 'SALIDA REGISTRADA', rec.Title);
         AP.State.result = null;
         if (location.hash.indexOf('#/resultado') === 0) AP.go(vuelta);
