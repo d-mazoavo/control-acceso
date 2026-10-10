@@ -57,9 +57,9 @@ window.AP_CONFIG = {
   // ---- Responsable del tratamiento (Ley 1581 de 2012) — COMPLETAR antes de operar ----
   responsable: {
     razonSocial: 'Avo Pak S.A.S.',
-    nit: '[COMPLETAR NIT]',
+    nit: '901.557.939-1',
     domicilio: 'Km 5 vía La Ceja – Abejorral, La Ceja (Antioquia)',
-    correoDatos: '[COMPLETAR CORREO DE ATENCIÓN DE PETICIONES SOBRE DATOS PERSONALES]',
+    correoDatos: 'info@avo-pak',
     politicaUrl: ''   // Enlace a la Política de Tratamiento de Datos publicada, si existe
   },
   versionAutorizacion: 'AUT-ACC-02'
