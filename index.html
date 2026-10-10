@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#66754e">
   <meta name="robots" content="noindex, nofollow">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://apis.google.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://*.googleapis.com https://apis.google.com; frame-src https://*.firebaseapp.com https://*.web.app; worker-src 'self' blob:; base-uri 'self'; form-action 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://apis.google.com https://cdn.emailjs.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://*.googleapis.com https://apis.google.com https://api.emailjs.com; frame-src https://*.firebaseapp.com https://*.web.app; worker-src 'self' blob:; base-uri 'self'; form-action 'self'">
   <title>Control de Acceso · Avo Pak</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" type="image/png" href="img/favicon.png">
@@ -45,5 +45,7 @@
   <script src="js/views-turno.js"></script>
   <script src="js/views-vigilantes.js"></script>
   <script src="js/views-horarios.js"></script>
+  <script src="https://cdn.emailjs.com/dist/email.min.js"></script>
+  <script src="js/notificaciones.js"></script>
 </body>
 </html>
