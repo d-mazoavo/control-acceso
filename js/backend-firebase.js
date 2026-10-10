@@ -521,6 +521,20 @@
       if (mem[list] && mem[list].docs[id]) { mem[list].docs[id]._borrado = true; guardar(list); }
     },
 
+    // Borrado físico: solo el Administrador puede borrar documentos de colecciones permitidas
+    COLECCIONES_BORRABLES: { AP_Personas: 1, AP_Visitas: 1, AP_Movimientos: 1, AP_Turnos: 1 },
+    borrarFisico: async function (list, id) {
+      if (!cuenta || cuenta.rol !== 'Administrador') throw err('api', 'Solo el Administrador puede borrar registros.');
+      if (!AP.B.COLECCIONES_BORRABLES[list]) throw err('api', 'No está permitido borrar registros de esta colección.');
+      await op(function () {
+        var b = db.batch();
+        b.delete(db.collection(list).doc(String(id)));
+        marcar(b, [list]);
+        return b.commit();
+      });
+      if (mem[list] && mem[list].docs[id]) { delete mem[list].docs[id]; guardar(list); }
+    },
+
     // Fotografía de evidencia: se guarda tal cual (su huella SHA-256 quedó registrada en la inspección)
     upload: async function (relPath, blob) {
       if (blob.size > MAX_FOTO) throw err('api', 'La fotografía supera el tamaño permitido (' + Math.round(blob.size / 1024) + ' KB). Tómela de nuevo.');

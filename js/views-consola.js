@@ -253,7 +253,8 @@
             h('button', { class: 'btn small', type: 'button', title: 'Editar', onclick: function () { editar(p); } }, AP.icon('edit', 16)),
             h('button', { class: 'btn small ' + (p.Estado === 'Habilitado' ? 'danger-outline' : ''), type: 'button', onclick: function () { cambiarEstado(p); } },
               AP.icon(p.Estado === 'Habilitado' ? 'lock' : 'unlock', 16), p.Estado === 'Habilitado' ? 'Inhabilitar' : 'Habilitar'),
-            h('button', { class: 'btn small', type: 'button', title: 'Credencial QR', onclick: function () { credencial(p); } }, AP.icon('qr', 16)));
+            h('button', { class: 'btn small', type: 'button', title: 'Credencial QR', onclick: function () { credencial(p); } }, AP.icon('qr', 16)),
+            AP.Session.can('admin') ? h('button', { class: 'btn small danger-outline', type: 'button', title: 'Borrar registro', onclick: function (e) { e.stopPropagation(); borrarPersona(p); } }, AP.icon('trash', 16)) : null);
         } }
       ];
       if (!tbl) tbl = table(cols, rows, { onRow: editar, afterPaint: fotosPagina, rowClass: function (p) { return p.Estado !== 'Habilitado' ? 'row-deny' : ''; } });
@@ -452,6 +453,29 @@
             } }, AP.icon('upload', 18), 'Cargar'));
         }
       });
+    }
+
+    async function borrarPersona(p) {
+      var ok = await new Promise(function (res) {
+        AP.modal({
+          title: 'Borrar registro',
+          body: function (close) {
+            return h('div', { class: 'stack' },
+              h('p', null, '¿Confirma el borrado definitivo de ', h('strong', null, p.Title), '? Esta acción no se puede deshacer.'),
+              h('div', { class: 'row gap' },
+                h('button', { class: 'btn danger', type: 'button', onclick: function () { res(true); close(); } }, AP.icon('trash', 16), 'Borrar definitivamente'),
+                h('button', { class: 'btn ghost', type: 'button', onclick: function () { res(false); close(); } }, 'Cancelar')));
+          },
+          onClose: function () { res(false); }
+        });
+      });
+      if (!ok) return;
+      try {
+        await AP.B.borrarFisico('AP_Personas', p.id);
+        personas = personas.filter(function (x) { return x.id !== p.id; });
+        AP.render.personasRepaint();
+        AP.toast('Registro borrado.', 'ok');
+      } catch (e) { AP.toast(e.message || 'No fue posible borrar el registro.', 'err'); }
     }
 
     function exportarPersonas(rows) {

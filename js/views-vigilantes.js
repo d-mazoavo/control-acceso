@@ -132,10 +132,38 @@
             AP.ROLES_TURNO.indexOf(v.Rol) >= 0 ? h('h3', null, 'Turnos y eventos (últimos 60 días)') : null,
             AP.ROLES_TURNO.indexOf(v.Rol) >= 0 ? tabla([['Fecha', function (e) { return U.fDateTime(e.FechaHora); }], ['Evento', function (e) { return AP.pill(e.Evento, EVENTO_KIND[e.Evento] || ''); }],
               ['Inicio del turno', function (e) { return e.InicioTurno ? U.fDateTime(e.InicioTurno) : ''; }], ['Registros', function (e) { return e.Registros == null ? '' : String(e.Registros); }],
-              ['Dispositivo', function (e) { return e.Dispositivo; }]], tv) : null,
+              ['Dispositivo', function (e) { return e.Dispositivo; }],
+              ['', function (e) { return AP.Session.can('admin') ? h('button', { class: 'btn small danger-outline', type: 'button', title: 'Borrar registro', onclick: function (ev) { ev.stopPropagation(); borrarTurno(e, v, tv); } }, AP.icon('trash', 14)) : null; }]], tv) : null,
             h('p', { class: 'muted small' }, 'Los registros de ingreso, salida e inspección hechos por este usuario se consultan en Historial filtrando por su nombre.'));
         }
       });
+    }
+
+    // ---------- Borrado de turno (solo Administrador) ----------
+    async function borrarTurno(e, v, tv) {
+      var ok = await new Promise(function (res) {
+        AP.modal({
+          title: 'Borrar evento de turno',
+          body: function (close) {
+            return h('div', { class: 'stack' },
+              h('p', null, '¿Confirma el borrado definitivo del evento ', h('strong', null, e.Evento || 'de turno'), ' de ', h('strong', null, v.Title), ' (', U.fDateTime(e.FechaHora), ')? Esta acción no se puede deshacer.'),
+              h('div', { class: 'row gap' },
+                h('button', { class: 'btn danger', type: 'button', onclick: function () { res(true); close(); } }, AP.icon('trash', 16), 'Borrar definitivamente'),
+                h('button', { class: 'btn ghost', type: 'button', onclick: function () { res(false); close(); } }, 'Cancelar')));
+          },
+          onClose: function () { res(false); }
+        });
+      });
+      if (!ok) return;
+      try {
+        await AP.B.borrarFisico('AP_Turnos', e.id);
+        datos.turnos = datos.turnos.filter(function (x) { return x.id !== e.id; });
+        var idx = tv.indexOf(e);
+        if (idx >= 0) tv.splice(idx, 1);
+        AP.toast('Registro de turno borrado.', 'ok');
+        // Recarga para reflejar cambio en la lista
+        cargar();
+      } catch (er) { AP.toast(er.message || 'No fue posible borrar el registro.', 'err'); }
     }
 
     // ---------- PIN temporal: se muestra una sola vez ----------

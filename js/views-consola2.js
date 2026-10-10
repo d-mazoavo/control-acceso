@@ -56,7 +56,8 @@
             v.Estado === 'Pendiente' ? h('button', { class: 'btn small primary', type: 'button', onclick: function () { aprobar(v, true); } }, AP.icon('check', 16), 'Aprobar') : null,
             v.Estado === 'Pendiente' ? h('button', { class: 'btn small danger-outline', type: 'button', onclick: function () { aprobar(v, false); } }, 'Rechazar') : null,
             v.Estado === 'Aprobada' ? h('button', { class: 'btn small', type: 'button', onclick: function () { pase(v); } }, AP.icon('qr', 16), 'Pase') : null,
-            h('button', { class: 'btn small', type: 'button', title: 'Editar', onclick: function () { editar(v); } }, AP.icon('edit', 16)));
+            h('button', { class: 'btn small', type: 'button', title: 'Editar', onclick: function () { editar(v); } }, AP.icon('edit', 16)),
+            AP.Session.can('admin') ? h('button', { class: 'btn small danger-outline', type: 'button', title: 'Borrar registro', onclick: function (e) { e.stopPropagation(); borrarVisita(v); } }, AP.icon('trash', 16)) : null);
         }]
       ], lista, editar));
     }
@@ -216,6 +217,28 @@
         }
       });
     }
+    async function borrarVisita(v) {
+      var ok = await new Promise(function (res) {
+        AP.modal({
+          title: 'Borrar visita',
+          body: function (close) {
+            return h('div', { class: 'stack' },
+              h('p', null, '¿Confirma el borrado definitivo de la visita de ', h('strong', null, v.Title), ' (', U.fDateTime(v.FechaInicio), ')? Esta acción no se puede deshacer.'),
+              h('div', { class: 'row gap' },
+                h('button', { class: 'btn danger', type: 'button', onclick: function () { res(true); close(); } }, AP.icon('trash', 16), 'Borrar definitivamente'),
+                h('button', { class: 'btn ghost', type: 'button', onclick: function () { res(false); close(); } }, 'Cancelar')));
+          },
+          onClose: function () { res(false); }
+        });
+      });
+      if (!ok) return;
+      try {
+        await AP.B.borrarFisico('AP_Visitas', v.id);
+        visitas = visitas.filter(function (x) { return x.id !== v.id; });
+        pintar();
+        AP.toast('Visita borrada.', 'ok');
+      } catch (e) { AP.toast(e.message || 'No fue posible borrar la visita.', 'err'); }
+    }
   });
 
   // =================== HISTORIAL ===================
@@ -285,8 +308,31 @@
         ['Empresa / anfitrión', function (m) { return [m.Empresa, m.Anfitrion].filter(Boolean).join(' · '); }],
         ['Placa', function (m) { return m.Placa; }],
         ['Vigilante', function (m) { return m.Vigilante; }],
-        ['', function (m) { return [m.Excepcion ? AP.pill('Excepción', 'warn') : null, m.SinConexion ? AP.pill('Sin conexión', 'muted') : null]; }]
+        ['', function (m) { return h('div', { class: 'row gap nowrap' }, m.Excepcion ? AP.pill('Excepción', 'warn') : null, m.SinConexion ? AP.pill('Sin conexión', 'muted') : null,
+          AP.Session.can('admin') ? h('button', { class: 'btn small danger-outline', type: 'button', title: 'Borrar registro', onclick: function (e) { e.stopPropagation(); borrarMovimiento(m); } }, AP.icon('trash', 16)) : null); }]
       ], lim, detalle), rows.length > 300 ? h('p', { class: 'muted small' }, 'Se muestran 300 de ' + rows.length + '. La exportación incluye todos.') : null);
+    }
+    async function borrarMovimiento(m) {
+      var ok = await new Promise(function (res) {
+        AP.modal({
+          title: 'Borrar movimiento',
+          body: function (close) {
+            return h('div', { class: 'stack' },
+              h('p', null, '¿Confirma el borrado definitivo del registro de ', h('strong', null, m.Sentido === 'Negado' ? 'ingreso negado' : m.Sentido), ' de ', h('strong', null, m.Title), ' (', U.fDateTime(m.FechaHora), ')? Esta acción no se puede deshacer.'),
+              h('div', { class: 'row gap' },
+                h('button', { class: 'btn danger', type: 'button', onclick: function () { res(true); close(); } }, AP.icon('trash', 16), 'Borrar definitivamente'),
+                h('button', { class: 'btn ghost', type: 'button', onclick: function () { res(false); close(); } }, 'Cancelar')));
+          },
+          onClose: function () { res(false); }
+        });
+      });
+      if (!ok) return;
+      try {
+        await AP.B.borrarFisico('AP_Movimientos', m.id);
+        datos = datos.filter(function (x) { return x.id !== m.id; });
+        pintar();
+        AP.toast('Movimiento borrado.', 'ok');
+      } catch (e) { AP.toast(e.message || 'No fue posible borrar el movimiento.', 'err'); }
     }
     function detalle(m) {
       AP.modal({
