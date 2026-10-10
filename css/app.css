@@ -289,6 +289,9 @@ button.banner { cursor: pointer; }
 .kpi span { color: var(--muted); font-size: .85rem; }
 .kpi.brand { background: var(--fill); color: var(--on-solid); border-color: var(--fill); } .kpi.brand svg, .kpi.brand span { color: #f1f3ea; }
 .kpi.deny strong, .kpi.deny svg { color: var(--deny); } .kpi.warn strong, .kpi.warn svg { color: var(--warn); }
+.kpi.kpi-link { cursor: pointer; transition: box-shadow .15s, transform .1s; }
+.kpi.kpi-link:hover { box-shadow: 0 4px 16px rgba(0,0,0,.12); transform: translateY(-1px); }
+.kpi.kpi-link:active { transform: translateY(0); }
 .alerts { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 360px; overflow: auto; }
 .alerts li { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border-radius: 10px; font-size: .9rem; }
 .alerts li svg { flex: none; margin-top: 2px; }
