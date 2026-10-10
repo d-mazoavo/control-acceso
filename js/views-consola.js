@@ -147,9 +147,18 @@
       nc.forEach(function (i) { alertas.push(['truck', 'deny', 'Inspección NO CONFORME: ' + i.Placa + ' (' + U.fTime(i.FechaHora) + '). ' + (i.NoConformidades || '')]); });
       pend.forEach(function (v) { alertas.push(['user', 'info', 'Visita pendiente de aprobación: ' + v.Title + ' (' + U.fDateTime(v.FechaInicio) + ').']); });
 
-      var kpi = function (n, l, icon, kind, href) {
-        return h(href ? 'a' : 'div', { class: 'kpi ' + (kind || ''), href: href ? '#' + href : null }, AP.icon(icon, 22), h('strong', null, String(n)), h('span', null, l));
+      var kpi = function (n, l, icon, kind, href, onclick) {
+        var attrs = { class: 'kpi ' + (kind || '') + (href || onclick ? ' kpi-link' : ''), href: href ? '#' + href : null };
+        if (onclick) attrs.onclick = onclick;
+        return h(href ? 'a' : 'div', attrs, AP.icon(icon, 22), h('strong', null, String(n)), h('span', null, l));
       };
+      function modalLista(titulo, cols, filas, vacia) {
+        AP.modal({ title: titulo, size: 'wide', body: filas.length
+          ? h('div', { class: 'tbl-scroll' }, h('table', { class: 'tbl' },
+              h('thead', null, h('tr', null, cols.map(function (c) { return h('th', null, c[0]); }))),
+              h('tbody', null, filas.map(function (r) { return h('tr', null, cols.map(function (c) { var v = c[1](r); return h('td', { 'data-label': c[0] }, v == null ? '' : v); })); }))))
+          : h('p', { class: 'muted center' }, vacia || 'Sin registros.') });
+      }
       var cats = {};
       dentro.forEach(function (m) { var c = m.Categoria || 'Otro'; cats[c] = (cats[c] || 0) + 1; });
 
@@ -164,14 +173,80 @@
       var recientes = movs.slice().sort(function (a, b) { return a.FechaHora < b.FechaHora ? 1 : -1; }).slice(0, 12);
       content.replaceChildren(
         h('div', { class: 'kpis' },
-          kpi(dentro.length, 'Personas dentro ahora', 'users', 'brand'),
-          kpi(ingresos.length, 'Ingresos hoy', 'door'),
-          kpi(negados.length, 'Ingresos negados hoy', 'x', negados.length ? 'deny' : ''),
-          kpi(excep.length, 'Excepciones hoy', 'key', excep.length ? 'warn' : ''),
-          kpi(hoy.filter(function (m) { return m.Novedad; }).length, 'Novedades de horario y salida hoy', 'alert', hoy.some(function (m) { return m.Novedad; }) ? 'warn' : '', '/consola/novedades'),
-          kpi(visHoy.length, 'Visitas aprobadas hoy', 'user', '', '/consola/visitas'),
-          kpi(pend.length, 'Visitas por aprobar', 'inbox', pend.length ? 'warn' : '', '/consola/visitas'),
-          kpi(insp.length, 'Inspecciones de carga hoy', 'truck', nc.length ? 'deny' : '', '/consola/inspecciones'),
+          kpi(dentro.length, 'Personas dentro ahora', 'users', 'brand', null, function () {
+            modalLista('Personas dentro ahora (' + dentro.length + ')', [
+              ['Nombre', function (m) { return m.Title; }],
+              ['Categoría', function (m) { return m.Categoria; }],
+              ['Empresa', function (m) { return m.Empresa; }],
+              ['Ingresó', function (m) { return U.fDateTime(m.FechaHora); }],
+              ['Tiempo dentro', function (m) { return U.duracion(m.FechaHora); }],
+              ['Vigilante', function (m) { return m.Vigilante; }]
+            ], dentro, 'Nadie registrado dentro en este momento.');
+          }),
+          kpi(ingresos.length, 'Ingresos hoy', 'door', '', null, function () {
+            modalLista('Ingresos de hoy (' + ingresos.length + ')', [
+              ['Hora', function (m) { return U.fTime(m.FechaHora); }],
+              ['Nombre', function (m) { return m.Title; }],
+              ['Categoría', function (m) { return m.Categoria; }],
+              ['Empresa', function (m) { return m.Empresa; }],
+              ['Placa', function (m) { return m.Placa; }],
+              ['Vigilante', function (m) { return m.Vigilante; }]
+            ], ingresos, 'Sin ingresos registrados hoy.');
+          }),
+          kpi(negados.length, 'Ingresos negados hoy', 'x', negados.length ? 'deny' : '', null, function () {
+            modalLista('Ingresos negados hoy (' + negados.length + ')', [
+              ['Hora', function (m) { return U.fTime(m.FechaHora); }],
+              ['Nombre', function (m) { return m.Title; }],
+              ['Motivo', function (m) { return m.MotivoNegacion; }],
+              ['Vigilante', function (m) { return m.Vigilante; }]
+            ], negados, 'Sin ingresos negados hoy.');
+          }),
+          kpi(excep.length, 'Excepciones hoy', 'key', excep.length ? 'warn' : '', null, function () {
+            modalLista('Excepciones de hoy (' + excep.length + ')', [
+              ['Hora', function (m) { return U.fTime(m.FechaHora); }],
+              ['Nombre', function (m) { return m.Title; }],
+              ['Autorizado por', function (m) { return m.AutorizadoPor; }],
+              ['Motivo', function (m) { return m.MotivoExcepcion; }],
+              ['Vigilante', function (m) { return m.Vigilante; }]
+            ], excep, 'Sin excepciones registradas hoy.');
+          }),
+          kpi(hoy.filter(function (m) { return m.Novedad; }).length, 'Novedades hoy', 'alert', hoy.some(function (m) { return m.Novedad; }) ? 'warn' : '', null, function () {
+            modalLista('Novedades de hoy', [
+              ['Hora', function (m) { return U.fTime(m.FechaHora); }],
+              ['Nombre', function (m) { return m.Title; }],
+              ['Novedad', function (m) { return m.Novedad; }],
+              ['Vigilante', function (m) { return m.Vigilante; }]
+            ], hoy.filter(function (m) { return m.Novedad; }), 'Sin novedades registradas hoy.');
+          }),
+          kpi(visHoy.length, 'Visitas aprobadas hoy', 'user', '', null, function () {
+            modalLista('Visitas aprobadas hoy (' + visHoy.length + ')', [
+              ['Visitante', function (v) { return v.Title; }],
+              ['Empresa', function (v) { return v.Empresa; }],
+              ['Hora inicio', function (v) { return U.fTime(v.FechaInicio); }],
+              ['Hora fin', function (v) { return U.fTime(v.FechaFin); }],
+              ['Anfitrión', function (v) { return v.Anfitrion; }],
+              ['Área', function (v) { return v.Area; }]
+            ], visHoy, 'Sin visitas aprobadas para hoy.');
+          }),
+          kpi(pend.length, 'Visitas por aprobar', 'inbox', pend.length ? 'warn' : '', null, function () {
+            modalLista('Visitas pendientes de aprobación (' + pend.length + ')', [
+              ['Visitante', function (v) { return v.Title; }],
+              ['Empresa', function (v) { return v.Empresa; }],
+              ['Fecha', function (v) { return U.fDateTime(v.FechaInicio); }],
+              ['Anfitrión', function (v) { return v.Anfitrion; }],
+              ['Motivo', function (v) { return v.Motivo; }]
+            ], pend, 'Sin visitas pendientes de aprobación.');
+          }),
+          kpi(insp.length, 'Inspecciones hoy', 'truck', nc.length ? 'deny' : '', null, function () {
+            modalLista('Inspecciones de hoy (' + insp.length + ')', [
+              ['Hora', function (i) { return U.fTime(i.FechaHora); }],
+              ['Placa', function (i) { return i.Placa; }],
+              ['Tipo', function (i) { return i.TipoVehiculo; }],
+              ['Resultado', function (i) { return i.Resultado; }],
+              ['No conformidades', function (i) { return i.NoConformidades; }],
+              ['Inspector', function (i) { return i.Inspector; }]
+            ], insp, 'Sin inspecciones registradas hoy.');
+          }),
           kpi(pers.filter(function (p) { return p.Estado === 'Habilitado'; }).length, 'Personas habilitadas', 'badge', '', '/consola/personas')),
         h('div', { class: 'grid-2' },
           h('section', { class: 'card' }, h('h3', null, 'Alertas'),
