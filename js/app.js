@@ -115,6 +115,7 @@
     ['/consola/permisos', 'key', 'Permisos', 'admin'],
     ['/consola/novedades', 'alert', 'Novedades', 'admin'],
     ['/consola/vigilantes', 'badge', 'Usuarios', 'admin'],
+    ['/consola/elementos', 'package', 'Elementos'],
     ['/consola/bitacora', 'file', 'Bitácora', 'admin'],
     ['/consola/instalacion', 'settings', 'Instalación', 'admin'],
     ['/consola/notificaciones', 'bell', 'Notificaciones', 'admin']
