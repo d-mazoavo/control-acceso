@@ -474,7 +474,7 @@
             h('div', { class: 'row gap wrap center' },
               h('button', { class: 'btn', type: 'button', onclick: function () { close(); imprimirCarnes([p]); } }, AP.icon('print', 18), 'Imprimir carné'),
               h('button', { class: 'btn', type: 'button', onclick: async function () {
-                var c = await AP.paseCanvas({ titulo: 'Credencial de acceso', nombre: p.Title, linea2: (p.TipoDoc || '') + ' ' + (p.NumDoc || ''), linea3: [p.Tipo, p.Empresa].filter(Boolean).join(' · '), token: p.Token, pie: 'Personal e intransferible' });
+                var c = await AP.paseCanvas({ titulo: 'Credencial de acceso', nombre: p.Title, linea2: (p.TipoDoc || '') + ' ' + (p.NumDoc || ''), linea3: p.Cargo || undefined, linea4: [p.Tipo, p.Empresa].filter(Boolean).join(' · '), linea5: p.Area || undefined, token: p.Token, pie: 'Personal e intransferible' });
                 c.toBlob(function (b) { U.download(b, 'Credencial_' + U.safeName(p.Title) + '.png'); });
               } }, AP.icon('download', 18), 'Descargar imagen'),
               p.Correo ? h('button', { class: 'btn', type: 'button', onclick: async function () {
@@ -601,9 +601,11 @@
             h('div', { class: 'id-data' },
               h('strong', null, p.Title),
               h('span', null, (p.TipoDoc || '') + ' ' + (p.NumDoc || '')),
+              !vis && p.Cargo ? h('span', null, p.Cargo) : null,
               vis && p.Empresa ? h('span', null, p.Empresa) : null,
               h('span', null, vis ? U.fDateTime(p.FechaInicio) + ' – ' + U.fTime(p.FechaFin) : (p.Tipo || '')),
               h('span', null, vis ? 'Visita a: ' + [p.Anfitrion, p.Area].filter(Boolean).join(' · ') : (p.Empresa || '')),
+              !vis && p.Area ? h('span', { class: 'muted' }, p.Area) : null,
               !vis && p.VigenciaHasta ? h('span', { class: 'id-vig' }, 'Vigente hasta ' + p.VigenciaHasta) : null),
             h('div', { class: 'id-qr', html: U.qrSvg(U.qrPayload(p.Token), 3, 2) })),
           h('div', { class: 'id-foot' }, vis ? 'Debe permanecer acompañado · Devolver al salir' : 'Personal e intransferible · ' + AP.CFG.empresa)));
@@ -647,7 +649,7 @@
   };
 
   AP.enviarCredencial = async function (p) {
-    var c = await AP.paseCanvas({ titulo: 'Credencial de acceso', nombre: p.Title, linea2: (p.TipoDoc || '') + ' ' + (p.NumDoc || ''), linea3: [p.Tipo, p.Empresa].filter(Boolean).join(' · '), token: p.Token, pie: 'Personal e intransferible' });
+    var c = await AP.paseCanvas({ titulo: 'Credencial de acceso', nombre: p.Title, linea2: (p.TipoDoc || '') + ' ' + (p.NumDoc || ''), linea3: p.Cargo || undefined, linea4: [p.Tipo, p.Empresa].filter(Boolean).join(' · '), linea5: p.Area || undefined, token: p.Token, pie: 'Personal e intransferible' });
     var blob = await new Promise(function (r) { c.toBlob(r, 'image/png'); });
     var b64 = await U.blobToBase64(blob);
     var html = '<div style="font-family:Arial,sans-serif;font-size:14px;color:#222">' +
