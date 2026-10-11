@@ -91,7 +91,7 @@
         title: 'Pase de ' + v.Title,
         body: function (close) {
           var img = h('img', { class: 'pase-img', alt: 'Pase de visitante' });
-          var blobP = AP.paseCanvas({ titulo: 'Pase de visitante', nombre: v.Title, linea2: U.fLong(v.FechaInicio) + ' a ' + U.fTime(v.FechaFin), linea3: 'Visita a: ' + [v.Anfitrion, v.Area].filter(Boolean).join(' · '), linea4: AP.CFG.sede, token: v.Token, pie: 'Presente este código y su documento de identidad' })
+          var blobP = AP.paseCanvas({ titulo: 'Pase de visitante', nombre: v.Title, linea2: v.Empresa || undefined, linea3: U.fLong(v.FechaInicio) + ' a ' + U.fTime(v.FechaFin), linea4: 'Visita a: ' + [v.Anfitrion, v.Area].filter(Boolean).join(' · '), linea5: AP.CFG.sede, token: v.Token, pie: 'Presente este código y su documento de identidad' })
             .then(function (c) { img.src = c.toDataURL('image/png'); return new Promise(function (r) { c.toBlob(r, 'image/png'); }); });
           var correo = AP.input('correo', v.Correo || '', { type: 'email', placeholder: 'correo@visitante.com' });
           return h('div', { class: 'stack center' }, img,

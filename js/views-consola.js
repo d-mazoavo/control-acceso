@@ -601,8 +601,9 @@
             h('div', { class: 'id-data' },
               h('strong', null, p.Title),
               h('span', null, (p.TipoDoc || '') + ' ' + (p.NumDoc || '')),
-              h('span', null, vis ? 'Visita a: ' + (p.Anfitrion || '') : (p.Tipo || '')),
-              h('span', null, vis ? U.fDateTime(p.FechaInicio) + ' – ' + U.fTime(p.FechaFin) : (p.Empresa || '')),
+              vis && p.Empresa ? h('span', null, p.Empresa) : null,
+              h('span', null, vis ? U.fDateTime(p.FechaInicio) + ' – ' + U.fTime(p.FechaFin) : (p.Tipo || '')),
+              h('span', null, vis ? 'Visita a: ' + [p.Anfitrion, p.Area].filter(Boolean).join(' · ') : (p.Empresa || '')),
               !vis && p.VigenciaHasta ? h('span', { class: 'id-vig' }, 'Vigente hasta ' + p.VigenciaHasta) : null),
             h('div', { class: 'id-qr', html: U.qrSvg(U.qrPayload(p.Token), 3, 2) })),
           h('div', { class: 'id-foot' }, vis ? 'Debe permanecer acompañado · Devolver al salir' : 'Personal e intransferible · ' + AP.CFG.empresa)));
@@ -612,7 +613,7 @@
 
   // Imagen del pase (para correo, descarga o WhatsApp)
   AP.paseCanvas = async function (o) {
-    var W = 720, H = 1100;
+    var W = 720, H = 1220;
     var c = document.createElement('canvas'); c.width = W; c.height = H;
     var x = c.getContext('2d');
     x.fillStyle = '#ffffff'; x.fillRect(0, 0, W, H);
@@ -630,7 +631,7 @@
     x.textAlign = 'center'; x.fillStyle = '#22261c';
     x.font = '700 34px system-ui, Arial'; y += wrap(o.nombre, y, 40); y += 48;
     x.font = '400 26px system-ui, Arial'; x.fillStyle = '#444';
-    [o.linea2, o.linea3, o.linea4].forEach(function (l) { if (l) { y += wrap(l, y, 32); y += 40; } });
+    [o.linea2, o.linea3, o.linea4, o.linea5].forEach(function (l) { if (l) { y += wrap(l, y, 32); y += 40; } });
     x.fillStyle = '#66754e'; x.fillRect(0, H - 70, W, 70);
     x.fillStyle = '#fff'; x.font = '600 22px system-ui, Arial'; x.fillText(o.pie || '', W / 2, H - 28);
     // Ajusta el texto a dos líneas como máximo; devuelve el alto adicional usado
