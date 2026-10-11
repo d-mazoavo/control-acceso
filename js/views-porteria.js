@@ -43,11 +43,13 @@
         tile('edit', 'Registro manual', 'Sin QR / no anunciado', '/manual'),
         tile('badge', 'Autoridad', 'Visita de autoridad', '/manual?cat=Autoridad'),
         tile('truck', 'Vehículo de carga', 'Inspección y precintos', '/carga'),
+        tile('package', 'Elementos', 'Ingreso / salida de herramientas', '/elementos'),
         tile('users', 'Personas dentro', String(dentro.length) + (AP.Session.can('admin') ? '' : ' · solo consulta'), '/dentro', dentro.length ? 'accent' : ''),
         tile('history', 'Mi turno', AP.Sync.pendingCount() ? AP.Sync.pendingCount() + ' por enviar' : 'Registros del celular', '/turno')),
       h('div', { class: 'quick-dial' },
         tel.director ? h('a', { class: 'btn', href: 'tel:' + tel.director }, AP.icon('phone', 18), 'Director') : null,
         tel.supervisor ? h('a', { class: 'btn', href: 'tel:' + tel.supervisor }, AP.icon('phone', 18), 'Supervisor') : null,
+        h('a', { class: 'btn', href: 'https://wa.me/573106453940', target: '_blank', rel: 'noopener' }, AP.icon('whatsapp', 18), 'Dir. Seguridad'),
         tel.policia ? h('a', { class: 'btn danger-outline', href: 'tel:' + tel.policia }, AP.icon('phone', 18), 'Emergencias ' + tel.policia) : null),
       h('div', { class: 'p-foot' },
         h('span', null, AP.Session.turno ? 'Turno de: ' : 'Vigilante: ', h('strong', null, user().nombre),
@@ -546,4 +548,95 @@
     AP.porteriaShell('Mi turno', cont, { back: '/porteria' });
     AP.onLeave(AP.Sync.on(U.debounce(function () { if (location.hash === '#/turno' && !document.querySelector('.modal-wrap')) AP.render(); }, 600)));
   });
+  // =================== ELEMENTOS (PORTERÍA) ===================
+  AP.route('/elementos', function () {
+    var content = h('div', { class: 'stack' });
+    AP.porteriaShell('Elementos', content, { back: '/porteria' });
+
+    async function cargar() {
+      content.replaceChildren(AP.spinner('Consultando…'));
+      try {
+        var hoy = new Date();
+        var desde = new Date(hoy); desde.setDate(desde.getDate() - 1);
+        var hasta = new Date(hoy); hasta.setDate(hasta.getDate() + 7);
+        var items = await AP.B.listRange('AP_Elementos', 'FechaPrevista', desde, hasta, {});
+        pintar(items);
+      } catch (e) {
+        content.replaceChildren(AP.empty('alert', 'No fue posible cargar', e && e.message));
+      }
+    }
+
+    function pintar(items) {
+      var pendientes = items.filter(function (x) { return x.Estado === 'Pendiente'; });
+      var otros = items.filter(function (x) { return x.Estado !== 'Pendiente'; });
+
+      content.replaceChildren(
+        pendientes.length ? null : AP.empty('package', 'Sin solicitudes pendientes', 'Las solicitudes creadas en la consola aparecerán aquí.'),
+        pendientes.length ? h('div', { class: 'list' }, pendientes.map(function (x) { return tarjeta(x, true); })) : null,
+        otros.length ? h('div', { class: 'stack' }, h('p', { class: 'muted section-label' }, 'Confirmados / rechazados (últimas 24 h y próximos 7 días)'),
+          h('div', { class: 'list' }, otros.map(function (x) { return tarjeta(x, false); }))) : null);
+    }
+
+    function tarjeta(x, activo) {
+      var elems = [];
+      try { elems = JSON.parse(x.Items || '[]'); } catch (e) {}
+      return h('div', { class: 'list-item' + (activo ? ' clickable' : ' static'), onclick: activo ? function () { confirmar(x, elems); } : null },
+        h('span', { class: 'dot ' + (x.Sentido === 'Ingreso' ? 'ok' : 'warn') }),
+        h('div', null,
+          h('strong', null, x.Title),
+          h('small', null, x.Sentido + ' · ' + U.fDateTime(x.FechaPrevista)),
+          h('small', { class: 'muted block' }, elems.map(function (i) { return (i.cant > 1 ? i.cant + '× ' : '') + i.desc; }).join(', ') || '—'),
+          h('small', { class: 'muted block' }, 'Autoriza: ' + (x.AutorizadoPor || '—'))),
+        AP.estadoPill(x.Estado));
+    }
+
+    function confirmar(x, elems) {
+      AP.modal({
+        title: x.Sentido + ' de elementos · ' + x.Title,
+        body: function (close) {
+          var obsIn = AP.textarea('obs', '', { placeholder: 'Observaciones (opcional)' });
+          return h('div', { class: 'stack' },
+            h('div', { class: 'card stack sm' },
+              h('div', null, h('strong', null, x.Title), h('small', { class: 'muted block' }, [x.PersonaDoc, x.PersonaEmpresa].filter(Boolean).join(' · '))),
+              h('span', { class: 'pill ' + (x.Sentido === 'Ingreso' ? 'ok' : 'warn') }, x.Sentido),
+              h('small', null, U.fDateTime(x.FechaPrevista)),
+              h('small', null, 'Autorizado por: ', h('strong', null, x.AutorizadoPor || '—'))),
+            h('div', { class: 'tbl-scroll' }, h('table', { class: 'tbl' },
+              h('thead', null, h('tr', null, h('th', null, 'Elemento'), h('th', null, 'Cant.'), h('th', null, 'Serial'))),
+              h('tbody', null, elems.map(function (i) {
+                return h('tr', null, h('td', null, i.desc), h('td', null, i.cant || 1), h('td', null, i.serial || '—'));
+              })))),
+            AP.field('Observaciones', obsIn),
+            h('div', { class: 'row gap wrap' },
+              h('button', { class: 'btn primary', type: 'button', onclick: async function () {
+                await guardarConfirmacion(x, 'Confirmado', obsIn.value.trim());
+                close(); cargar();
+              } }, AP.icon('check', 18), 'Confirmar ' + x.Sentido.toLowerCase()),
+              h('button', { class: 'btn danger-outline', type: 'button', onclick: async function () {
+                await guardarConfirmacion(x, 'Rechazado', obsIn.value.trim());
+                close(); cargar();
+              } }, AP.icon('x', 18), 'Rechazar'),
+              h('button', { class: 'btn', type: 'button', onclick: close }, 'Cancelar')));
+        }
+      });
+    }
+
+    async function guardarConfirmacion(x, estado, obs) {
+      var u = AP.Session.operador();
+      var data = {
+        Estado: estado,
+        Vigilante: u.nombre,
+        VigilanteUsuario: u.usuario,
+        FechaConfirmacion: new Date().toISOString()
+      };
+      if (obs) data.Observaciones = ((x.Observaciones ? x.Observaciones + '\n' : '') + 'Portería: ' + obs);
+      await AP.B.update('AP_Elementos', x.id, data);
+      U.beep(estado === 'Confirmado' ? 'ok' : 'deny');
+      await flash(estado === 'Confirmado', estado === 'Confirmado' ? x.Sentido + ' confirmado' : 'Rechazado', x.Title);
+    }
+
+    cargar();
+    AP.onLeave(AP.Sync.on(U.debounce(function () { if (location.hash === '#/elementos') cargar(); }, 800)));
+  });
+
 })();

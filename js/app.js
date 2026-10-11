@@ -109,7 +109,7 @@
     ['/consola/panel', 'chart', 'Panel'],
     ['/consola/personas', 'users', 'Personas'],
     ['/consola/visitas', 'user', 'Visitas'],
-    ['/consola/historial', 'history', 'Historial'],
+    ['/consola/historial', 'history', 'Ingresos y salidas'],
     ['/consola/inspecciones', 'truck', 'Inspecciones'],
     ['/consola/horarios', 'clock', 'Horarios', 'admin'],
     ['/consola/permisos', 'key', 'Permisos', 'admin'],
