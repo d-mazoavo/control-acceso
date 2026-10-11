@@ -637,12 +637,12 @@
     function pintar(items) {
       var pendientes = items.filter(function (x) { return x.Estado === 'Pendiente'; });
       var otros = items.filter(function (x) { return x.Estado !== 'Pendiente'; });
-
-      content.replaceChildren(
-        pendientes.length ? null : AP.empty('package', 'Sin solicitudes pendientes', 'Las solicitudes creadas en la consola aparecerán aquí.'),
-        pendientes.length ? h('div', { class: 'list' }, pendientes.map(function (x) { return tarjeta(x, true); })) : null,
-        otros.length ? h('div', { class: 'stack' }, h('p', { class: 'muted section-label' }, 'Confirmados / rechazados (últimas 24 h y próximos 7 días)'),
-          h('div', { class: 'list' }, otros.map(function (x) { return tarjeta(x, false); }))) : null);
+      var nodos = [];
+      if (!pendientes.length) nodos.push(AP.empty('package', 'Sin solicitudes pendientes', 'Las solicitudes creadas en la consola aparecerán aquí.'));
+      if (pendientes.length) nodos.push(h('div', { class: 'list' }, pendientes.map(function (x) { return tarjeta(x, true); })));
+      if (otros.length) nodos.push(h('div', { class: 'stack' }, h('p', { class: 'muted section-label' }, 'Confirmados / rechazados (últimas 24 h y próximos 7 días)'),
+        h('div', { class: 'list' }, otros.map(function (x) { return tarjeta(x, false); }))));
+      content.replaceChildren.apply(content, nodos);
     }
 
     function tarjeta(x, activo) {

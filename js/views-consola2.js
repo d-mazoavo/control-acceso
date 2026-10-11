@@ -520,6 +520,201 @@
   };
   var PLANTILLA = ['Nombre completo', 'Tipo', 'Tipo de documento', 'Número de documento', 'Teléfono', 'Correo', 'Empresa', 'Cargo', 'Área', 'Estado', 'Vigente hasta', 'Placa', 'Tipo de vehículo', 'Autoriza datos', 'Autoriza foto', 'Observaciones'];
 
+  // =================== ELEMENTOS ===================
+  AP.route('/consola/elementos', function (qs) {
+    if (!guard()) return;
+    var tab = qs.t || 'pendientes';
+    var content = h('div', { class: 'stack' });
+    AP.consolaShell('/consola/elementos', 'Control de Elementos', content,
+      h('button', { class: 'btn primary', type: 'button', onclick: function () { editar(null); } }, AP.icon('plus', 18), 'Nueva solicitud'));
+
+    var items = [];
+    async function cargar() {
+      content.replaceChildren(AP.spinner('Consultando…'));
+      try {
+        items = await AP.B.listRange('AP_Elementos', 'FechaCreacion', U.addDays(new Date(), -60), null, {});
+        pintar();
+      } catch (e) { content.replaceChildren(errBox(e)); }
+    }
+
+    function pintar() {
+      var hoy = U.ymd(), ahora = new Date();
+      var grupos = {
+        pendientes: items.filter(function (x) { return x.Estado === 'Pendiente' && new Date(x.FechaPrevista) >= U.addDays(ahora, -1); }),
+        hoy: items.filter(function (x) { return U.ymd(x.FechaPrevista) === hoy; }),
+        historial: items.slice().sort(function (a, b) { return a.FechaCreacion > b.FechaCreacion ? -1 : 1; })
+      };
+      var lista = (grupos[tab] || []).sort(function (a, b) { return a.FechaPrevista < b.FechaPrevista ? -1 : 1; });
+      var tabs = h('div', { class: 'tabs' },
+        [['pendientes', 'Pendientes'], ['hoy', 'Hoy'], ['historial', 'Últimos 60 días']].map(function (t) {
+          return h('a', { class: t[0] === tab ? 'on' : '', href: '#/consola/elementos?t=' + t[0] }, t[1] + (t[0] !== 'historial' ? ' (' + grupos[t[0]].length + ')' : ''));
+        }));
+      content.replaceChildren(tabs, simpleTable([
+        ['Persona', function (x) { return h('div', null, h('strong', null, x.Title), h('small', { class: 'block muted' }, [x.PersonaDoc, x.PersonaEmpresa].filter(Boolean).join(' · '))); }],
+        ['Sentido', function (x) { return h('span', { class: 'pill ' + (x.Sentido === 'Ingreso' ? 'ok' : 'warn') }, x.Sentido); }],
+        ['Fecha prevista', function (x) { return U.fDateTime(x.FechaPrevista); }],
+        ['Elementos', function (x) {
+          var it = [];
+          try { it = JSON.parse(x.Items || '[]'); } catch (e) {}
+          return h('div', null, it.slice(0, 2).map(function (i) { return h('div', null, (i.cant > 1 ? i.cant + '× ' : '') + i.desc); }),
+            it.length > 2 ? h('small', { class: 'muted' }, '+ ' + (it.length - 2) + ' más') : null);
+        }],
+        ['Autoriza', function (x) { return x.AutorizadoPor; }],
+        ['Estado', function (x) { return AP.estadoPill(x.Estado); }],
+        ['', function (x) {
+          return h('div', { class: 'row gap nowrap' },
+            x.Estado === 'Pendiente' ? h('button', { class: 'btn small danger-outline', type: 'button', onclick: function (e) { e.stopPropagation(); cancelar(x); } }, 'Cancelar') : null,
+            h('button', { class: 'btn small', type: 'button', title: 'Editar', onclick: function (e) { e.stopPropagation(); editar(x); } }, AP.icon('edit', 16)));
+        }]
+      ], lista, function (x) { detalle(x); }));
+    }
+    cargar();
+
+    function itemsFromForm(wrap) {
+      var filas = wrap.querySelectorAll('.elem-fila');
+      var arr = [];
+      filas.forEach(function (f) {
+        var desc = f.querySelector('[data-k=desc]').value.trim();
+        var cant = parseInt(f.querySelector('[data-k=cant]').value) || 1;
+        var serial = f.querySelector('[data-k=serial]').value.trim();
+        if (desc) arr.push({ desc: desc, cant: cant, serial: serial || undefined });
+      });
+      return arr;
+    }
+
+    function filaItem(item) {
+      item = item || {};
+      var fila = h('div', { class: 'elem-fila row gap' });
+      var desc = AP.input('desc', item.desc || '', { placeholder: 'Descripción del elemento *' });
+      desc.dataset.k = 'desc';
+      var cant = h('input', { class: 'input', type: 'number', min: 1, max: 999, value: item.cant || 1, style: 'width:70px' });
+      cant.dataset.k = 'cant';
+      var serial = AP.input('serial', item.serial || '', { placeholder: 'Serial / código (opcional)' });
+      serial.dataset.k = 'serial';
+      var del = h('button', { class: 'btn small danger-outline', type: 'button', onclick: function () { fila.remove(); } }, AP.icon('x', 16));
+      fila.append(
+        AP.field('Elemento *', desc),
+        AP.field('Cant.', cant),
+        AP.field('Serial', serial),
+        del
+      );
+      return fila;
+    }
+
+    function editar(x) {
+      var nuevo = !x;
+      var full = x ? Object.assign({}, x) : { Sentido: 'Salida', Estado: 'Pendiente' };
+      var existingItems = [];
+      try { existingItems = JSON.parse(full.Items || '[]'); } catch (e) {}
+
+      AP.modal({
+        title: nuevo ? 'Nueva solicitud de elementos' : 'Editar solicitud',
+        size: 'wide',
+        body: function (close) {
+          var personaIn = AP.input('persona', full.Title || '', { placeholder: 'Nombre completo *' });
+          var docIn = AP.input('doc', full.PersonaDoc || '', { placeholder: 'CC / CE / Pasaporte' });
+          var empresaIn = AP.input('empresa', full.PersonaEmpresa || '', { placeholder: 'Empresa (si es contratista)' });
+          var sentidoSel = AP.select('sentido', AP.CAT.sentidosElemento, full.Sentido);
+          var fechaIn = h('input', { class: 'input', type: 'datetime-local', value: full.FechaPrevista ? full.FechaPrevista.slice(0, 16) : '' });
+          var autorizaIn = AP.input('autoriza', full.AutorizadoPor || '', { placeholder: 'Nombre de quien autoriza *' });
+          var obsIn = AP.textarea('obs', full.Observaciones || '', { placeholder: 'Observaciones (opcional)' });
+
+          var listaItems = h('div', { class: 'stack' });
+          (existingItems.length ? existingItems : [{}]).forEach(function (i) { listaItems.appendChild(filaItem(i)); });
+
+          var addBtn = h('button', { class: 'btn small', type: 'button', onclick: function () { listaItems.appendChild(filaItem()); } }, AP.icon('plus', 16), 'Agregar elemento');
+
+          return h('div', { class: 'stack' },
+            h('div', { class: 'form-grid' },
+              AP.field('Nombre de la persona *', personaIn),
+              AP.field('Documento', docIn),
+              AP.field('Empresa', empresaIn),
+              AP.field('Sentido *', sentidoSel),
+              AP.field('Fecha y hora prevista *', fechaIn),
+              AP.field('Autorizado por *', autorizaIn)),
+            h('h4', null, 'Elementos'),
+            listaItems,
+            addBtn,
+            AP.field('Observaciones', obsIn),
+            h('div', { class: 'row gap wrap' },
+              h('button', { class: 'btn primary', type: 'button', onclick: async function () {
+                var persona = personaIn.value.trim();
+                var fecha = fechaIn.value;
+                var autoriza = autorizaIn.value.trim();
+                var elems = itemsFromForm(listaItems);
+                if (!persona) return AP.toast('Ingrese el nombre de la persona.', 'warn');
+                if (!fecha) return AP.toast('Ingrese la fecha y hora prevista.', 'warn');
+                if (!autoriza) return AP.toast('Ingrese quién autoriza.', 'warn');
+                if (!elems.length) return AP.toast('Agregue al menos un elemento.', 'warn');
+                var data = {
+                  Title: persona,
+                  PersonaDoc: docIn.value.trim() || null,
+                  PersonaEmpresa: empresaIn.value.trim() || null,
+                  Sentido: sentidoSel.value,
+                  FechaPrevista: new Date(fecha).toISOString(),
+                  AutorizadoPor: autoriza,
+                  Items: JSON.stringify(elems),
+                  Observaciones: obsIn.value.trim() || null,
+                  Estado: full.Estado || 'Pendiente'
+                };
+                try {
+                  if (nuevo) {
+                    data.CreadoPor = AP.Session.user.upn;
+                    data.FechaCreacion = new Date().toISOString();
+                    await AP.B.add('AP_Elementos', data);
+                    AP.toast('Solicitud creada. Queda pendiente de confirmación en portería.', 'ok');
+                  } else {
+                    await AP.B.update('AP_Elementos', x.id, data);
+                    AP.toast('Solicitud actualizada.');
+                  }
+                  close(); cargar();
+                } catch (e) { AP.toast(e.message, 'error'); }
+              } }, AP.icon('check', 18), nuevo ? 'Crear solicitud' : 'Guardar'),
+              !nuevo && x.Estado === 'Pendiente' ? h('button', { class: 'btn danger-outline', type: 'button', onclick: function () { close(); cancelar(x); } }, 'Cancelar solicitud') : null));
+        }
+      });
+    }
+
+    async function cancelar(x) {
+      if (!(await AP.confirm('Cancelar solicitud', '¿Cancelar la solicitud de elementos de ' + x.Title + '?', 'Sí, cancelar', 'danger'))) return;
+      try {
+        await AP.B.update('AP_Elementos', x.id, { Estado: 'Cancelado' });
+        AP.toast('Solicitud cancelada.');
+        cargar();
+      } catch (e) { AP.toast(e.message, 'error'); }
+    }
+
+    function detalle(x) {
+      var elems = [];
+      try { elems = JSON.parse(x.Items || '[]'); } catch (e) {}
+      AP.modal({
+        title: x.Title + ' · ' + x.Sentido,
+        body: function (close) {
+          return h('div', { class: 'stack' },
+            h('div', { class: 'form-grid' },
+              AP.field('Persona', h('span', null, x.Title)),
+              AP.field('Documento', h('span', null, x.PersonaDoc || '—')),
+              AP.field('Empresa', h('span', null, x.PersonaEmpresa || '—')),
+              AP.field('Sentido', h('span', { class: 'pill ' + (x.Sentido === 'Ingreso' ? 'ok' : 'warn') }, x.Sentido)),
+              AP.field('Fecha prevista', h('span', null, U.fDateTime(x.FechaPrevista))),
+              AP.field('Autorizado por', h('span', null, x.AutorizadoPor || '—')),
+              AP.field('Estado', AP.estadoPill(x.Estado)),
+              x.Vigilante ? AP.field('Confirmado por', h('span', null, x.Vigilante + (x.FechaConfirmacion ? ' · ' + U.fDateTime(x.FechaConfirmacion) : ''))) : null,
+              x.Observaciones ? AP.field('Observaciones', h('span', null, x.Observaciones)) : null),
+            h('h4', null, 'Elementos (' + elems.length + ')'),
+            h('div', { class: 'tbl-scroll' }, h('table', { class: 'tbl' },
+              h('thead', null, h('tr', null, h('th', null, 'Elemento'), h('th', null, 'Cant.'), h('th', null, 'Serial / código'))),
+              h('tbody', null, elems.map(function (i) {
+                return h('tr', null, h('td', null, i.desc), h('td', null, i.cant || 1), h('td', null, i.serial || '—'));
+              })))),
+            h('div', { class: 'row gap wrap' },
+              x.Estado === 'Pendiente' ? h('button', { class: 'btn', type: 'button', onclick: function () { close(); editar(x); } }, AP.icon('edit', 18), 'Editar') : null,
+              h('button', { class: 'btn', type: 'button', onclick: close }, 'Cerrar')));
+        }
+      });
+    }
+  });
+
   // =================== NOTIFICACIONES ===================
   AP.route('/consola/notificaciones', function () {
     if (!guard('admin')) return;
