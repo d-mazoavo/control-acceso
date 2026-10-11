@@ -202,6 +202,74 @@
     var ult = r.ultimo;
     var ultimo = ult ? h('p', { class: 'muted small' }, AP.icon('clock', 14), ' Último registro: ', h('strong', null, ult.Sentido), ' ' + U.fDateTime(ult.FechaHora) + ' (' + U.rel(ult.FechaHora) + ')') : null;
 
+    // --- Sección de elementos pendientes para esta persona ---
+    var secElementos = h('div'); // se llena asíncronamente
+    if (!r.invalido && (rec.NumDoc || rec.Title)) {
+      (async function () {
+        try {
+          var hoy = new Date();
+          var desde = new Date(hoy); desde.setDate(desde.getDate() - 1);
+          var hasta = new Date(hoy); hasta.setDate(hasta.getDate() + 3);
+          var todos = await AP.B.listRange('AP_Elementos', 'FechaPrevista', desde, hasta, {});
+          var doc = U.normDoc(rec.NumDoc || '');
+          var nom = (rec.Title || '').toLowerCase();
+          var pendientes = todos.filter(function (x) {
+            if (x.Estado !== 'Pendiente') return false;
+            if (doc && U.normDoc(x.PersonaDoc || '') === doc) return true;
+            if (nom && x.Title && x.Title.toLowerCase() === nom) return true;
+            return false;
+          });
+          if (!pendientes.length) return;
+          var items = pendientes.map(function (x) {
+            var elems = [];
+            try { elems = JSON.parse(x.Items || '[]'); } catch (e) {}
+            return h('div', { class: 'elem-pendiente card stack sm' },
+              h('div', { class: 'row gap' },
+                h('span', { class: 'pill ' + (x.Sentido === 'Ingreso' ? 'ok' : 'warn') }, x.Sentido),
+                h('span', { class: 'muted small' }, U.fDateTime(x.FechaPrevista)),
+                h('span', { class: 'muted small' }, 'Autoriza: ' + (x.AutorizadoPor || '—'))),
+              h('div', { class: 'tbl-scroll' }, h('table', { class: 'tbl' },
+                h('thead', null, h('tr', null, h('th', null, 'Elemento'), h('th', null, 'Cant.'), h('th', null, 'Serial'))),
+                h('tbody', null, elems.map(function (i) {
+                  return h('tr', null, h('td', null, i.desc), h('td', null, i.cant || 1), h('td', null, i.serial || '—'));
+                })))),
+              h('div', { class: 'row gap wrap' },
+                h('button', { class: 'btn small primary', type: 'button', onclick: async function (e) {
+                  var btn = e.currentTarget;
+                  btn.disabled = true;
+                  try {
+                    var u = AP.Session.operador();
+                    await AP.B.update('AP_Elementos', x.id, {
+                      Estado: 'Confirmado', Vigilante: u.nombre, VigilanteUsuario: u.usuario,
+                      FechaConfirmacion: new Date().toISOString()
+                    });
+                    U.beep('ok');
+                    btn.closest('.elem-pendiente').replaceWith(h('p', { class: 'note ok' }, AP.icon('check', 16), ' ' + x.Sentido + ' de elementos confirmado'));
+                  } catch (err) { AP.toast('Error: ' + err.message, 'error'); btn.disabled = false; }
+                } }, AP.icon('check', 16), 'Confirmar ' + x.Sentido.toLowerCase()),
+                h('button', { class: 'btn small danger-outline', type: 'button', onclick: async function (e) {
+                  var btn = e.currentTarget;
+                  btn.disabled = true;
+                  try {
+                    var u = AP.Session.operador();
+                    await AP.B.update('AP_Elementos', x.id, {
+                      Estado: 'Rechazado', Vigilante: u.nombre, VigilanteUsuario: u.usuario,
+                      FechaConfirmacion: new Date().toISOString()
+                    });
+                    U.beep('deny');
+                    btn.closest('.elem-pendiente').replaceWith(h('p', { class: 'note warn' }, AP.icon('x', 16), ' ' + x.Sentido + ' de elementos rechazado'));
+                  } catch (err) { AP.toast('Error: ' + err.message, 'error'); btn.disabled = false; }
+                } }, AP.icon('x', 16), 'Rechazar')));
+          });
+          secElementos.replaceChildren(
+            h('div', { class: 'card stack' },
+              h('h3', null, AP.icon('package', 18), ' Elementos pendientes (' + pendientes.length + ')'),
+              h('p', { class: 'note' }, 'Esta persona tiene solicitudes de ' + (pendientes.length === 1 ? 'ingreso/salida de elementos' : 'ingreso/salida de elementos') + ' para confirmar.'),
+              h('div', { class: 'stack sm' }, items)));
+        } catch (e) { /* sin conexión o sin colección: silencioso */ }
+      })();
+    }
+
     // --- Controles ---
     var sentidoCtl = AP.Session.can('admin')
       ? AP.segmented('Sentido', [
@@ -334,7 +402,7 @@
       } finally { saving = false; }
     }
 
-    var cont = h('div', { class: 'stack' }, banner, ficha, ultimo,
+    var cont = h('div', { class: 'stack' }, banner, ficha, ultimo, secElementos,
       r.invalido ? null : h('div', { class: 'card stack' }, h('h3', null, 'Registro'), sentidoCtl, enVeh, vehBox, visIn, visOut, obs),
       acciones);
     form.appendChild(cont);
