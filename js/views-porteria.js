@@ -43,14 +43,12 @@
         tile('edit', 'Registro manual', 'Sin QR / no anunciado', '/manual'),
         tile('badge', 'Autoridad', 'Visita de autoridad', '/manual?cat=Autoridad'),
         tile('truck', 'Vehículo de carga', 'Inspección y precintos', '/carga'),
-        tile('package', 'Elementos', 'Ingreso / salida de herramientas', '/elementos'),
         tile('users', 'Personas dentro', String(dentro.length) + (AP.Session.can('admin') ? '' : ' · solo consulta'), '/dentro', dentro.length ? 'accent' : ''),
         tile('history', 'Mi turno', AP.Sync.pendingCount() ? AP.Sync.pendingCount() + ' por enviar' : 'Registros del celular', '/turno')),
       h('div', { class: 'quick-dial' },
         tel.director ? h('a', { class: 'btn', href: 'tel:' + tel.director }, AP.icon('phone', 18), 'Director') : null,
         tel.supervisor ? h('a', { class: 'btn', href: 'tel:' + tel.supervisor }, AP.icon('phone', 18), 'Supervisor') : null,
-        h('a', { class: 'btn', href: 'https://wa.me/573106453940', target: '_blank', rel: 'noopener' }, AP.icon('whatsapp', 18), 'Dir. Seguridad'),
-        tel.policia ? h('a', { class: 'btn danger-outline', href: 'tel:' + tel.policia }, AP.icon('phone', 18), 'Emergencias ' + tel.policia) : null),
+        h('a', { class: 'btn', href: 'https://wa.me/573106453940', target: '_blank', rel: 'noopener' }, AP.icon('whatsapp', 18), 'Dir. Seguridad')),
       h('div', { class: 'p-foot' },
         h('span', null, AP.Session.turno ? 'Turno de: ' : 'Vigilante: ', h('strong', null, user().nombre),
           AP.Session.turno ? ' (' + AP.Session.turno.usuario + ') desde las ' + U.fTime(AP.Session.turno.inicio) : null),
@@ -202,74 +200,6 @@
     var ult = r.ultimo;
     var ultimo = ult ? h('p', { class: 'muted small' }, AP.icon('clock', 14), ' Último registro: ', h('strong', null, ult.Sentido), ' ' + U.fDateTime(ult.FechaHora) + ' (' + U.rel(ult.FechaHora) + ')') : null;
 
-    // --- Sección de elementos pendientes para esta persona ---
-    var secElementos = h('div'); // se llena asíncronamente
-    if (!r.invalido && (rec.NumDoc || rec.Title)) {
-      (async function () {
-        try {
-          var hoy = new Date();
-          var desde = new Date(hoy); desde.setDate(desde.getDate() - 1);
-          var hasta = new Date(hoy); hasta.setDate(hasta.getDate() + 3);
-          var todos = await AP.B.listRange('AP_Elementos', 'FechaPrevista', desde, hasta, {});
-          var doc = U.normDoc(rec.NumDoc || '');
-          var nom = (rec.Title || '').toLowerCase();
-          var pendientes = todos.filter(function (x) {
-            if (x.Estado !== 'Pendiente') return false;
-            if (doc && U.normDoc(x.PersonaDoc || '') === doc) return true;
-            if (nom && x.Title && x.Title.toLowerCase() === nom) return true;
-            return false;
-          });
-          if (!pendientes.length) return;
-          var items = pendientes.map(function (x) {
-            var elems = [];
-            try { elems = JSON.parse(x.Items || '[]'); } catch (e) {}
-            return h('div', { class: 'elem-pendiente card stack sm' },
-              h('div', { class: 'row gap' },
-                h('span', { class: 'pill ' + (x.Sentido === 'Ingreso' ? 'ok' : 'warn') }, x.Sentido),
-                h('span', { class: 'muted small' }, U.fDateTime(x.FechaPrevista)),
-                h('span', { class: 'muted small' }, 'Autoriza: ' + (x.AutorizadoPor || '—'))),
-              h('div', { class: 'tbl-scroll' }, h('table', { class: 'tbl' },
-                h('thead', null, h('tr', null, h('th', null, 'Elemento'), h('th', null, 'Cant.'), h('th', null, 'Serial'))),
-                h('tbody', null, elems.map(function (i) {
-                  return h('tr', null, h('td', null, i.desc), h('td', null, i.cant || 1), h('td', null, i.serial || '—'));
-                })))),
-              h('div', { class: 'row gap wrap' },
-                h('button', { class: 'btn small primary', type: 'button', onclick: async function (e) {
-                  var btn = e.currentTarget;
-                  btn.disabled = true;
-                  try {
-                    var u = AP.Session.operador();
-                    await AP.B.update('AP_Elementos', x.id, {
-                      Estado: 'Confirmado', Vigilante: u.nombre, VigilanteUsuario: u.usuario,
-                      FechaConfirmacion: new Date().toISOString()
-                    });
-                    U.beep('ok');
-                    btn.closest('.elem-pendiente').replaceWith(h('p', { class: 'note ok' }, AP.icon('check', 16), ' ' + x.Sentido + ' de elementos confirmado'));
-                  } catch (err) { AP.toast('Error: ' + err.message, 'error'); btn.disabled = false; }
-                } }, AP.icon('check', 16), 'Confirmar ' + x.Sentido.toLowerCase()),
-                h('button', { class: 'btn small danger-outline', type: 'button', onclick: async function (e) {
-                  var btn = e.currentTarget;
-                  btn.disabled = true;
-                  try {
-                    var u = AP.Session.operador();
-                    await AP.B.update('AP_Elementos', x.id, {
-                      Estado: 'Rechazado', Vigilante: u.nombre, VigilanteUsuario: u.usuario,
-                      FechaConfirmacion: new Date().toISOString()
-                    });
-                    U.beep('deny');
-                    btn.closest('.elem-pendiente').replaceWith(h('p', { class: 'note warn' }, AP.icon('x', 16), ' ' + x.Sentido + ' de elementos rechazado'));
-                  } catch (err) { AP.toast('Error: ' + err.message, 'error'); btn.disabled = false; }
-                } }, AP.icon('x', 16), 'Rechazar')));
-          });
-          secElementos.replaceChildren(
-            h('div', { class: 'card stack' },
-              h('h3', null, AP.icon('package', 18), ' Elementos pendientes (' + pendientes.length + ')'),
-              h('p', { class: 'note' }, 'Esta persona tiene solicitudes de ' + (pendientes.length === 1 ? 'ingreso/salida de elementos' : 'ingreso/salida de elementos') + ' para confirmar.'),
-              h('div', { class: 'stack sm' }, items)));
-        } catch (e) { /* sin conexión o sin colección: silencioso */ }
-      })();
-    }
-
     // --- Controles ---
     var sentidoCtl = AP.Session.can('admin')
       ? AP.segmented('Sentido', [
@@ -279,6 +209,102 @@
       : h('div', { class: 'sentido-auto ' + (sentido === 'Salida' ? 'out' : 'in'), dataset: { value: sentido } },
         AP.icon(sentido === 'Salida' ? 'logout' : 'door', 22), h('strong', null, sentido === 'Salida' ? 'SALIDA' : 'INGRESO'),
         h('small', null, 'Determinado por el sistema según el último registro'));
+
+    // --- Elementos programados por la Dirección de Seguridad Integral para esta persona ---
+    // Se muestran los registros de elementos pendientes del día. El vigilante coteja
+    // cada elemento y deja constancia; el resultado también queda anotado en el registro del movimiento.
+    var EL = AP.Elem;
+    var elem = { el: h('div', { class: 'elem-wrap' }), lista: [], resueltos: {}, cargado: false };
+    function sentidoActual() { return sentidoCtl.dataset.value || sentido; }
+    function elemDe(x) {
+      if (r.token && x.Token && x.Token === r.token) return true;
+      var d = U.normDoc(rec.NumDoc || '');
+      return !!(d && x.PersonaDoc && U.normDoc(x.PersonaDoc) === d);
+    }
+    async function cargarElementos() {
+      if (r.invalido || !(r.token || rec.NumDoc)) return;
+      try {
+        var desde = U.startOfDayCO(new Date());
+        var hasta = U.addDays(desde, 1);
+        var todos = await AP.B.listRange('AP_Elementos', 'FechaPrevista', desde, hasta, {});
+        elem.lista = todos.filter(function (x) { return x.Estado === 'Pendiente' && elemDe(x); })
+          .sort(function (a, b) { return a.FechaPrevista < b.FechaPrevista ? -1 : 1; });
+        elem.cargado = true;
+        pintarElementos();
+      } catch (e) {
+        elem.el.replaceChildren(h('p', { class: 'note' }, AP.icon('alert', 16), ' No fue posible consultar los elementos programados para esta persona (' + e.message + '). Si porta herramientas o equipos, comuníquese con la Dirección de Seguridad Integral antes de permitir su paso.'));
+      }
+    }
+    function pintarElementos() {
+      if (!elem.lista.length) { elem.el.replaceChildren(); return; }
+      var s0 = sentidoActual();
+      var orden = elem.lista.slice().sort(function (a, b) { return (a.Sentido === s0 ? 0 : 1) - (b.Sentido === s0 ? 0 : 1); });
+      var pend = elem.lista.filter(function (x) { return !elem.resueltos[x.id]; }).length;
+      elem.el.replaceChildren(h('section', { class: 'card stack elem-box' },
+        h('h3', { class: 'row gap' }, AP.icon('package', 22), h('span', null, 'Registros de elementos (' + elem.lista.length + ')')),
+        pend ? h('p', { class: 'note' }, 'Revise físicamente cada elemento (descripción, cantidad y serial) contra esta lista antes de verificar.') : null,
+        orden.map(tarjetaElemento)));
+    }
+    function tarjetaElemento(x) {
+      var elems = EL.items(x), fotos = EL.fotos(x), res = elem.resueltos[x.id];
+      var esIn = x.Sentido === 'Ingreso', coincide = x.Sentido === sentidoActual();
+      var verbo = esIn ? 'ingresa' : 'sale';
+      var cab = h('div', { class: 'elem-head' },
+        AP.pill(x.Sentido.toUpperCase(), esIn ? 'ok' : 'warn'),
+        h('span', { class: 'small' }, 'Previsto: ', h('strong', null, U.fDateTime(x.FechaPrevista))),
+        h('span', { class: 'small' }, 'Autoriza: ', h('strong', null, x.AutorizadoPor || '—')));
+      var cuerpo = [cab, EL.tabla(elems)];
+      if (fotos.length) cuerpo.push(EL.galeria(fotos));
+      if (x.Observaciones) cuerpo.push(h('p', { class: 'small' }, h('strong', null, 'Indicaciones: '), x.Observaciones));
+      if (res) {
+        cuerpo.push(h('div', { class: 'elem-res ' + (res.estado === 'Confirmado' ? 'ok' : 'deny') },
+          AP.icon(res.estado === 'Confirmado' ? 'check' : 'x', 20),
+          h('span', null, res.estado === 'Confirmado' ? 'Verificado: los elementos ' + (esIn ? 'ingresaron' : 'salieron') + ' conforme a la lista.' : 'Registrado: no coincide. ' + res.nota)));
+      } else {
+        if (!coincide) cuerpo.push(h('p', { class: 'note' }, 'Programado para la ' + x.Sentido.toUpperCase() + '. Verifíquelo solo cuando la persona efectivamente ' + verbo + ' con los elementos.'));
+        var bOk = h('button', { class: 'btn ' + (esIn ? 'go-in' : 'go-out'), type: 'button' }, AP.icon('check', 20), 'Verificado: sí ' + verbo);
+        var bNo = h('button', { class: 'btn danger-outline', type: 'button' }, AP.icon('x', 18), 'No coincide / no los presenta');
+        bOk.onclick = function () { resolverElemento(x, 'Confirmado', '', [bOk, bNo]); };
+        bNo.onclick = function () {
+          AP.modal({ title: 'Elementos que no coinciden', body: function (close) {
+            var t = AP.textarea('nota', '', { placeholder: 'Describa qué no coincide (elemento, cantidad o serial distinto, no los presenta, elementos adicionales, etc.)', rows: 3 });
+            return h('div', { class: 'stack' }, h('p', { class: 'muted small' }, x.Title + ' — ' + x.Sentido + ' de elementos'), t,
+              h('button', { class: 'btn danger block', type: 'button', onclick: function () {
+                if (t.value.trim().length < 6) return AP.toast('Describa brevemente qué no coincide.', 'warn');
+                close(); resolverElemento(x, 'Rechazado', t.value.trim(), [bOk, bNo]);
+              } }, 'Registrar novedad'));
+          } });
+        };
+        cuerpo.push(h('div', { class: 'row gap wrap' }, bOk, bNo));
+      }
+      return h('div', { class: 'elem-sol ' + (esIn ? 'in' : 'out') + (res ? ' hecho' : '') }, cuerpo);
+    }
+    async function resolverElemento(x, estado, nota, btns) {
+      btns.forEach(function (b) { b.disabled = true; });
+      var u = AP.Session.operador();
+      var cambios = { Estado: estado, Vigilante: u.nombre, VigilanteUsuario: u.usuario, FechaConfirmacion: new Date().toISOString() };
+      if (nota) cambios.NotaPorteria = nota;
+      try {
+        await AP.B.update('AP_Elementos', x.id, cambios);
+        elem.resueltos[x.id] = { estado: estado, nota: nota, sentido: x.Sentido, resumen: EL.resumen(EL.items(x)) };
+        U.beep(estado === 'Confirmado' ? 'ok' : 'deny');
+        AP.toast(estado === 'Confirmado' ? 'Elementos verificados.' : 'Novedad de elementos registrada. Informe a la Dirección de Seguridad Integral.', estado === 'Confirmado' ? 'info' : 'warn', 5000);
+        pintarElementos();
+      } catch (e) {
+        btns.forEach(function (b) { b.disabled = false; });
+        AP.toast('No se pudo guardar la verificación de elementos: ' + e.message + (e.offline ? ' Intente de nuevo cuando haya señal.' : ''), 'error', 8000);
+      }
+    }
+    // Constancia en el registro del movimiento
+    function notaElementos(sent) {
+      var out = [];
+      elem.lista.forEach(function (x) {
+        var z = elem.resueltos[x.id];
+        if (z) out.push((z.estado === 'Confirmado' ? 'Elementos verificados (' : 'Elementos NO coinciden (') + z.sentido.toLowerCase() + '): ' + z.resumen + (z.nota ? ' — ' + z.nota : ''));
+        else if (x.Sentido === sent) out.push('Elementos programados SIN verificar (' + x.Sentido.toLowerCase() + '): ' + EL.resumen(EL.items(x)));
+      });
+      return out.join(' | ');
+    }
 
     var placas = String(rec.Placa || '').split(/[,;/]/).map(function (x) { return x.trim(); }).filter(Boolean);
     var enVeh = AP.check('enVehiculo', 'Llega o sale en vehículo', !!(ult && ult.Placa && sentido === 'Salida'));
@@ -299,6 +325,7 @@
 
     function pintar() {
       var s = sentidoCtl.dataset.value;
+      if (elem.cargado) pintarElementos();
       vehBox.style.display = enVeh.querySelector('input').checked ? '' : 'none';
       visIn.style.display = (esVisita || (esManual && rec.Categoria !== 'Autoridad')) && s === 'Ingreso' ? '' : 'none';
       visOut.style.display = (esVisita || esManual) && s === 'Salida' ? '' : 'none';
@@ -366,8 +393,16 @@
       if (resultado === 'Permitido' && sent === 'Ingreso' && esVisitante && !autoriza.querySelector('input').checked) {
         return AP.toast('Confirme que el visitante autorizó el tratamiento de datos. Si no autoriza, no puede registrarse su ingreso.', 'warn', 7000);
       }
+      var sinVerificar = resultado === 'Permitido' ? elem.lista.filter(function (x) { return x.Sentido === sent && !elem.resueltos[x.id]; }) : [];
+      if (sinVerificar.length) {
+        var seguir = await AP.confirm('Elementos sin verificar',
+          'Esta persona tiene ' + (sinVerificar.length === 1 ? 'un registro' : sinVerificar.length + ' registros') + ' de ' + sent.toLowerCase() + ' de elementos sin verificar. Verifíquelo(s) en la parte superior antes de registrar. Si registra de todas formas, quedará constancia de que los elementos no se verificaron.',
+          'Registrar de todas formas', 'danger');
+        if (!seguir) { try { elem.el.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { /* */ } return; }
+      }
       saving = true;
       try {
+        var notaEl = notaElementos(sent);
         var f = {
           Title: rec.Title || '(sin nombre)', Sentido: sent, Resultado: resultado,
           Categoria: r.categoria || (esVisita ? 'Visitante' : rec.Tipo), Origen: r.origen || 'QR',
@@ -375,7 +410,7 @@
           TipoDoc: rec.TipoDoc, NumDoc: rec.NumDoc, Telefono: rec.Telefono, Empresa: rec.Empresa, Cargo: rec.Cargo,
           Anfitrion: rec.Anfitrion, AnfitrionCorreo: rec.AnfitrionCorreo, Area: rec.Area, Motivo: rec.Motivo,
           Placa: veh ? placa : undefined, VehiculoTipo: veh ? vehTipo.value : undefined,
-          EstadoMostrado: r.etiqueta, Observaciones: obs.value.trim(),
+          EstadoMostrado: r.etiqueta, Observaciones: [obs.value.trim(), notaEl].filter(Boolean).join(' | '),
           DatosAdicionales: rec.DatosAdicionales
         };
         if (resultado === 'Negado') f.MotivoNegacion = r.etiqueta + (r.detalle ? ': ' + r.detalle : '');
@@ -402,12 +437,13 @@
       } finally { saving = false; }
     }
 
-    var cont = h('div', { class: 'stack' }, banner, ficha, ultimo, secElementos,
+    var cont = h('div', { class: 'stack' }, banner, ficha, ultimo, elem.el,
       r.invalido ? null : h('div', { class: 'card stack' }, h('h3', null, 'Registro'), sentidoCtl, enVeh, vehBox, visIn, visOut, obs),
       acciones);
     form.appendChild(cont);
     AP.porteriaShell('Verificación', form, { back: vuelta });
     pintar();
+    cargarElementos();
   });
 
   // =================== BÚSQUEDA ===================
@@ -616,95 +652,4 @@
     AP.porteriaShell('Mi turno', cont, { back: '/porteria' });
     AP.onLeave(AP.Sync.on(U.debounce(function () { if (location.hash === '#/turno' && !document.querySelector('.modal-wrap')) AP.render(); }, 600)));
   });
-  // =================== ELEMENTOS (PORTERÍA) ===================
-  AP.route('/elementos', function () {
-    var content = h('div', { class: 'stack' });
-    AP.porteriaShell('Elementos', content, { back: '/porteria' });
-
-    async function cargar() {
-      content.replaceChildren(AP.spinner('Consultando…'));
-      try {
-        var hoy = new Date();
-        var desde = new Date(hoy); desde.setDate(desde.getDate() - 1);
-        var hasta = new Date(hoy); hasta.setDate(hasta.getDate() + 7);
-        var items = await AP.B.listRange('AP_Elementos', 'FechaPrevista', desde, hasta, {});
-        pintar(items);
-      } catch (e) {
-        content.replaceChildren(AP.empty('alert', 'No fue posible cargar', e && e.message));
-      }
-    }
-
-    function pintar(items) {
-      var pendientes = items.filter(function (x) { return x.Estado === 'Pendiente'; });
-      var otros = items.filter(function (x) { return x.Estado !== 'Pendiente'; });
-      var nodos = [];
-      if (!pendientes.length) nodos.push(AP.empty('package', 'Sin solicitudes pendientes', 'Las solicitudes creadas en la consola aparecerán aquí.'));
-      if (pendientes.length) nodos.push(h('div', { class: 'list' }, pendientes.map(function (x) { return tarjeta(x, true); })));
-      if (otros.length) nodos.push(h('div', { class: 'stack' }, h('p', { class: 'muted section-label' }, 'Confirmados / rechazados (últimas 24 h y próximos 7 días)'),
-        h('div', { class: 'list' }, otros.map(function (x) { return tarjeta(x, false); }))));
-      content.replaceChildren.apply(content, nodos);
-    }
-
-    function tarjeta(x, activo) {
-      var elems = [];
-      try { elems = JSON.parse(x.Items || '[]'); } catch (e) {}
-      return h('div', { class: 'list-item' + (activo ? ' clickable' : ' static'), onclick: activo ? function () { confirmar(x, elems); } : null },
-        h('span', { class: 'dot ' + (x.Sentido === 'Ingreso' ? 'ok' : 'warn') }),
-        h('div', null,
-          h('strong', null, x.Title),
-          h('small', null, x.Sentido + ' · ' + U.fDateTime(x.FechaPrevista)),
-          h('small', { class: 'muted block' }, elems.map(function (i) { return (i.cant > 1 ? i.cant + '× ' : '') + i.desc; }).join(', ') || '—'),
-          h('small', { class: 'muted block' }, 'Autoriza: ' + (x.AutorizadoPor || '—'))),
-        AP.estadoPill(x.Estado));
-    }
-
-    function confirmar(x, elems) {
-      AP.modal({
-        title: x.Sentido + ' de elementos · ' + x.Title,
-        body: function (close) {
-          var obsIn = AP.textarea('obs', '', { placeholder: 'Observaciones (opcional)' });
-          return h('div', { class: 'stack' },
-            h('div', { class: 'card stack sm' },
-              h('div', null, h('strong', null, x.Title), h('small', { class: 'muted block' }, [x.PersonaDoc, x.PersonaEmpresa].filter(Boolean).join(' · '))),
-              h('span', { class: 'pill ' + (x.Sentido === 'Ingreso' ? 'ok' : 'warn') }, x.Sentido),
-              h('small', null, U.fDateTime(x.FechaPrevista)),
-              h('small', null, 'Autorizado por: ', h('strong', null, x.AutorizadoPor || '—'))),
-            h('div', { class: 'tbl-scroll' }, h('table', { class: 'tbl' },
-              h('thead', null, h('tr', null, h('th', null, 'Elemento'), h('th', null, 'Cant.'), h('th', null, 'Serial'))),
-              h('tbody', null, elems.map(function (i) {
-                return h('tr', null, h('td', null, i.desc), h('td', null, i.cant || 1), h('td', null, i.serial || '—'));
-              })))),
-            AP.field('Observaciones', obsIn),
-            h('div', { class: 'row gap wrap' },
-              h('button', { class: 'btn primary', type: 'button', onclick: async function () {
-                await guardarConfirmacion(x, 'Confirmado', obsIn.value.trim());
-                close(); cargar();
-              } }, AP.icon('check', 18), 'Confirmar ' + x.Sentido.toLowerCase()),
-              h('button', { class: 'btn danger-outline', type: 'button', onclick: async function () {
-                await guardarConfirmacion(x, 'Rechazado', obsIn.value.trim());
-                close(); cargar();
-              } }, AP.icon('x', 18), 'Rechazar'),
-              h('button', { class: 'btn', type: 'button', onclick: close }, 'Cancelar')));
-        }
-      });
-    }
-
-    async function guardarConfirmacion(x, estado, obs) {
-      var u = AP.Session.operador();
-      var data = {
-        Estado: estado,
-        Vigilante: u.nombre,
-        VigilanteUsuario: u.usuario,
-        FechaConfirmacion: new Date().toISOString()
-      };
-      if (obs) data.Observaciones = ((x.Observaciones ? x.Observaciones + '\n' : '') + 'Portería: ' + obs);
-      await AP.B.update('AP_Elementos', x.id, data);
-      U.beep(estado === 'Confirmado' ? 'ok' : 'deny');
-      await flash(estado === 'Confirmado', estado === 'Confirmado' ? x.Sentido + ' confirmado' : 'Rechazado', x.Title);
-    }
-
-    cargar();
-    AP.onLeave(AP.Sync.on(U.debounce(function () { if (location.hash === '#/elementos') cargar(); }, 800)));
-  });
-
 })();

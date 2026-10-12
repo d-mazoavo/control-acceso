@@ -6,7 +6,7 @@
   AP.CFG = window.AP_CONFIG || {};
   AP.TX = window.AP_TEXTOS || {};
   AP.State = {};
-  AP.VERSION = '2.0.0';
+  AP.VERSION = '2.1.0';
 
   var Session = (AP.Session = { user: null, rol: null, perms: {}, turno: null, dispositivo: false });
 
@@ -115,7 +115,7 @@
     ['/consola/permisos', 'key', 'Permisos', 'admin'],
     ['/consola/novedades', 'alert', 'Novedades', 'admin'],
     ['/consola/vigilantes', 'badge', 'Usuarios', 'admin'],
-    ['/consola/elementos', 'package', 'Elementos'],
+    ['/consola/elementos', 'package', 'Elementos', 'admin'],
     ['/consola/bitacora', 'file', 'Bitácora', 'admin'],
     ['/consola/instalacion', 'settings', 'Instalación', 'admin'],
     ['/consola/notificaciones', 'bell', 'Notificaciones', 'admin']
@@ -358,7 +358,7 @@
         if (!w) return;
         w.addEventListener('statechange', function () {
           if (w.state === 'installed' && navigator.serviceWorker.controller) {
-            AP.toast('Hay una nueva versión de la aplicación. Se aplicará al volver a abrirla.', 'info', 8000);
+            AP.toast('Hay una nueva versión de la aplicación. Cierre y vuelva a abrir la aplicación (o recargue la página) para aplicarla.', 'info', 9000);
           }
         });
       });

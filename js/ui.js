@@ -201,7 +201,7 @@
   };
   AP.pill = function (text, kind) { return h('span', { class: 'pill ' + (kind || '') }, text); };
   AP.estadoPill = function (estado) {
-    var k = { Habilitado: 'ok', Aprobada: 'ok', Permitido: 'ok', Conforme: 'ok', Inhabilitado: 'deny', Rechazada: 'deny', Negado: 'deny', 'No conforme': 'deny', Cancelada: 'muted', Pendiente: 'warn' }[estado] || 'muted';
+    var k = { Habilitado: 'ok', Aprobada: 'ok', Permitido: 'ok', Conforme: 'ok', Confirmado: 'ok', Inhabilitado: 'deny', Rechazada: 'deny', Rechazado: 'deny', Negado: 'deny', 'No conforme': 'deny', Cancelada: 'muted', Cancelado: 'muted', Pendiente: 'warn' }[estado] || 'muted';
     return AP.pill(estado || '—', k);
   };
   AP.photoEl = function (rec, cls) {
@@ -210,6 +210,35 @@
   };
 
   // Abre la cámara del celular (o el selector de archivos en el computador)
+  // ---------- Control de elementos: auxiliares comunes (consola y pantalla de verificación) ----------
+  AP.Elem = {
+    items: function (x) { try { var a = JSON.parse((x && x.Items) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } },
+    fotos: function (x) { try { var a = JSON.parse((x && x.Fotos) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } },
+    resumen: function (elems) {
+      return elems.map(function (i) { return (i.cant > 1 ? i.cant + ' × ' : '') + i.desc + (i.serial ? ' (' + i.serial + ')' : ''); }).join('; ');
+    },
+    tabla: function (elems) {
+      return h('div', { class: 'tbl-scroll' }, h('table', { class: 'tbl' },
+        h('thead', null, h('tr', null, h('th', null, 'Elemento'), h('th', null, 'Cant.'), h('th', null, 'Serial / código'))),
+        h('tbody', null, elems.length ? elems.map(function (i) {
+          return h('tr', null, h('td', { 'data-label': 'Elemento' }, i.desc), h('td', { 'data-label': 'Cant.' }, String(i.cant || 1)), h('td', { 'data-label': 'Serial' }, i.serial || '—'));
+        }) : h('tr', null, h('td', { colspan: 3, class: 'center muted' }, 'Sin elementos')))));
+    },
+    // Fotografías guardadas (se descargan del servidor solo cuando se muestran)
+    galeria: function (fotos) {
+      var gal = h('div', { class: 'gallery' });
+      fotos.forEach(function (f) {
+        var fig = h('figure', null, h('div', { class: 'ph' }, 'Cargando…'), h('figcaption', null, f.etiqueta || 'Fotografía'));
+        gal.appendChild(fig);
+        AP.B.fileUrl(f.ruta).then(function (u) {
+          if (!u) { fig.firstChild.textContent = 'No disponible'; return; }
+          fig.replaceChild(h('a', { href: u, target: '_blank', rel: 'noopener' }, h('img', { src: u, alt: f.etiqueta || 'Fotografía de los elementos' })), fig.firstChild);
+        }).catch(function () { fig.firstChild.textContent = 'No disponible'; });
+      });
+      return gal;
+    }
+  };
+
   AP.pickImage = function (capture) {
     return new Promise(function (res) {
       var i = h('input', { type: 'file', accept: 'image/*', style: { display: 'none' } });

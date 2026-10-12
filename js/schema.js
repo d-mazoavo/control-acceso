@@ -102,6 +102,17 @@
       titulo: 'Acción',
       desc: 'Bitácora de actuaciones administrativas (habilitaciones, cargas, exportaciones)',
       cols: [['Accion', 'text'], ['Usuario', 'text'], ['FechaHora', 'datetime', IDX], ['Referencia', 'text'], ['Detalle', 'note'], ['Hash', 'text']]
+    },
+    AP_Elementos: {
+      titulo: 'Nombre de la persona',
+      desc: 'Control de ingreso y salida de elementos, herramientas y equipos (lo registra la Dirección de Seguridad Integral; el vigilante lo verifica al leer el QR)',
+      cols: [
+        ['Token', 'text', IDX], ['PersonaTipo', 'text'], ['PersonaDoc', 'text', IDX], ['PersonaEmpresa', 'text'],
+        ['Sentido', 'text', IDX], ['Estado', 'text', IDX], ['FechaPrevista', 'datetime', IDX], ['AutorizadoPor', 'text'],
+        ['Items', 'note'], ['Fotos', 'note'],
+        ['Vigilante', 'text'], ['VigilanteUsuario', 'text'], ['FechaConfirmacion', 'datetime'], ['NotaPorteria', 'note'],
+        ['Observaciones', 'note'], ['CreadoPor', 'text'], ['FechaCreacion', 'datetime', IDX]
+      ]
     }
   };
 
@@ -133,7 +144,9 @@
     dias: [['1', 'Lun'], ['2', 'Mar'], ['3', 'Mié'], ['4', 'Jue'], ['5', 'Vie'], ['6', 'Sáb'], ['0', 'Dom']],
     tiposPermiso: ['Ingreso tardío', 'Salida anticipada', 'Salida temporal (cita o diligencia)', 'Ingreso y salida fuera de horario'],
     resultadosVerificacion: ['Justificada', 'No justificada', 'Pendiente de soporte'],
-    operacionesCarga: ['Ingreso de vehículo de carga', 'Salida / despacho con carga', 'Salida en vacío', 'Ingreso de contenedor vacío']
+    operacionesCarga: ['Ingreso de vehículo de carga', 'Salida / despacho con carga', 'Salida en vacío', 'Ingreso de contenedor vacío'],
+    sentidosElemento: ['Ingreso', 'Salida'],
+    estadosElemento: ['Pendiente', 'Confirmado', 'Rechazado', 'Cancelado']
   };
 
   AP.ROLES = {
