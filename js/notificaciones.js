@@ -42,8 +42,8 @@
     try {
       new Notification(titulo, {
         body: cuerpo,
-        icon: '/app/img/icon-192.png',
-        badge: '/app/img/icon-192.png',
+        icon: 'img/icon-192.png',
+        badge: 'img/icon-192.png',
         tag: tag || ('ap-' + Date.now()),
         requireInteraction: false
       });
@@ -173,6 +173,7 @@
     configurar: configurar,
     movimiento: notificarMovimiento,
     inspeccion: notificarInspeccion,
+    aviso: function (titulo, cuerpo, tag) { pedirPermiso(); pushLocal(titulo, cuerpo, tag); },
     emailConfigurado: function () { return !!leerCfg(); }
   };
 

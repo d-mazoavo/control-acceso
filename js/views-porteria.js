@@ -35,20 +35,38 @@
     var tile = function (icon, title, sub, path, cls) {
       return h('a', { class: 'tile ' + (cls || ''), href: '#' + path }, AP.icon(icon, 28), h('strong', null, title), sub ? h('small', null, sub) : null);
     };
+    // Visitantes no anunciados registrados hoy en portería y la decisión del Director sobre cada uno
+    var solicitudes = h('div');
+    function pintarSolicitudes() {
+      var hoy = U.ymd();
+      var l = AP.Sync.visitas.filter(function (v) { return v.Origen === 'Portería' && U.ymd(v.FechaSolicitud || v.FechaInicio) === hoy; })
+        .sort(function (a, b) { return (a.FechaSolicitud || '') < (b.FechaSolicitud || '') ? 1 : -1; });
+      if (!l.length) { solicitudes.replaceChildren(); return; }
+      var txt = { Pendiente: 'Esperando aprobación', Aprobada: 'Aprobada: leer QR', Rechazada: 'Rechazada', Cancelada: 'Cancelada' };
+      solicitudes.replaceChildren(h('section', { class: 'card stack sm' },
+        h('h3', { class: 'row gap' }, AP.icon('inbox', 20), h('span', null, 'Visitantes no anunciados de hoy')),
+        h('div', { class: 'list' }, l.slice(0, 8).map(function (v) {
+          return h('a', { class: 'list-item', href: '#/espera?id=' + encodeURIComponent(v.id) }, AP.icon('user', 20),
+            h('div', null, h('strong', null, v.Title), h('small', null, U.fTime(v.FechaSolicitud || v.FechaInicio) + ' · visita a ' + (v.Anfitrion || '—'))),
+            AP.pill(txt[v.Estado] || v.Estado, v.Estado === 'Aprobada' ? 'ok' : v.Estado === 'Pendiente' ? 'warn' : v.Estado === 'Rechazada' ? 'deny' : 'muted'));
+        }))));
+    }
+    pintarSolicitudes();
     var content = h('div', { class: 'stack' },
       h('a', { class: 'scan-cta', href: '#/escanear' }, h('span', { class: 'scan-ico' }, AP.icon('qr', 44)),
         h('span', null, h('strong', null, 'Leer código QR'), h('small', null, 'Ingreso y salida: siempre con lectura del QR'))),
       h('div', { class: 'tiles' },
         tile('search', 'Buscar', 'Por documento o nombre', '/buscar'),
-        tile('edit', 'Registro manual', 'Sin QR / no anunciado', '/manual'),
+        tile('edit', 'Registro manual', 'No anunciado / sin QR / salidas', '/manual'),
         tile('badge', 'Autoridad', 'Visita de autoridad', '/manual?cat=Autoridad'),
         tile('truck', 'Vehículo de carga', 'Inspección y precintos', '/carga'),
         tile('users', 'Personas dentro', String(dentro.length) + (AP.Session.can('admin') ? '' : ' · solo consulta'), '/dentro', dentro.length ? 'accent' : ''),
         tile('history', 'Mi turno', AP.Sync.pendingCount() ? AP.Sync.pendingCount() + ' por enviar' : 'Registros del celular', '/turno')),
+      solicitudes,
       h('div', { class: 'quick-dial' },
         tel.director ? h('a', { class: 'btn', href: 'tel:' + tel.director }, AP.icon('phone', 18), 'Director') : null,
         tel.supervisor ? h('a', { class: 'btn', href: 'tel:' + tel.supervisor }, AP.icon('phone', 18), 'Supervisor') : null,
-        h('a', { class: 'btn', href: 'https://wa.me/573106453940', target: '_blank', rel: 'noopener' }, AP.icon('whatsapp', 18), 'Dir. Seguridad')),
+        h('a', { class: 'btn', href: AP.waLink(AP.WA_DIRECTOR), target: '_blank', rel: 'noopener' }, AP.icon('whatsapp', 18), 'Dir. Seguridad')),
       h('div', { class: 'p-foot' },
         h('span', null, AP.Session.turno ? 'Turno de: ' : 'Vigilante: ', h('strong', null, user().nombre),
           AP.Session.turno ? ' (' + AP.Session.turno.usuario + ') desde las ' + U.fTime(AP.Session.turno.inicio) : null),
@@ -63,6 +81,7 @@
     AP.onLeave(AP.Sync.on(U.debounce(function () {
       var t = document.querySelector('a.tile[href="#/dentro"] small');
       if (t) t.textContent = String(AP.Access.inside().length) + (AP.Session.can('admin') ? '' : ' · solo consulta');
+      pintarSolicitudes();
     }, 200)));
   });
 
@@ -74,6 +93,16 @@
     var torchOn = false;
     var torchBtn = h('button', { class: 'icon-btn light', type: 'button', 'aria-label': 'Linterna' }, AP.icon('flash', 24));
     var done = false;
+    // Si el resultado no es favorable, se confirma con el servidor antes de mostrarlo (visita recién aprobada, etc.)
+    async function evaluar(token, origen) {
+      msg.classList.remove('err');
+      msg.textContent = 'Verificando…';
+      var r = await AP.Access.evaluarActual(token);
+      r.origen = origen;
+      U.beep(r.nivel === 'ok' ? 'ok' : r.nivel === 'warn' ? 'warn' : 'deny');
+      AP.State.result = r; AP.State.fromScan = true;
+      if (location.hash.indexOf('#/escanear') === 0) AP.go('/resultado');
+    }
     var scanner = AP.Scanner(video, canvas, function (text) {
       if (done || location.hash.indexOf('#/escanear') !== 0) return;
       var token = U.parseQR(text);
@@ -82,15 +111,13 @@
       if (!token) {
         U.beep('deny');
         AP.State.result = { token: null, nivel: 'deny', etiqueta: 'CÓDIGO NO VÁLIDO', detalle: 'El código leído no es una credencial de Avo Pak.', origen: 'QR', invalido: true };
-      } else {
-        var r = AP.Access.evaluate(token);
-        r.origen = 'QR';
-        U.beep(r.nivel === 'ok' ? 'ok' : r.nivel === 'warn' ? 'warn' : 'deny');
-        AP.State.result = r;
+        AP.State.fromScan = true;
+        AP.go('/resultado');
+        return;
       }
-      AP.State.fromScan = true;
-      AP.go('/resultado');
+      evaluar(token, 'QR');
     }, function () { /* errores de cuadro ignorados */ });
+    AP.leerToken = evaluar; // también lo usan las pruebas automáticas
 
     torchBtn.addEventListener('click', async function () {
       torchOn = !torchOn;
@@ -109,8 +136,7 @@
             var t = U.parseQR(i.value);
             if (!t) return AP.toast('Código no válido.', 'warn');
             close(); done = true; scanner.stop();
-            var r = AP.Access.evaluate(t); r.origen = 'Código digitado';
-            AP.State.result = r; AP.State.fromScan = true; AP.go('/resultado');
+            evaluar(t, 'Código digitado');
           }
           return h('div', null, AP.field('Código', i, 'También funciona con lectores de código externos (tipo teclado).'),
             h('button', { class: 'btn primary block', type: 'button', onclick: go }, 'Consultar'));
@@ -127,9 +153,8 @@
         if (!text) { msg.textContent = 'No se encontró un código QR en la foto. Intente de nuevo, más cerca y con buena luz.'; msg.classList.add('err'); return; }
         var t = U.parseQR(text);
         done = true; scanner.stop();
-        if (!t) { AP.State.result = { token: null, nivel: 'deny', etiqueta: 'CÓDIGO NO VÁLIDO', detalle: 'El código leído no es una credencial de Avo Pak.', origen: 'Foto', invalido: true }; }
-        else { var r = AP.Access.evaluate(t); r.origen = 'Foto del código'; U.beep(r.nivel === 'ok' ? 'ok' : r.nivel === 'warn' ? 'warn' : 'deny'); AP.State.result = r; }
-        AP.State.fromScan = true; AP.go('/resultado');
+        if (!t) { AP.State.result = { token: null, nivel: 'deny', etiqueta: 'CÓDIGO NO VÁLIDO', detalle: 'El código leído no es una credencial de Avo Pak.', origen: 'Foto', invalido: true }; AP.State.fromScan = true; AP.go('/resultado'); }
+        else evaluar(t, 'Foto del código');
       } catch (e) { msg.textContent = e.message; msg.classList.add('err'); }
     }
 
@@ -179,7 +204,7 @@
       add(esVisita ? 'Empresa / entidad' : 'Empresa', rec.Empresa);
       if (!esVisita) add('Cargo / área', [rec.Cargo, rec.Area].filter(Boolean).join(' · '));
       if (esVisita) {
-        add('Visita a', [rec.Anfitrion, rec.Area].filter(Boolean).join(' · '));
+        add('Visita a', [rec.Anfitrion, rec.AnfitrionCargo, rec.Area].filter(Boolean).join(' · '));
         add('Motivo', rec.Motivo);
         add('Horario', U.fDateTime(rec.FechaInicio) + ' a ' + U.fTime(rec.FechaFin));
       }
@@ -314,7 +339,8 @@
     var vehBox = h('div', { class: 'grid2' }, AP.field('Placa', placaIn), AP.field('Tipo de vehículo', vehTipo), dl);
     enVeh.querySelector('input').addEventListener('change', pintar);
 
-    var autoriza = AP.check('AutorizacionConfirmada', 'El visitante autorizó el tratamiento de sus datos (aviso de privacidad)', false);
+    // Si la autorización quedó registrada al solicitar la visita en portería, llega marcada (el vigilante la confirma)
+    var autoriza = AP.check('AutorizacionConfirmada', 'El visitante autorizó el tratamiento de sus datos (aviso de privacidad)', esVisita && rec.AutorizaDatos === true);
     var carne = AP.input('CarneEntregado', '', { placeholder: 'N.° de carné temporal entregado (si aplica)' });
     var custodia = AP.check('DocumentoCustodia', 'Documento de identidad dejado en custodia', false);
     var devuelto = AP.check('CarneDevuelto', 'Carné temporal devuelto', !!(ult && ult.CarneEntregado));
@@ -408,7 +434,7 @@
           Categoria: r.categoria || (esVisita ? 'Visitante' : rec.Tipo), Origen: r.origen || 'QR',
           Token: r.token || undefined, RefLista: esVisita ? 'AP_Visitas' : esManual ? 'Manual' : 'AP_Personas', RefId: rec.id,
           TipoDoc: rec.TipoDoc, NumDoc: rec.NumDoc, Telefono: rec.Telefono, Empresa: rec.Empresa, Cargo: rec.Cargo,
-          Anfitrion: rec.Anfitrion, AnfitrionCorreo: rec.AnfitrionCorreo, Area: rec.Area, Motivo: rec.Motivo,
+          Anfitrion: rec.Anfitrion, AnfitrionCorreo: rec.AnfitrionCorreo, AnfitrionId: rec.AnfitrionId, AnfitrionDoc: rec.AnfitrionDoc, Area: rec.Area, Motivo: rec.Motivo,
           Placa: veh ? placa : undefined, VehiculoTipo: veh ? vehTipo.value : undefined,
           EstadoMostrado: r.etiqueta, Observaciones: [obs.value.trim(), notaEl].filter(Boolean).join(' | '),
           DatosAdicionales: rec.DatosAdicionales
@@ -480,18 +506,22 @@
   });
 
   // =================== REGISTRO MANUAL / AUTORIDAD ===================
+  // El visitante no anunciado NO ingresa por registro manual: el vigilante registra sus datos y los envía a aprobación
+  // del Director de Seguridad Integral; al aprobarse, el visitante recibe su QR y entra y sale leyéndolo.
+  var EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
   AP.route('/manual', function (qs) {
     var cat = qs.cat || 'Visitante no anunciado';
     var box = h('div', { class: 'stack' });
     var catCtl = AP.select('Categoria', AP.CAT.categoriasManual, cat);
     catCtl.addEventListener('change', function () { AP.go('/manual?cat=' + encodeURIComponent(catCtl.value)); });
     var esAut = cat === 'Autoridad';
+    var noAnunciado = cat === 'Visitante no anunciado';
     var I = AP.input;
     var f = {
       Title: I('Title', '', { placeholder: esAut ? 'Servidor a cargo' : 'Nombres y apellidos', autocapitalize: 'words' }),
       TipoDoc: AP.select('TipoDoc', AP.CAT.tiposDoc, 'CC'),
       NumDoc: I('NumDoc', '', { inputmode: 'numeric', placeholder: 'Número' }),
-      Telefono: I('Telefono', '', { inputmode: 'tel' }),
+      Telefono: I('Telefono', '', { inputmode: 'tel', placeholder: noAnunciado ? 'Ej.: 3001234567' : '' }),
       Empresa: esAut ? AP.select('Empresa', [''].concat(AP.CAT.entidades), '') : I('Empresa', ''),
       Anfitrion: I('Anfitrion', '', { placeholder: 'Persona o área visitada' }),
       Motivo: AP.textarea('Motivo', '', { rows: 2 }),
@@ -499,6 +529,16 @@
       VehiculoTipo: AP.select('VehiculoTipo', AP.CAT.vehiculos, ''),
       AutorizadoPor: I('AutorizadoPor', '', { placeholder: 'Quién autoriza el ingreso' })
     };
+    // Visitante no anunciado: anfitrión del personal propio, correo opcional y autorización de datos previa a la solicitud
+    var anf = null, correo = null, autorizaSol = null;
+    if (noAnunciado) {
+      delete f.Anfitrion; delete f.AutorizadoPor;
+      anf = AP.anfitrionPicker({ fuente: function () { return Promise.resolve(AP.Sync.personas); }, libre: true, placeholder: 'Buscar colaborador (nombre, cargo o área)' });
+      correo = I('Correo', '', { type: 'email', inputmode: 'email', placeholder: 'Opcional' });
+      autorizaSol = AP.check('AutorizaDatos', AP.TX.confirmacionSolicitudVisita ||
+        ((AP.TX.confirmacionVisitante || '¿Autoriza el tratamiento de sus datos personales para el control de acceso?') +
+          ' Incluye el envío por WhatsApp, al celular que suministra, del código QR de su visita.'), false);
+    }
     var aut = {
       Unidad: I('Unidad', '', { placeholder: 'Unidad / seccional / dependencia' }),
       Grado: I('Grado', '', { placeholder: 'Grado o cargo' }),
@@ -507,8 +547,8 @@
       TipoVisita: AP.select('TipoVisita', [''].concat(AP.CAT.tiposVisitaAutoridad), ''),
       Orden: I('Orden', '', { placeholder: 'N.° de orden o acto, si se exhibe' })
     };
-    // Si el documento corresponde a una persona registrada, se sugiere usar su ficha.
-    var sugerencia = h('div');
+    // Si el documento corresponde a una persona registrada o a una visita vigente, se sugiere usarla.
+    var sugerencia = h('div', { class: 'stack sm' });
     f.NumDoc.addEventListener('input', U.debounce(function () {
       sugerencia.replaceChildren();
       var d = U.normDoc(f.NumDoc.value); if (d.length < 5) return;
@@ -519,37 +559,96 @@
           ev.origen = 'Documento'; AP.State.result = ev; AP.State.fromScan = false; AP.go('/resultado');
         } }, AP.icon('user', 18), h('span', null, p.Title + ' ya está registrado (' + ev.etiqueta + '). Toque para usar su ficha.')));
       }
+      var v = noAnunciado ? visitaVigente(d) : null;
+      if (v) {
+        sugerencia.appendChild(h('a', { class: 'banner ' + (v.Estado === 'Aprobada' ? 'info' : 'warn'), href: '#/espera?id=' + encodeURIComponent(v.id) },
+          AP.icon(v.Estado === 'Aprobada' ? 'qr' : 'clock', 18),
+          h('span', null, v.Title + (v.Estado === 'Aprobada' ? ' ya tiene una visita aprobada: lea su código QR.' : ' ya tiene una solicitud esperando aprobación. Toque para verla.'))));
+      }
     }, 250));
 
-    var noAnunciado = cat === 'Visitante no anunciado';
-    AP.add(box, 
+    var salidas = salidasManuales();
+    AP.add(box,
+      salidas,
       AP.field('Categoría', catCtl),
       esAut ? h('p', { class: 'note' }, AP.TX.autoridad) : null,
-      noAnunciado ? h('p', { class: 'note' }, 'Ningún visitante ingresa sin prerregistro, salvo autorización expresa. Comuníquese con el anfitrión o con la Dirección de Seguridad Integral antes de permitir el ingreso.') : null,
+      noAnunciado ? h('p', { class: 'note' }, 'El visitante no anunciado NO ingresa todavía. Registre sus datos y envíe la solicitud al Director de Seguridad Integral. Si la aprueba, el visitante recibe por WhatsApp su código QR: léalo para registrar el ingreso y, después, la salida.') : null,
       h('div', { class: 'card stack' },
         esAut ? AP.field('Entidad', f.Empresa) : null,
         esAut ? AP.field('Unidad', aut.Unidad) : null,
-        AP.field(esAut ? 'Nombres y apellidos del servidor a cargo' : 'Nombres y apellidos', f.Title),
+        AP.field(esAut ? 'Nombres y apellidos del servidor a cargo' : 'Nombres y apellidos' + (noAnunciado ? ' *' : ''), f.Title),
         esAut ? AP.field('Grado / cargo', aut.Grado) : null,
-        h('div', { class: 'grid2' }, AP.field('Tipo doc.', f.TipoDoc), AP.field('Número de documento', f.NumDoc)),
+        h('div', { class: 'grid2' }, AP.field('Tipo doc.', f.TipoDoc), AP.field('Número de documento' + (noAnunciado ? ' *' : ''), f.NumDoc)),
         sugerencia,
         esAut ? h('div', { class: 'grid2' }, AP.field('Placa / credencial', aut.Credencial), AP.field('N.° de servidores', aut.Servidores)) : null,
         esAut ? AP.field('Tipo de visita', aut.TipoVisita) : null,
         esAut ? AP.field('Orden o acto que soporta la actuación', aut.Orden) : null,
         !esAut ? AP.field('Empresa / dependencia', f.Empresa) : null,
-        !esAut ? AP.field('Teléfono', f.Telefono) : null,
-        AP.field(esAut ? 'Área visitada / acompañante' : 'Anfitrión o área solicitante', f.Anfitrion),
-        AP.field('Motivo', f.Motivo),
+        !esAut ? AP.field(noAnunciado ? 'Celular con WhatsApp *' : 'Teléfono', f.Telefono, noAnunciado ? 'A este número el Director le enviará el código QR si aprueba la visita.' : null) : null,
+        noAnunciado ? AP.field('Correo electrónico', correo) : null,
+        noAnunciado ? AP.field('Colaborador que visita (anfitrión) *', anf, 'Busque en el personal propio. Si no aparece, escriba el nombre o el área.') : AP.field(esAut ? 'Área visitada / acompañante' : 'Anfitrión o área solicitante', f.Anfitrion),
+        AP.field('Motivo' + (noAnunciado ? ' *' : ''), f.Motivo),
         h('div', { class: 'grid2' }, AP.field(esAut ? 'Vehículo(s) / placa(s)' : 'Placa', f.Placa), AP.field('Tipo de vehículo', f.VehiculoTipo)),
-        noAnunciado || cat.indexOf('sin carné') > 0 ? AP.field('Autorizado por', f.AutorizadoPor, 'Obligatorio para visitantes no anunciados y personas sin carné.') : null),
-      h('button', { class: 'btn big block go-in', type: 'button', onclick: continuar }, AP.icon('check', 22), 'Continuar al registro'));
+        cat.indexOf('sin carné') > 0 ? AP.field('Autorizado por', f.AutorizadoPor, 'Obligatorio para personas sin carné.') : null,
+        noAnunciado ? h('div', { class: 'stack sm' }, autorizaSol, h('p', { class: 'help' }, 'Pregúntele al visitante y marque solo si responde que sí. Sin su autorización no se registran sus datos.')) : null),
+      noAnunciado
+        ? h('button', { class: 'btn big block primary', type: 'button', onclick: function (e) { enviarSolicitud(e.currentTarget); } }, AP.icon('inbox', 22), 'Enviar a aprobación del Director')
+        : h('button', { class: 'btn big block go-in', type: 'button', onclick: continuar }, AP.icon('check', 22), 'Continuar al registro'));
+
+    function visitaVigente(doc) {
+      var ahora = new Date();
+      return AP.Sync.visitas.filter(function (v) {
+        return U.normDoc(v.NumDoc) === doc && new Date(v.FechaFin) >= ahora && (v.Estado === 'Pendiente' || v.Estado === 'Aprobada');
+      }).sort(function (a, b) { return a.FechaInicio < b.FechaInicio ? -1 : 1; })[0] || null;
+    }
+
+    var enviando = false;
+    async function enviarSolicitud(btn) {
+      if (enviando) return;
+      var d = {};
+      Object.keys(f).forEach(function (k) { d[k] = f[k].value.trim(); });
+      var a = anf.valor();
+      var mail = correo.value.trim();
+      if (d.Title.length < 5) return AP.toast('Escriba el nombre completo del visitante.', 'warn');
+      if (U.normDoc(d.NumDoc).length < 4) return AP.toast('Escriba el número de documento.', 'warn');
+      if (!AP.waNum(d.Telefono)) return AP.toast('Escriba el celular del visitante (10 dígitos, ej.: 3001234567). Allí recibirá el código QR por WhatsApp.', 'warn', 7000);
+      if (mail && !EMAIL_RE.test(mail)) return AP.toast('El correo no es válido. Corríjalo o déjelo vacío.', 'warn');
+      if (!a.Anfitrion || a.Anfitrion.length < 3) return AP.toast('Indique el colaborador o el área que visita.', 'warn');
+      if (d.Motivo.length < 4) return AP.toast('Escriba el motivo de la visita.', 'warn');
+      if (!autorizaSol.querySelector('input').checked) return AP.toast('Sin la autorización del visitante para el tratamiento de sus datos no es posible registrar la solicitud.', 'warn', 7000);
+      var previa = visitaVigente(U.normDoc(d.NumDoc));
+      if (previa) { AP.toast(previa.Estado === 'Aprobada' ? 'Esta persona ya tiene una visita aprobada: lea su código QR.' : 'Esta persona ya tiene una solicitud esperando aprobación.', 'info', 6000); AP.go('/espera?id=' + encodeURIComponent(previa.id)); return; }
+      var ahora = new Date(), u = user();
+      // Vigencia provisional: el Director fija la definitiva al aprobar
+      var fin = U.fromLocal(U.ymd(ahora), '23:59');
+      if (fin.getTime() - ahora.getTime() < 3 * 3600000) fin = new Date(ahora.getTime() + 3 * 3600000);
+      var data = {
+        Title: d.Title, TipoDoc: d.TipoDoc, NumDoc: d.NumDoc, Telefono: d.Telefono, Correo: mail, Empresa: d.Empresa,
+        Motivo: d.Motivo, Placa: U.normPlaca(d.Placa), VehiculoTipo: d.VehiculoTipo,
+        Anfitrion: a.Anfitrion, AnfitrionId: a.AnfitrionId, AnfitrionDoc: a.AnfitrionDoc, AnfitrionCargo: a.AnfitrionCargo, Area: a.Area,
+        Categoria: 'Visitante', Estado: 'Pendiente', Origen: 'Portería', Porteria: AP.CFG.porteria, Token: U.newToken(),
+        FechaInicio: ahora.toISOString(), FechaFin: fin.toISOString(),
+        SolicitadoPor: AP.Session.user.usuario, SolicitadoPorNombre: u.nombre, FechaSolicitud: ahora.toISOString(), AutorizaDatos: true
+      };
+      enviando = true; btn.disabled = true; btn.lastChild.textContent = 'Enviando…';
+      try {
+        var rec = await AP.B.create('AP_Visitas', data);
+        AP.Sync.visitas.push(rec); AP.Sync.reindex();
+        await AP.Audit.log('Solicitud de visita no anunciada (portería)', d.Title + ' — ' + U.fDateTime(ahora), 'Visita a: ' + a.Anfitrion + (a.AnfitrionId ? ' (vinculado)' : ' (sin vincular)') + '; registró ' + u.nombre);
+        U.beep('ok');
+        AP.go('/espera?id=' + encodeURIComponent(rec.id) + '&nueva=1');
+      } catch (e) {
+        AP.toast(e.offline ? 'Sin conexión: la solicitud no se pudo enviar. Intente de nuevo cuando haya señal o llame al Director de Seguridad Integral. El visitante no ingresa mientras tanto.' : 'No se pudo enviar la solicitud: ' + e.message, 'error', 9000);
+      } finally { enviando = false; btn.disabled = false; btn.lastChild.textContent = 'Enviar a aprobación del Director'; }
+    }
 
     function continuar() {
       var d = {};
       Object.keys(f).forEach(function (k) { d[k] = f[k].value.trim(); });
+      var sinCarne = cat.indexOf('sin carné') > 0;
       if (d.Title.length < 5) return AP.toast('Escriba el nombre completo.', 'warn');
       if (!esAut && d.NumDoc.length < 4) return AP.toast('Escriba el número de documento.', 'warn');
-      if ((noAnunciado || cat.indexOf('sin carné') > 0) && d.AutorizadoPor.length < 4) return AP.toast('Indique quién autoriza el ingreso.', 'warn');
+      if (sinCarne && d.AutorizadoPor.length < 4) return AP.toast('Indique quién autoriza el ingreso.', 'warn');
       var extra = null;
       if (esAut) {
         if (!d.Empresa) return AP.toast('Seleccione la entidad.', 'warn');
@@ -564,18 +663,114 @@
       var key = d.NumDoc ? 'DOC:' + U.normDoc(d.NumDoc) : null;
       var ult = key ? AP.Access.lastFor(key) : null;
       AP.State.result = {
-        tipo: 'manual', rec: rec, categoria: cat, origen: 'Manual', token: null,
-        nivel: noAnunciado || cat.indexOf('sin carné') > 0 ? 'ok' : 'ok',
+        tipo: 'manual', rec: rec, categoria: cat, origen: 'Manual', token: null, nivel: 'ok',
         etiqueta: esAut ? 'AUTORIDAD — INFORME AL DIRECTOR' : 'REGISTRO MANUAL',
         detalle: d.AutorizadoPor ? 'Autorizado por ' + d.AutorizadoPor : (esAut ? 'Diligenciar formato AP-SG-FT-002' : ''),
         ultimo: ult, sentido: ult && ult.Sentido === 'Ingreso' ? 'Salida' : 'Ingreso'
       };
       if (d.AutorizadoPor) { rec.AutorizadoPor = d.AutorizadoPor; }
-      AP.State.manualExtra = d.AutorizadoPor ? { Excepcion: noAnunciado || cat.indexOf('sin carné') > 0, AutorizadoPor: d.AutorizadoPor, MotivoExcepcion: noAnunciado ? 'Visitante sin prerregistro' : cat } : null;
+      AP.State.manualExtra = d.AutorizadoPor ? { Excepcion: sinCarne, AutorizadoPor: d.AutorizadoPor, MotivoExcepcion: cat } : null;
       AP.State.fromScan = false;
       AP.go('/resultado');
     }
-    AP.porteriaShell(esAut ? 'Visita de autoridad' : 'Registro manual', box, { back: '/porteria' });
+    AP.porteriaShell(esAut ? 'Visita de autoridad' : noAnunciado ? 'Visitante no anunciado' : 'Registro manual', box, { back: '/porteria' });
+  });
+
+  // Quienes ingresaron por registro manual (sin QR: autoridades, personas sin carné) registran su salida desde aquí.
+  function salidasManuales() {
+    var lista = AP.Access.inside().filter(function (m) { return m.RefLista === 'Manual'; });
+    if (!lista.length) return null;
+    return h('section', { class: 'card stack sm' },
+      h('h3', { class: 'row gap' }, AP.icon('logout', 20), h('span', null, 'Salida de registros manuales (' + lista.length + ')')),
+      h('p', { class: 'muted small' }, 'Personas que ingresaron sin QR. Toque el nombre para registrar su salida.'),
+      h('div', { class: 'list' }, lista.map(function (m) {
+        return h('button', { class: 'list-item', type: 'button', onclick: function () {
+          AP.State.result = {
+            tipo: 'manual', token: null, origen: 'Manual', categoria: m.Categoria, nivel: 'ok', etiqueta: 'REGISTRO DE SALIDA', detalle: 'Ingresó el ' + U.fDateTime(m.FechaHora),
+            rec: { Title: m.Title, TipoDoc: m.TipoDoc, NumDoc: m.NumDoc, Empresa: m.Empresa, Anfitrion: m.Anfitrion, Area: m.Area, Motivo: m.Motivo, Placa: m.Placa, VehiculoTipo: m.VehiculoTipo, Categoria: m.Categoria, Telefono: m.Telefono, Cargo: m.Cargo },
+            ultimo: m, sentido: 'Salida'
+          };
+          AP.State.fromScan = false; AP.go('/resultado');
+        } }, AP.icon('user', 20),
+          h('div', null, h('strong', null, m.Title), h('small', null, (m.Categoria || '') + ' · ingresó ' + U.fTime(m.FechaHora) + (U.ymd(m.FechaHora) !== U.ymd() ? ' del ' + U.fDate(m.FechaHora) : '') + ' (' + U.duracion(m.FechaHora) + ')')),
+          h('span', { class: 'btn small' }, 'Salida'));
+      })));
+  }
+
+  // =================== SOLICITUD DE VISITA: ESPERA DE LA DECISIÓN DEL DIRECTOR ===================
+  function textoAvisoDirector(v) {
+    return 'Visitante no anunciado en ' + (v.Porteria || AP.CFG.porteria) + ': ' + v.Title + (v.Empresa ? ' (' + v.Empresa + ')' : '') +
+      '. Visita a: ' + (v.Anfitrion || '—') + '. Motivo: ' + (v.Motivo || '—') + '. Registró: ' + (v.SolicitadoPorNombre || v.SolicitadoPor || '') +
+      ' a las ' + U.fTime(v.FechaSolicitud || v.FechaInicio) + '. Pendiente de su aprobación en la app (Consola > Visitas > Por aprobar).';
+  }
+  AP.route('/espera', function (qs) {
+    var id = qs.id;
+    var box = h('div', { class: 'stack' });
+    AP.porteriaShell('Solicitud de visita', box, { back: '/porteria' });
+    var estadoPrevio = null;
+    function visita() { return AP.Sync.visitas.find(function (x) { return x.id === id; }) || null; }
+    function pintar() {
+      if (document.querySelector('.modal-wrap')) return;
+      var v = visita();
+      if (!v) { box.replaceChildren(AP.spinner('Consultando la solicitud…')); return; }
+      var est = v.Estado;
+      if (estadoPrevio === 'Pendiente' && est !== 'Pendiente') U.beep(est === 'Aprobada' ? 'ok' : 'deny');
+      estadoPrevio = est;
+      var vence = new Date(v.FechaFin) < new Date();
+      var verdict;
+      if (est === 'Pendiente') {
+        verdict = h('div', { class: 'verdict warn' }, AP.icon('clock', 40), h('div', null, h('strong', null, 'ESPERANDO APROBACIÓN'),
+          h('span', null, 'El visitante NO ingresa todavía. Esta pantalla se actualiza sola cuando el Director decida.')));
+      } else if (est === 'Aprobada') {
+        verdict = h('div', { class: 'verdict ' + (vence ? 'deny' : 'ok') }, AP.icon(vence ? 'x' : 'check', 40), h('div', null, h('strong', null, vence ? 'APROBACIÓN VENCIDA' : 'VISITA APROBADA'),
+          h('span', null, vence ? 'La autorización terminó el ' + U.fDateTime(v.FechaFin) + '.' : 'Vale del ' + U.fDateTime(v.FechaInicio) + ' a las ' + U.fTime(v.FechaFin) + (U.ymd(v.FechaFin) !== U.ymd(v.FechaInicio) ? ' del ' + U.fDate(v.FechaFin) : '') + '. Pida al visitante el código QR que recibió por WhatsApp y léalo.')));
+      } else if (est === 'Rechazada') {
+        verdict = h('div', { class: 'verdict deny' }, AP.icon('x', 40), h('div', null, h('strong', null, 'VISITA RECHAZADA'), h('span', null, 'No se permite el ingreso. Informe al visitante con cortesía.')));
+      } else {
+        verdict = h('div', { class: 'verdict muted' }, AP.icon('x', 40), h('div', null, h('strong', null, 'SOLICITUD ' + String(est || '').toUpperCase()), h('span', null, 'El visitante no ingresa con esta solicitud.')));
+      }
+      var kv = function (k, val) { return val ? h('div', { class: 'kv' }, h('span', null, k), h('strong', null, val)) : null; };
+      var datos = h('section', { class: 'card stack sm' },
+        h('h3', null, v.Title),
+        kv('Documento', (v.TipoDoc ? v.TipoDoc + ' ' : '') + (v.NumDoc || '')),
+        kv('Celular', v.Telefono), kv('Empresa / entidad', v.Empresa),
+        kv('Visita a', [v.Anfitrion, v.AnfitrionCargo, v.Area].filter(Boolean).join(' · ')),
+        kv('Motivo', v.Motivo), kv('Vehículo', [v.VehiculoTipo, v.Placa].filter(Boolean).join(' · ')),
+        kv('Solicitud', U.fDateTime(v.FechaSolicitud || v.FechaInicio) + (v.SolicitadoPorNombre ? ' · registró ' + v.SolicitadoPorNombre : '')),
+        est !== 'Pendiente' && v.FechaAprobacion ? kv(est === 'Aprobada' ? 'Aprobada' : 'Decisión', U.fDateTime(v.FechaAprobacion) + (v.AprobadoPorNombre ? ' · ' + v.AprobadoPorNombre : '')) : null,
+        est === 'Rechazada' ? kv('Motivo del rechazo', v.JustificacionDecision || '—') : null);
+      var acciones = h('div', { class: 'stack sm' });
+      if (est === 'Pendiente') {
+        AP.add(acciones,
+          h('a', { class: 'btn block', href: AP.waLink(AP.WA_DIRECTOR, textoAvisoDirector(v)), target: '_blank', rel: 'noopener' }, AP.icon('whatsapp', 18), 'Avisar al Director por WhatsApp'),
+          h('button', { class: 'btn block danger-outline', type: 'button', onclick: function () { cancelar(v); } }, AP.icon('x', 18), 'Cancelar solicitud (el visitante se retiró)'));
+      } else if (est === 'Aprobada' && !vence) {
+        AP.add(acciones, h('a', { class: 'btn big block go-in', href: '#/escanear' }, AP.icon('qr', 22), 'Leer QR del visitante'),
+          h('p', { class: 'muted small' }, 'El ingreso y la salida del visitante se registran leyendo su QR.'));
+      }
+      AP.add(acciones, h('a', { class: 'btn block', href: '#/porteria' }, 'Volver a portería'));
+      box.replaceChildren(verdict, qs.nueva && est === 'Pendiente' ? h('p', { class: 'banner info' }, AP.icon('check', 18), h('span', null, 'Solicitud enviada al Director de Seguridad Integral. Avísele también por WhatsApp si es urgente.')) : null, datos, acciones);
+    }
+    async function cancelar(v) {
+      var ok = await AP.confirm('Cancelar solicitud', '¿El visitante se retiró? La solicitud quedará cancelada y el Director ya no la verá por aprobar.', 'Sí, cancelar', 'danger');
+      if (!ok) return;
+      var u = user();
+      var cambios = { Estado: 'Cancelada', Observaciones: (v.Observaciones ? v.Observaciones + '\n' : '') + 'Cancelada en portería por ' + u.nombre + ' el ' + U.fDateTime(new Date()) + ': el visitante se retiró.' };
+      try {
+        await AP.B.update('AP_Visitas', v.id, cambios);
+        Object.assign(v, cambios);
+        await AP.Audit.log('Cancelación de solicitud de visita (portería)', v.Title, 'Por ' + u.nombre);
+        AP.toast('Solicitud cancelada.');
+        pintar();
+        AP.Sync.run();
+      } catch (e) { AP.toast('No se pudo cancelar: ' + e.message, 'error', 7000); }
+    }
+    pintar();
+    if (!visita()) AP.Sync.run().then(function () { if (!visita()) box.replaceChildren(AP.empty('search', 'Solicitud no encontrada', 'Verifique la conexión e intente de nuevo.', h('a', { class: 'btn', href: '#/porteria' }, 'Volver a portería'))); });
+    // Mientras se espera la decisión, se consulta el servidor cada 15 segundos
+    var t = setInterval(function () { var v = visita(); if (document.visibilityState === 'visible' && (!v || v.Estado === 'Pendiente')) AP.Sync.run(); }, 15000);
+    AP.onLeave(function () { clearInterval(t); });
+    AP.onLeave(AP.Sync.on(U.debounce(pintar, 250)));
   });
 
   // =================== PERSONAS DENTRO ===================

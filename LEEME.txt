@@ -1,4 +1,4 @@
-AVO PAK S.A.S. — Control de Acceso de Personas y Vehículos (versión 2.1.0)
+AVO PAK S.A.S. — Control de Acceso de Personas y Vehículos (versión 2.2.0)
 Dirección de Seguridad Integral
 
 Contenido de esta carpeta
@@ -8,7 +8,7 @@ Contenido de esta carpeta
   textos.js   -> aviso de privacidad y textos legales (revisar con el responsable de
                  protección de datos antes de operar).
 
-Funcionamiento (versión 2.1.0)
+Funcionamiento (versión 2.2.0)
   - Base de datos e inicio de sesión: Firebase (Google), plan gratuito. Ya no se usa Microsoft 365.
   - Todos, incluido el administrador, ingresan SOLO con usuario y contraseña o PIN. Nadie usa correo.
   - El administrador crea, edita, restablece y da de baja usuarios en Consola > Usuarios.
@@ -16,6 +16,14 @@ Funcionamiento (versión 2.1.0)
   - Cada vigilante o supervisor ingresa desde su propio celular; al ingresar se abre su turno y al
     cerrar el turno se cierra la sesión. El primer ingreso se hace con un PIN temporal (vence en 72 h)
     y la aplicación obliga a definir un PIN personal que nadie más conoce.
+  - Visitante no anunciado (v2.2.0): el vigilante registra sus datos en Registro manual y los envía
+    a aprobación. El Director decide en Consola > Visitas > Por aprobar, con justificación; al aprobar
+    fija la vigencia del QR y lo envía por WhatsApp al celular registrado. El visitante ingresa y sale
+    leyendo ese QR. El servidor impide que el vigilante apruebe o amplíe una visita.
+  - Anfitrión: en Visitas se busca en el personal propio habilitado y la visita queda vinculada al
+    colaborador (Personas > ficha > Visitas recibidas).
+  - Registros manuales sin QR (autoridades, personas sin carné): su salida se registra desde
+    Registro manual > Salida de registros manuales.
   - Control de elementos (solo Administrador): Consola > Elementos. El Director asigna a una persona
     registrada los elementos que ingresa o retira; el vigilante los ve y los verifica al leer el QR.
   - Los registros se guardan en el celular si no hay internet y se envían solos al volver la señal.

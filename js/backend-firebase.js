@@ -375,6 +375,8 @@
     },
 
     // ---------- Lectura ----------
+    // La próxima consulta pregunta al servidor qué cambió, sin usar el dato de los últimos segundos
+    olvidarMarcador: function () { marcadorAt = 0; },
     listAll: async function (list, opt) {
       var c = await copia(list);
       if (!c.full) {
