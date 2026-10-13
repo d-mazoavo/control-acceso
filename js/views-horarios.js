@@ -42,7 +42,8 @@
         var sin = datos.per.filter(function (p) { return !datos.hor.some(function (x) { return x.Token === p.Token && x.Activo !== false; }); });
         content.replaceChildren(
           h('div', { class: 'banner info' }, AP.icon('clock', 18), h('span', null,
-            'Al leer el QR, la aplicación compara la hora con el turno programado de la persona: a tiempo hasta la hora de entrada; ' + AP.Horario.cfg().minutosPendiente +
+            'Al leer el QR, la aplicación compara la hora con el turno programado de la persona: el ingreso se habilita desde ' + AP.Horario.cfg().minutosAntelacionTurno +
+            ' minutos antes de la hora de entrada (antes de eso se alerta MUY TEMPRANO y queda PENDIENTE); a tiempo hasta la hora de entrada; ' + AP.Horario.cfg().minutosPendiente +
             ' minutos o más después, el ingreso queda DENEGADO hasta que usted verifique; entre 1 y ' + (AP.Horario.cfg().minutosPendiente - 1) + ' minutos queda PENDIENTE. ' +
             'La salida antes de la hora de fin exige un permiso suyo; sin él se muestra como NO AUTORIZADA (sin retención física). Las personas sin horario registrado no tienen estas reglas.')),
           sin.length ? h('div', { class: 'banner warn' }, AP.icon('alert', 18), h('span', null, sin.length + ' persona(s) habilitada(s) sin horario registrado (' + sin.slice(0, 4).map(function (p) { return p.Title; }).join(', ') + (sin.length > 4 ? '…' : '') + '). Las reglas de puntualidad y salida no se les aplican.')) : null,

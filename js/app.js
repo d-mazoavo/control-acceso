@@ -6,7 +6,7 @@
   AP.CFG = window.AP_CONFIG || {};
   AP.TX = window.AP_TEXTOS || {};
   AP.State = {};
-  AP.VERSION = '2.2.0';
+  AP.VERSION = '2.2.1';
 
   var Session = (AP.Session = { user: null, rol: null, perms: {}, turno: null, dispositivo: false });
 
