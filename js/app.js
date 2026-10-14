@@ -6,7 +6,7 @@
   AP.CFG = window.AP_CONFIG || {};
   AP.TX = window.AP_TEXTOS || {};
   AP.State = {};
-  AP.VERSION = '2.2.1';
+  AP.VERSION = '2.3.0';
 
   var Session = (AP.Session = { user: null, rol: null, perms: {}, turno: null, dispositivo: false });
 
@@ -238,7 +238,7 @@
         AP.State.bootError ? h('p', { class: 'banner deny' }, AP.State.bootError) : null,
         AP.B.lastLoginError ? h('p', { class: 'banner warn' }, AP.B.lastLoginError) : null,
         form,
-        h('p', { class: 'muted small' }, AVISO_USO),
+        h('div', { class: 'login-sello' }, h('img', { src: 'img/sello-dsi.png', alt: 'Sello de la Dirección de Seguridad de Avo Pak' }), h('p', { class: 'muted small' }, AVISO_USO)),
         AP.State.configError ? null : h('button', { class: 'linkish small', type: 'button', onclick: function () { AP.State.instalado = false; render(); } }, 'Primera instalación')),
       h('p', { class: 'login-foot' }, AP.CFG.empresa + ' · v' + AP.VERSION));
     AP.mount(box, 'is-login');

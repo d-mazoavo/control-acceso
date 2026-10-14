@@ -137,13 +137,20 @@
         }
         if (m.DesfaseReloj && Math.abs(m.DesfaseReloj) > 300 && new Date(m.FechaHora) >= hoy0) alertas.push(['clock', 'warn', 'Registro de ' + m.Title + ' con hora del celular desfasada ' + Math.round(m.DesfaseReloj / 60) + ' min.']);
       });
+      // Quién autorizó la excepción y por qué
+      var autorizo = function (m) { return m.Excepcion ? ' Autorizó: ' + (m.AutorizadoPor || '—') + (m.MotivoExcepcion ? '. Justificación: ' + String(m.MotivoExcepcion).replace(/[.\s]+$/, '') : '') + '.' : ''; };
       movs.forEach(function (m) {
         if (!m.Novedad || new Date(m.FechaHora) < hoy0) return;
         var grave = /no autorizada|denegad/i.test(m.Novedad);
-        alertas.push([grave ? 'alert' : 'clock', grave ? 'deny' : 'warn', m.Title + ' — ' + m.Novedad + ' (' + U.fTime(m.FechaHora) + (m.Vigilante ? ', registró ' + m.Vigilante : '') + '). Verifique en Novedades.']);
+        var sinQR = /sin lectura de QR/i.test(m.Novedad);
+        alertas.push([grave ? 'alert' : sinQR ? 'key' : 'clock', grave ? 'deny' : 'warn', m.Title + ' — ' + m.Novedad + ' (' + U.fTime(m.FechaHora) + (m.Vigilante ? ', registró ' + m.Vigilante : '') + ').' + autorizo(m) + ' Verifique en Novedades.']);
       });
       negados.forEach(function (m) { alertas.push(['x', 'deny', 'Ingreso negado a ' + m.Title + ' a las ' + U.fTime(m.FechaHora) + ': ' + (m.MotivoNegacion || '')]); });
-      excep.forEach(function (m) { alertas.push(['key', 'warn', 'Ingreso por excepción de ' + m.Title + ' autorizado por ' + (m.AutorizadoPor || '—') + '.']); });
+      // Las excepciones con novedad ya figuran arriba, con quién autorizó y la justificación
+      excep.filter(function (m) { return !m.Novedad; }).forEach(function (m) { alertas.push(['key', 'warn', 'Ingreso por excepción de ' + m.Title + ' (' + U.fTime(m.FechaHora) + ').' + autorizo(m)]); });
+      hoy.filter(function (m) { return m.Categoria === 'Autoridad' && m.Sentido === 'Ingreso' && m.Resultado === 'Permitido'; }).forEach(function (m) {
+        alertas.push(['badge', 'warn', 'Visita de autoridad: ' + [m.Empresa, m.Title].filter(Boolean).join(' — ') + (m.Area ? ' (' + m.Area + ')' : '') + ', ingresó a las ' + U.fTime(m.FechaHora) + (m.Vigilante ? ', registró ' + m.Vigilante : '') + '. Diligencie el formato AP-SG-FT-002.']);
+      });
       nc.forEach(function (i) { alertas.push(['truck', 'deny', 'Inspección NO CONFORME: ' + i.Placa + ' (' + U.fTime(i.FechaHora) + '). ' + (i.NoConformidades || '')]); });
       pend.forEach(function (v) {
         alertas.push(v.Origen === 'Portería'
@@ -636,14 +643,14 @@
     var c = document.createElement('canvas'); c.width = W; c.height = H;
     var x = c.getContext('2d');
     x.fillStyle = '#ffffff'; x.fillRect(0, 0, W, H);
-    x.fillStyle = '#66754e'; x.fillRect(0, 0, W, 150);
+    x.fillStyle = '#587e50'; x.fillRect(0, 0, W, 150);
     try {
       var logo = await new Promise(function (res, rej) { var i = new Image(); i.onload = function () { res(i); }; i.onerror = rej; i.src = 'img/logo-avo.png'; });
       var lw = 200, lh = lw * logo.height / logo.width; x.drawImage(logo, 36, (150 - lh) / 2, lw, lh);
     } catch (e) { /* sin logo */ }
     x.fillStyle = '#ffffff'; x.font = '700 30px system-ui, Arial'; x.textAlign = 'right';
     x.fillText(o.titulo.toUpperCase(), W - 36, 86);
-    x.fillStyle = '#d2ce60'; x.fillRect(0, 150, W, 8);
+    x.fillStyle = '#dfd57c'; x.fillRect(0, 150, W, 8);
     var q = U.qrCanvas(U.qrPayload(o.token), 520);
     x.drawImage(q, (W - q.width) / 2, 190);
     var y = 190 + q.height + 50;
@@ -651,7 +658,7 @@
     x.font = '700 34px system-ui, Arial'; y += wrap(o.nombre, y, 40); y += 48;
     x.font = '400 26px system-ui, Arial'; x.fillStyle = '#444';
     [o.linea2, o.linea3, o.linea4, o.linea5].forEach(function (l) { if (l) { y += wrap(l, y, 32); y += 40; } });
-    x.fillStyle = '#66754e'; x.fillRect(0, H - 70, W, 70);
+    x.fillStyle = '#587e50'; x.fillRect(0, H - 70, W, 70);
     x.fillStyle = '#fff'; x.font = '600 22px system-ui, Arial'; x.fillText(o.pie || '', W / 2, H - 28);
     // Ajusta el texto a dos líneas como máximo; devuelve el alto adicional usado
     function wrap(t, yy, lh) {

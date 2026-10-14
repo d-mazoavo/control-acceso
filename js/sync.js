@@ -366,6 +366,21 @@
     return r;
   };
 
+  // Estado de una visita según sus movimientos: por llegar, dentro o ya salió (cada visita tiene su propio QR)
+  A.estadoVisita = function (v) {
+    var m = v && v.Token ? A.lastFor(v.Token) : null;
+    if (!m) return { clave: 'porLlegar', texto: 'Por llegar' };
+    return m.Sentido === 'Ingreso' ? { clave: 'dentro', texto: 'Dentro desde ' + U.fTime(m.FechaHora), mov: m } : { clave: 'salio', texto: 'Salió ' + U.fTime(m.FechaHora), mov: m };
+  };
+  // Visitas aprobadas para hoy que aún no han ingresado (al ingresar salen de la lista)
+  A.visitasPorLlegar = function (now) {
+    now = now || new Date();
+    var hoy = U.ymd(now);
+    return Sync.visitas.filter(function (v) {
+      return v.Estado === 'Aprobada' && U.ymd(v.FechaInicio) <= hoy && U.ymd(v.FechaFin) >= hoy && new Date(v.FechaFin) > now && A.estadoVisita(v).clave === 'porLlegar';
+    }).sort(function (a, b) { return a.FechaInicio < b.FechaInicio ? -1 : 1; });
+  };
+
   // Evaluación al leer un QR: si el resultado no es favorable y hay conexión, se consulta primero el servidor,
   // porque el Director pudo aprobar la visita (o habilitar a la persona) hace unos segundos.
   A.evaluarActual = async function (token) {

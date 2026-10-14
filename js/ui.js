@@ -317,6 +317,50 @@
     return box;
   };
 
+  // ---------- Visitantes ya conocidos (v2.3.0) ----------
+  // Las visitas anteriores de la misma cédula llenan el formulario de una visita nueva. El visitante NO se crea en
+  // Personas: allí solo figuran quienes tienen QR permanente (personal propio, contratistas y conductores).
+  var cacheVis = {};
+  AP.Visitantes = {
+    historial: async function (doc, excluirId) {
+      var raw = String(doc || '').trim(), d = U.normDoc(raw);
+      if (d.length < 5) return [];
+      var c = cacheVis[d];
+      if (!c || Date.now() - c.t > 60000) {
+        var porId = {};
+        (AP.Sync.visitas || []).forEach(function (v) { if (U.normDoc(v.NumDoc) === d) porId[v.id] = v; });
+        var vals = [raw]; if (d !== raw) vals.push(d);
+        for (var i = 0; i < vals.length; i++) {
+          try { (await AP.B.findBy('AP_Visitas', 'NumDoc', vals[i])).forEach(function (v) { if (!v._borrado) porId[v.id] = v; }); }
+          catch (e) { /* sin conexión: solo lo que hay en el dispositivo */ }
+        }
+        c = cacheVis[d] = { t: Date.now(), l: Object.keys(porId).map(function (k) { return porId[k]; }).sort(function (a, b) { return (a.FechaInicio || '') < (b.FechaInicio || '') ? 1 : -1; }) };
+      }
+      return c.l.filter(function (v) { return v.id !== excluirId; });
+    },
+    olvidar: function (doc) { delete cacheVis[U.normDoc(doc)]; },
+    // Llena con la visita (o persona) de referencia los campos que estén vacíos; devuelve los nombres de los campos llenados
+    llenar: function (campos, ref) {
+      var nombres = { Title: 'nombre', TipoDoc: 'tipo de documento', Empresa: 'empresa', Telefono: 'celular', Correo: 'correo', Placa: 'placa', VehiculoTipo: 'vehículo' };
+      var hechos = [];
+      Object.keys(nombres).forEach(function (k) {
+        var el = campos[k], val = ref && ref[k];
+        if (!el || !val) return;
+        var vacio = !String(el.value || '').trim() || (k === 'TipoDoc' && el.value === 'CC');
+        if (!vacio || String(el.value) === String(val)) return;
+        el.value = val;
+        el.classList.add('autollenado');
+        el.addEventListener('input', function () { el.classList.remove('autollenado'); }, { once: true });
+        hechos.push(nombres[k]);
+      });
+      return hechos;
+    },
+    resumen: function (l) {
+      var rech = l.filter(function (v) { return v.Estado === 'Rechazada'; });
+      return { n: l.length, ultima: l[0] || null, rechazadas: rech, ultRechazo: rech[0] || null };
+    }
+  };
+
   // ---------- WhatsApp ----------
   // Número internacional sin signos para wa.me. Celulares de Colombia: 10 dígitos que empiezan por 3.
   AP.waNum = function (tel) {

@@ -7,12 +7,12 @@
 
 // ====== PEGUE AQUÍ, reemplazando las 8 líneas siguientes, el bloque que le muestra Firebase ======
 const firebaseConfig = {
-  apiKey: "AIzaSyDA-T4nqFN-LoF94nuIG5-EpYCFvZqY9FQ",
-  authDomain: "avopak-acceso-bf73e.firebaseapp.com",
-  projectId: "avopak-acceso-bf73e",
-  storageBucket: "avopak-acceso-bf73e.firebasestorage.app",
-  messagingSenderId: "988828626159",
-  appId: "1:988828626159:web:a593c81c2bb085881fbf1a"
+  apiKey: "PEGAR_AQUI",
+  authDomain: "PEGAR_AQUI",
+  projectId: "PEGAR_AQUI",
+  storageBucket: "PEGAR_AQUI",
+  messagingSenderId: "PEGAR_AQUI",
+  appId: "PEGAR_AQUI"
 };
 // ====== FIN DEL BLOQUE DE FIREBASE ======
 
@@ -45,7 +45,7 @@ window.AP_CONFIG = {
   puntualidad: {
     minutosPendiente: 10,           // Llegada 1 a 9 min después de la hora de entrada: ingreso PENDIENTE (se registra y queda para verificación).
                                     // Desde este minuto (10): ingreso DENEGADO hasta que el Director verifique.
-    minutosAntelacionTurno: 120,    // Se acepta el ingreso hasta X min antes de la hora de entrada; antes de eso queda PENDIENTE
+    minutosAntelacionTurno: 30,     // El ingreso se habilita desde X min antes de la hora de entrada; antes, alerta MUY TEMPRANO (queda PENDIENTE)
     minutosSalidaAntesDeFin: 0,     // Salida permitida desde X min antes de la hora de fin de jornada
     horasMaxSinSalida: 14           // Un ingreso abierto por más horas se considera con salida no registrada
   },
@@ -57,9 +57,9 @@ window.AP_CONFIG = {
   // ---- Responsable del tratamiento (Ley 1581 de 2012) — COMPLETAR antes de operar ----
   responsable: {
     razonSocial: 'Avo Pak S.A.S.',
-    nit: '901.557.939-1',
+    nit: '[COMPLETAR NIT]',
     domicilio: 'Km 5 vía La Ceja – Abejorral, La Ceja (Antioquia)',
-    correoDatos: 'info@avo-pak.com',
+    correoDatos: '[COMPLETAR CORREO DE ATENCIÓN DE PETICIONES SOBRE DATOS PERSONALES]',
     politicaUrl: ''   // Enlace a la Política de Tratamiento de Datos publicada, si existe
   },
   versionAutorizacion: 'AUT-ACC-02'
