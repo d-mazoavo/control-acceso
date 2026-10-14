@@ -122,7 +122,7 @@
   };
 
   AP.CAT = {
-    tiposPersona: ['Personal propio', 'Contratista', 'Conductor / transportador'],
+    tiposPersona: ['Personal propio', 'Personal de finca', 'Contratista', 'Conductor / transportador'],
     tiposDoc: ['CC', 'CE', 'PA', 'PPT', 'TI', 'NIT', 'Otro'],
     vehiculos: ['', 'Automóvil', 'Camioneta', 'Motocicleta', 'Bicicleta', 'Camión', 'Tractocamión', 'Furgón', 'Otro'],
     roles: ['Administrador', 'Analista', 'Supervisor', 'Vigilante'],
@@ -130,7 +130,7 @@
     motivosBaja: ['Retiro del servicio informado por el contratista', 'Cambio de puesto o rotación informado por el contratista',
       'Terminación del contrato de vigilancia', 'Retiro o cambio de cargo del trabajador de Avo Pak', 'Credencial comprometida (PIN conocido por terceros)', 'Otro'],
     estadosVisita: ['Pendiente', 'Aprobada', 'Rechazada', 'Cancelada'],
-    categoriasManual: ['Visitante no anunciado', 'Autoridad', 'Personal propio sin carné', 'Contratista sin carné', 'Conductor / transportador'],
+    categoriasManual: ['Visitante no anunciado', 'Autoridad', 'Personal propio sin carné', 'Personal de finca sin carné', 'Contratista sin carné', 'Conductor / transportador'],
     tiposVisitaAutoridad: ['Inspección', 'Verificación', 'Registro / requisa', 'Notificación', 'Apoyo operativo',
       'Recepción de denuncia', 'Seguimiento', 'Incautación / decomiso', 'Citación', 'Otra'],
     entidades: ['Policía Nacional', 'Fiscalía General de la Nación', 'Ejército Nacional', 'DIAN', 'ICA', 'INVIMA',
