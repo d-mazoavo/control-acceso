@@ -7,12 +7,12 @@
 
 // ====== PEGUE AQUÍ, reemplazando las 8 líneas siguientes, el bloque que le muestra Firebase ======
 const firebaseConfig = {
-  apiKey: "PEGAR_AQUI",
-  authDomain: "PEGAR_AQUI",
-  projectId: "PEGAR_AQUI",
-  storageBucket: "PEGAR_AQUI",
-  messagingSenderId: "PEGAR_AQUI",
-  appId: "PEGAR_AQUI"
+  apiKey: "AIzaSyDA-T4nqFN-LoF94nuIG5-EpYCFvZqY9FQ",
+  authDomain: "avopak-acceso-bf73e.firebaseapp.com",
+  projectId: "avopak-acceso-bf73e",
+  storageBucket: "avopak-acceso-bf73e.firebasestorage.app",
+  messagingSenderId: "988828626159",
+  appId: "1:988828626159:web:a593c81c2bb085881fbf1a"
 };
 // ====== FIN DEL BLOQUE DE FIREBASE ======
 
