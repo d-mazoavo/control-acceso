@@ -32,6 +32,17 @@
     });
   }
   AP.h = h;
+  // Los bloques opcionales (null, undefined, false) se omiten también en replaceChildren, como en AP.h;
+  // así nunca aparece el texto "null" en pantalla.
+  (function () {
+    var orig = Element.prototype.replaceChildren;
+    if (!orig || orig._ap) return;
+    var seguro = function () {
+      return orig.apply(this, Array.prototype.filter.call(arguments, function (c) { return c !== null && c !== undefined && c !== false; }));
+    };
+    seguro._ap = true;
+    Element.prototype.replaceChildren = seguro;
+  })();
   // Agrega hijos ignorando valores vacíos (null, undefined, false)
   AP.add = function (el) { append(el, Array.prototype.slice.call(arguments, 1)); return el; };
 
@@ -238,6 +249,130 @@
       return gal;
     }
   };
+
+  // ---------- Anfitrión: búsqueda en el personal propio (v2.2.0) ----------
+  // Deja la visita vinculada al colaborador. Conserva en campos ocultos Anfitrion, AnfitrionId, AnfitrionDoc y
+  // AnfitrionCargo, que AP.formData lee junto con el resto del formulario.
+  // opt: { fuente: async () => personas, valor: registro previo, onSelect: fn(persona), libre: bool, placeholder }
+  AP.anfitrionPicker = function (opt) {
+    opt = opt || {};
+    var v0 = opt.valor || {};
+    var hid = {};
+    ['Anfitrion', 'AnfitrionId', 'AnfitrionDoc', 'AnfitrionCargo'].forEach(function (k) { hid[k] = h('input', { type: 'hidden', name: k, value: v0[k] || '' }); });
+    var area = '';
+    var buscar = h('input', { type: 'search', autocomplete: 'off', class: 'anf-buscar', placeholder: opt.placeholder || 'Nombre, documento, cargo o área del colaborador', 'aria-label': 'Buscar anfitrión en el personal propio' });
+    var res = h('div', { class: 'list anf-res' });
+    var vista = h('div', { class: 'stack sm' });
+    var box = h('div', { class: 'anf-pick' }, vista, h('div', { hidden: true }, hid.Anfitrion, hid.AnfitrionId, hid.AnfitrionDoc, hid.AnfitrionCargo));
+    var cache = null;
+    async function personal() {
+      if (!cache) {
+        var l = await opt.fuente();
+        cache = (l || []).filter(function (p) { return p.Tipo === 'Personal propio' && p.Estado === 'Habilitado' && p.Title; });
+      }
+      return cache;
+    }
+    function fijar(p) {
+      hid.Anfitrion.value = p ? p.Title : (opt.libre ? buscar.value.trim() : '');
+      hid.AnfitrionId.value = p ? p.id : '';
+      hid.AnfitrionDoc.value = p ? (p.NumDoc || '') : '';
+      hid.AnfitrionCargo.value = p ? (p.Cargo || '') : '';
+      area = p ? (p.Area || '') : '';
+    }
+    var filtrar = U.debounce(async function () {
+      if (!hid.AnfitrionId.value) fijar(null);
+      var t = U.fold(buscar.value), d = U.normDoc(buscar.value);
+      if (t.length < 2) { res.replaceChildren(); return; }
+      try {
+        var l = (await personal()).filter(function (p) {
+          return U.fold([p.Title, p.Cargo, p.Area].join(' ')).indexOf(t) >= 0 || (d.length >= 3 && U.normDoc(p.NumDoc).indexOf(d) >= 0);
+        }).slice(0, 8);
+        if (!l.length) {
+          res.replaceChildren(h('p', { class: 'muted small' }, 'No aparece en el personal propio habilitado.' + (opt.libre && buscar.value.trim() ? ' Se registrará como texto: «' + buscar.value.trim() + '», sin vínculo con un colaborador.' : '')));
+          return;
+        }
+        res.replaceChildren.apply(res, l.map(function (p) {
+          return h('button', { class: 'list-item', type: 'button', onclick: function () { fijar(p); pintar(); if (opt.onSelect) opt.onSelect(p); } },
+            AP.icon('badge', 20), h('div', null, h('strong', null, p.Title), h('small', null, [p.Cargo, p.Area].filter(Boolean).join(' · ') || 'Personal propio')));
+        }));
+      } catch (e) { res.replaceChildren(h('p', { class: 'note' }, 'No fue posible consultar el personal: ' + e.message)); }
+    }, 200);
+    buscar.addEventListener('input', filtrar);
+    function pintar() {
+      if (hid.AnfitrionId.value) {
+        vista.replaceChildren(h('div', { class: 'sel-persona' }, AP.icon('badge', 22),
+          h('div', null, h('strong', null, hid.Anfitrion.value),
+            h('small', { class: 'block muted' }, [hid.AnfitrionCargo.value, area].filter(Boolean).join(' · ') || 'Personal propio'),
+            h('small', { class: 'block muted' }, 'Visita vinculada al colaborador')),
+          h('button', { class: 'btn small', type: 'button', onclick: function () { buscar.value = ''; fijar(null); res.replaceChildren(); pintar(); setTimeout(function () { try { buscar.focus(); } catch (e) { /* */ } }, 30); } }, 'Cambiar')));
+      } else {
+        vista.replaceChildren(buscar, res,
+          hid.Anfitrion.value && buscar.value.trim() === hid.Anfitrion.value ? h('small', { class: 'help' }, 'Anfitrión sin vincular: búsquelo y selecciónelo de la lista para vincular la visita al colaborador.') : null);
+      }
+    }
+    if (!v0.AnfitrionId && v0.Anfitrion) buscar.value = v0.Anfitrion;
+    pintar();
+    box.valor = function () { return { Anfitrion: hid.Anfitrion.value, AnfitrionId: hid.AnfitrionId.value, AnfitrionDoc: hid.AnfitrionDoc.value, AnfitrionCargo: hid.AnfitrionCargo.value, Area: area }; };
+    box.vinculado = function () { return !!hid.AnfitrionId.value; };
+    return box;
+  };
+
+  // ---------- Visitantes ya conocidos (v2.3.0) ----------
+  // Las visitas anteriores de la misma cédula llenan el formulario de una visita nueva. El visitante NO se crea en
+  // Personas: allí solo figuran quienes tienen QR permanente (personal propio, contratistas y conductores).
+  var cacheVis = {};
+  AP.Visitantes = {
+    historial: async function (doc, excluirId) {
+      var raw = String(doc || '').trim(), d = U.normDoc(raw);
+      if (d.length < 5) return [];
+      var c = cacheVis[d];
+      if (!c || Date.now() - c.t > 60000) {
+        var porId = {};
+        (AP.Sync.visitas || []).forEach(function (v) { if (U.normDoc(v.NumDoc) === d) porId[v.id] = v; });
+        var vals = [raw]; if (d !== raw) vals.push(d);
+        for (var i = 0; i < vals.length; i++) {
+          try { (await AP.B.findBy('AP_Visitas', 'NumDoc', vals[i])).forEach(function (v) { if (!v._borrado) porId[v.id] = v; }); }
+          catch (e) { /* sin conexión: solo lo que hay en el dispositivo */ }
+        }
+        c = cacheVis[d] = { t: Date.now(), l: Object.keys(porId).map(function (k) { return porId[k]; }).sort(function (a, b) { return (a.FechaInicio || '') < (b.FechaInicio || '') ? 1 : -1; }) };
+      }
+      return c.l.filter(function (v) { return v.id !== excluirId; });
+    },
+    olvidar: function (doc) { delete cacheVis[U.normDoc(doc)]; },
+    // Llena con la visita (o persona) de referencia los campos que estén vacíos; devuelve los nombres de los campos llenados
+    llenar: function (campos, ref) {
+      var nombres = { Title: 'nombre', TipoDoc: 'tipo de documento', Empresa: 'empresa', Telefono: 'celular', Correo: 'correo', Placa: 'placa', VehiculoTipo: 'vehículo' };
+      var hechos = [];
+      Object.keys(nombres).forEach(function (k) {
+        var el = campos[k], val = ref && ref[k];
+        if (!el || !val) return;
+        var vacio = !String(el.value || '').trim() || (k === 'TipoDoc' && el.value === 'CC');
+        if (!vacio || String(el.value) === String(val)) return;
+        el.value = val;
+        el.classList.add('autollenado');
+        el.addEventListener('input', function () { el.classList.remove('autollenado'); }, { once: true });
+        hechos.push(nombres[k]);
+      });
+      return hechos;
+    },
+    resumen: function (l) {
+      var rech = l.filter(function (v) { return v.Estado === 'Rechazada'; });
+      return { n: l.length, ultima: l[0] || null, rechazadas: rech, ultRechazo: rech[0] || null };
+    }
+  };
+
+  // ---------- WhatsApp ----------
+  // Número internacional sin signos para wa.me. Celulares de Colombia: 10 dígitos que empiezan por 3.
+  AP.waNum = function (tel) {
+    var raw = String(tel || '').trim(), d = raw.replace(/\D/g, '');
+    if (/^3\d{9}$/.test(d)) return '57' + d;
+    if (/^573\d{9}$/.test(d)) return d;
+    if (/^00\d{10,15}$/.test(d)) return d.slice(2);
+    if (raw.charAt(0) === '+' && d.length >= 10 && d.length <= 15) return d;
+    return '';
+  };
+  AP.waLink = function (num, texto) { return 'https://wa.me/' + num + (texto ? '?text=' + encodeURIComponent(texto) : ''); };
+  AP.WA_DIRECTOR = '573106453940';
 
   AP.pickImage = function (capture) {
     return new Promise(function (res) {

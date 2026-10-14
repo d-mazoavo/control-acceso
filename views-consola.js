@@ -117,7 +117,7 @@
       var negados = hoy.filter(function (m) { return m.Resultado === 'Negado'; });
       var excep = hoy.filter(function (m) { return m.Excepcion; });
       var visHoy = vis.filter(function (v) { return U.ymd(v.FechaInicio) === U.ymd() && v.Estado === 'Aprobada'; });
-      var pend = vis.filter(function (v) { return v.Estado === 'Pendiente'; });
+      var pend = vis.filter(function (v) { return v.Estado === 'Pendiente' && new Date(v.FechaFin) >= new Date(); });
       var nc = insp.filter(function (i) { return i.Resultado === 'No conforme'; });
       var porPersona = new Map(pers.map(function (p) { return [p.Token, p]; }));
       var visTok = new Map(vis.map(function (v) { return [v.Token, v]; }));
@@ -137,15 +137,26 @@
         }
         if (m.DesfaseReloj && Math.abs(m.DesfaseReloj) > 300 && new Date(m.FechaHora) >= hoy0) alertas.push(['clock', 'warn', 'Registro de ' + m.Title + ' con hora del celular desfasada ' + Math.round(m.DesfaseReloj / 60) + ' min.']);
       });
+      // Quién autorizó la excepción y por qué
+      var autorizo = function (m) { return m.Excepcion ? ' Autorizó: ' + (m.AutorizadoPor || '—') + (m.MotivoExcepcion ? '. Justificación: ' + String(m.MotivoExcepcion).replace(/[.\s]+$/, '') : '') + '.' : ''; };
       movs.forEach(function (m) {
         if (!m.Novedad || new Date(m.FechaHora) < hoy0) return;
         var grave = /no autorizada|denegad/i.test(m.Novedad);
-        alertas.push([grave ? 'alert' : 'clock', grave ? 'deny' : 'warn', m.Title + ' — ' + m.Novedad + ' (' + U.fTime(m.FechaHora) + (m.Vigilante ? ', registró ' + m.Vigilante : '') + '). Verifique en Novedades.']);
+        var sinQR = /sin lectura de QR/i.test(m.Novedad);
+        alertas.push([grave ? 'alert' : sinQR ? 'key' : 'clock', grave ? 'deny' : 'warn', m.Title + ' — ' + m.Novedad + ' (' + U.fTime(m.FechaHora) + (m.Vigilante ? ', registró ' + m.Vigilante : '') + ').' + autorizo(m) + ' Verifique en Novedades.']);
       });
       negados.forEach(function (m) { alertas.push(['x', 'deny', 'Ingreso negado a ' + m.Title + ' a las ' + U.fTime(m.FechaHora) + ': ' + (m.MotivoNegacion || '')]); });
-      excep.forEach(function (m) { alertas.push(['key', 'warn', 'Ingreso por excepción de ' + m.Title + ' autorizado por ' + (m.AutorizadoPor || '—') + '.']); });
+      // Las excepciones con novedad ya figuran arriba, con quién autorizó y la justificación
+      excep.filter(function (m) { return !m.Novedad; }).forEach(function (m) { alertas.push(['key', 'warn', 'Ingreso por excepción de ' + m.Title + ' (' + U.fTime(m.FechaHora) + ').' + autorizo(m)]); });
+      hoy.filter(function (m) { return m.Categoria === 'Autoridad' && m.Sentido === 'Ingreso' && m.Resultado === 'Permitido'; }).forEach(function (m) {
+        alertas.push(['badge', 'warn', 'Visita de autoridad: ' + [m.Empresa, m.Title].filter(Boolean).join(' — ') + (m.Area ? ' (' + m.Area + ')' : '') + ', ingresó a las ' + U.fTime(m.FechaHora) + (m.Vigilante ? ', registró ' + m.Vigilante : '') + '. Diligencie el formato AP-SG-FT-002.']);
+      });
       nc.forEach(function (i) { alertas.push(['truck', 'deny', 'Inspección NO CONFORME: ' + i.Placa + ' (' + U.fTime(i.FechaHora) + '). ' + (i.NoConformidades || '')]); });
-      pend.forEach(function (v) { alertas.push(['user', 'info', 'Visita pendiente de aprobación: ' + v.Title + ' (' + U.fDateTime(v.FechaInicio) + ').']); });
+      pend.forEach(function (v) {
+        alertas.push(v.Origen === 'Portería'
+          ? ['user', 'warn', 'Visitante no anunciado esperando en portería desde las ' + U.fTime(v.FechaSolicitud || v.FechaInicio) + ': ' + v.Title + '. Apruebe o rechace en Visitas.']
+          : ['user', 'info', 'Visita pendiente de aprobación: ' + v.Title + ' (' + U.fDateTime(v.FechaInicio) + ').']);
+      });
 
       var kpi = function (n, l, icon, kind, href, onclick) {
         var attrs = { class: 'kpi ' + (kind || '') + (href || onclick ? ' kpi-link' : ''), href: href ? '#' + href : null };
@@ -228,15 +239,7 @@
               ['Área', function (v) { return v.Area; }]
             ], visHoy, 'Sin visitas aprobadas para hoy.');
           }),
-          kpi(pend.length, 'Visitas por aprobar', 'inbox', pend.length ? 'warn' : '', null, function () {
-            modalLista('Visitas pendientes de aprobación (' + pend.length + ')', [
-              ['Visitante', function (v) { return v.Title; }],
-              ['Empresa', function (v) { return v.Empresa; }],
-              ['Fecha', function (v) { return U.fDateTime(v.FechaInicio); }],
-              ['Anfitrión', function (v) { return v.Anfitrion; }],
-              ['Motivo', function (v) { return v.Motivo; }]
-            ], pend, 'Sin visitas pendientes de aprobación.');
-          }),
+          kpi(pend.length, 'Visitas por aprobar', 'inbox', pend.length ? 'warn' : '', '/consola/visitas?t=pendientes'),
           kpi(insp.length, 'Inspecciones hoy', 'truck', nc.length ? 'deny' : '', null, function () {
             modalLista('Inspecciones de hoy (' + insp.length + ')', [
               ['Hora', function (i) { return U.fTime(i.FechaHora); }],
@@ -457,11 +460,32 @@
             h('div', { class: 'edit-side' }, img, fotoBtns, h('p', { class: 'help' }, 'Foto de baja resolución, solo para cotejo visual.'), qrBox),
             h('div', { class: 'stack' }, form,
               h('div', { class: 'row gap wrap end' },
+                !nuevo && full.Tipo === 'Personal propio' ? h('button', { class: 'btn', type: 'button', onclick: function () { visitasRecibidas(p); } }, AP.icon('user', 18), 'Visitas recibidas') : null,
                 !nuevo ? h('button', { class: 'btn', type: 'button', onclick: function () { close(); credencial(p); } }, AP.icon('qr', 18), 'Credencial') : null,
                 h('button', { class: 'btn', type: 'button', onclick: function () { close(); } }, 'Cancelar'),
                 h('button', { class: 'btn primary', type: 'button', onclick: save }, AP.icon('check', 18), 'Guardar'))));
         }
       });
+    }
+
+    // Visitas en las que el colaborador figura como anfitrión (vínculo por identificador o por documento)
+    async function visitasRecibidas(p) {
+      var m = AP.modal({ title: 'Visitas recibidas por ' + p.Title, size: 'wide', body: AP.spinner('Consultando…') });
+      try {
+        var doc = U.normDoc(p.NumDoc);
+        var l = (await AP.B.listRange('AP_Visitas', 'FechaFin', U.addDays(new Date(), -90), null, { exclude: ['Foto'] }))
+          .filter(function (v) { return v.AnfitrionId === p.id || (doc && v.AnfitrionDoc && U.normDoc(v.AnfitrionDoc) === doc); })
+          .sort(function (a, b) { return a.FechaInicio < b.FechaInicio ? 1 : -1; });
+        var cuerpo = l.length ? h('div', { class: 'tbl-scroll' }, h('table', { class: 'tbl' },
+          h('thead', null, h('tr', null, ['Fecha', 'Visitante', 'Empresa', 'Motivo', 'Origen', 'Estado'].map(function (c) { return h('th', null, c); }))),
+          h('tbody', null, l.map(function (v) {
+            return h('tr', null, h('td', { 'data-label': 'Fecha' }, U.fDateTime(v.FechaInicio)), h('td', { 'data-label': 'Visitante' }, v.Title),
+              h('td', { 'data-label': 'Empresa' }, v.Empresa || ''), h('td', { 'data-label': 'Motivo' }, v.Motivo || ''),
+              h('td', { 'data-label': 'Origen' }, v.Origen === 'Portería' ? 'No anunciado (portería)' : 'Prerregistro'), h('td', { 'data-label': 'Estado' }, AP.estadoPill(v.Estado)));
+          }))))
+          : AP.empty('user', 'Sin visitas vinculadas', 'En los últimos 90 días no hay visitas en las que este colaborador figure como anfitrión.');
+        m.el.querySelector('.modal-body').replaceChildren(h('p', { class: 'muted small' }, 'Últimos 90 días · ' + l.length + ' visita(s).'), cuerpo);
+      } catch (e) { m.el.querySelector('.modal-body').replaceChildren(h('p', { class: 'note' }, e.message)); }
     }
 
     async function credencial(p) {
@@ -619,14 +643,14 @@
     var c = document.createElement('canvas'); c.width = W; c.height = H;
     var x = c.getContext('2d');
     x.fillStyle = '#ffffff'; x.fillRect(0, 0, W, H);
-    x.fillStyle = '#66754e'; x.fillRect(0, 0, W, 150);
+    x.fillStyle = '#587e50'; x.fillRect(0, 0, W, 150);
     try {
       var logo = await new Promise(function (res, rej) { var i = new Image(); i.onload = function () { res(i); }; i.onerror = rej; i.src = 'img/logo-avo.png'; });
       var lw = 200, lh = lw * logo.height / logo.width; x.drawImage(logo, 36, (150 - lh) / 2, lw, lh);
     } catch (e) { /* sin logo */ }
     x.fillStyle = '#ffffff'; x.font = '700 30px system-ui, Arial'; x.textAlign = 'right';
     x.fillText(o.titulo.toUpperCase(), W - 36, 86);
-    x.fillStyle = '#d2ce60'; x.fillRect(0, 150, W, 8);
+    x.fillStyle = '#dfd57c'; x.fillRect(0, 150, W, 8);
     var q = U.qrCanvas(U.qrPayload(o.token), 520);
     x.drawImage(q, (W - q.width) / 2, 190);
     var y = 190 + q.height + 50;
@@ -634,7 +658,7 @@
     x.font = '700 34px system-ui, Arial'; y += wrap(o.nombre, y, 40); y += 48;
     x.font = '400 26px system-ui, Arial'; x.fillStyle = '#444';
     [o.linea2, o.linea3, o.linea4, o.linea5].forEach(function (l) { if (l) { y += wrap(l, y, 32); y += 40; } });
-    x.fillStyle = '#66754e'; x.fillRect(0, H - 70, W, 70);
+    x.fillStyle = '#587e50'; x.fillRect(0, H - 70, W, 70);
     x.fillStyle = '#fff'; x.font = '600 22px system-ui, Arial'; x.fillText(o.pie || '', W / 2, H - 28);
     // Ajusta el texto a dos líneas como máximo; devuelve el alto adicional usado
     function wrap(t, yy, lh) {

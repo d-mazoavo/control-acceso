@@ -25,7 +25,11 @@
         ['Correo', 'text'], ['Empresa', 'text'], ['Motivo', 'note'], ['Anfitrion', 'text'], ['AnfitrionCorreo', 'text'],
         ['Area', 'text'], ['FechaInicio', 'datetime', IDX], ['FechaFin', 'datetime', IDX], ['Placa', 'text'],
         ['VehiculoTipo', 'text'], ['Estado', 'text', IDX], ['SolicitadoPor', 'text'], ['AprobadoPor', 'text'],
-        ['FechaAprobacion', 'datetime'], ['QREnviado', 'datetime'], ['Foto', 'note'], ['Observaciones', 'note']
+        ['FechaAprobacion', 'datetime'], ['QREnviado', 'datetime'], ['Foto', 'note'], ['Observaciones', 'note'],
+        // v2.2.0: anfitrión vinculado al personal propio y solicitudes de visitantes no anunciados hechas en portería
+        ['AnfitrionId', 'text'], ['AnfitrionDoc', 'text', IDX], ['AnfitrionCargo', 'text'],
+        ['Origen', 'text'], ['Porteria', 'text'], ['SolicitadoPorNombre', 'text'], ['FechaSolicitud', 'datetime'],
+        ['AutorizaDatos', 'bool'], ['JustificacionDecision', 'note'], ['AprobadoPorNombre', 'text']
       ]
     },
     AP_Movimientos: {
@@ -35,6 +39,7 @@
         ['IdLocal', 'text', UNQ], ['Sentido', 'text'], ['Resultado', 'text'], ['Categoria', 'text'], ['Origen', 'text'],
         ['Token', 'text', IDX], ['RefLista', 'text'], ['RefId', 'text'], ['TipoDoc', 'text'], ['NumDoc', 'text', IDX],
         ['Telefono', 'text'], ['Empresa', 'text'], ['Cargo', 'text'], ['Anfitrion', 'text'], ['AnfitrionCorreo', 'text'], ['Area', 'text'],
+        ['AnfitrionId', 'text'], ['AnfitrionDoc', 'text'],
         ['Motivo', 'note'], ['Placa', 'text', IDX], ['VehiculoTipo', 'text'], ['EstadoMostrado', 'text'],
         ['Excepcion', 'bool'], ['AutorizadoPor', 'text'], ['MotivoExcepcion', 'note'], ['MotivoNegacion', 'note'],
         ['AutorizacionConfirmada', 'bool'], ['CarneEntregado', 'text'], ['DocumentoCustodia', 'bool'],

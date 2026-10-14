@@ -272,7 +272,8 @@
       window.addEventListener('offline', function () { Sync.state.online = false; Sync.emit(); });
       document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') Sync.run(); });
       Sync._timer = setInterval(function () {
-        if (document.visibilityState === 'visible') Sync.run();
+        // La consola del Director sigue consultando aunque la pestaña esté en segundo plano (visitas por aprobar)
+        if (document.visibilityState === 'visible' || (AP.Session && AP.Session.can && AP.Session.can('consola'))) Sync.run();
       }, 90 * 1000);
       Sync.run();
     }
@@ -286,7 +287,8 @@
   A.keyOf = function (m) {
     if (m.Token) return m.Token;
     if (m.NumDoc) return 'DOC:' + U.normDoc(m.NumDoc);
-    return 'ID:' + m.IdLocal;
+    // Registro manual sin documento (p. ej., autoridad): la salida se asocia a su ingreso
+    return 'ID:' + (m.Sentido === 'Salida' && m.EntradaId ? m.EntradaId : m.IdLocal);
   };
 
   A.lastFor = function (key) {
@@ -362,6 +364,37 @@
       else { r.nivel = 'ok'; r.etiqueta = 'VISITA AUTORIZADA'; r.detalle = 'Válida hasta las ' + U.fTime(fin) + (U.ymd(fin) !== U.ymd(now) ? ' del ' + U.fDate(fin) : ''); }
     }
     return r;
+  };
+
+  // Estado de una visita según sus movimientos: por llegar, dentro o ya salió (cada visita tiene su propio QR)
+  A.estadoVisita = function (v) {
+    var m = v && v.Token ? A.lastFor(v.Token) : null;
+    if (!m) return { clave: 'porLlegar', texto: 'Por llegar' };
+    return m.Sentido === 'Ingreso' ? { clave: 'dentro', texto: 'Dentro desde ' + U.fTime(m.FechaHora), mov: m } : { clave: 'salio', texto: 'Salió ' + U.fTime(m.FechaHora), mov: m };
+  };
+  // Visitas aprobadas para hoy que aún no han ingresado (al ingresar salen de la lista)
+  A.visitasPorLlegar = function (now) {
+    now = now || new Date();
+    var hoy = U.ymd(now);
+    return Sync.visitas.filter(function (v) {
+      return v.Estado === 'Aprobada' && U.ymd(v.FechaInicio) <= hoy && U.ymd(v.FechaFin) >= hoy && new Date(v.FechaFin) > now && A.estadoVisita(v).clave === 'porLlegar';
+    }).sort(function (a, b) { return a.FechaInicio < b.FechaInicio ? -1 : 1; });
+  };
+
+  // Evaluación al leer un QR: si el resultado no es favorable y hay conexión, se consulta primero el servidor,
+  // porque el Director pudo aprobar la visita (o habilitar a la persona) hace unos segundos.
+  A.evaluarActual = async function (token) {
+    var r = A.evaluate(token);
+    if (r.nivel === 'ok' || navigator.onLine === false || !AP.Session.user) return r;
+    try {
+      await Promise.race([(async function () {
+        // Si ya hay una sincronización en curso, pudo empezar antes de la aprobación: se espera y se repite
+        if (Sync._running) { try { await Sync._running; } catch (e) { /* */ } }
+        if (AP.B.olvidarMarcador) AP.B.olvidarMarcador();
+        await Sync.run();
+      })(), U.sleep(8000)]);
+    } catch (e) { /* se usa la copia local */ }
+    return A.evaluate(token);
   };
 
   // ======================= BITÁCORA =======================

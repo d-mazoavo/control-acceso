@@ -18,6 +18,15 @@
   }
 
   // =================== VISITAS ===================
+  // v2.2.0: los visitantes no anunciados que registra el vigilante llegan aquí "Por aprobar". El Director decide con
+  // justificación; al aprobar fija la vigencia del QR y se lo envía al visitante por WhatsApp.
+  var EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+  function finSugerido(desde) {
+    var a = desde || new Date();
+    var b = U.fromLocal(U.ymd(a), '18:00');
+    if (b.getTime() - a.getTime() < 2 * 3600000) b = new Date(a.getTime() + 2 * 3600000);
+    return b;
+  }
   AP.route('/consola/visitas', function (qs) {
     if (!guard()) return;
     var tab = qs.t || 'pendientes';
@@ -25,13 +34,26 @@
     AP.consolaShell('/consola/visitas', 'Visitas', content,
       h('button', { class: 'btn primary', type: 'button', onclick: function () { editar(null); } }, AP.icon('plus', 18), 'Nueva visita'));
     var visitas = [];
+    async function consultar() { return AP.B.listRange('AP_Visitas', 'FechaFin', U.addDays(new Date(), tab === 'historial' ? -60 : -1), null, { exclude: ['Foto'] }); }
     async function cargar() {
       content.replaceChildren(AP.spinner('Consultando…'));
-      try {
-        visitas = await AP.B.listRange('AP_Visitas', 'FechaFin', U.addDays(new Date(), tab === 'historial' ? -60 : -1), null, { exclude: ['Foto'] });
-        pintar();
-      } catch (e) { content.replaceChildren(errBox(e)); }
+      try { visitas = await consultar(); pintar(); }
+      catch (e) { content.replaceChildren(errBox(e)); }
     }
+    // Las solicitudes nuevas de portería aparecen solas (cada 30 s, sin interrumpir si hay una ventana abierta)
+    var t = setInterval(async function () {
+      if (document.querySelector('.modal-wrap')) return;
+      try {
+        var n = await consultar();
+        var firma = function (l) { return l.map(function (v) { return v.id + v.Estado + v._etag; }).sort().join('|'); };
+        if (firma(n) !== firma(visitas) && !document.querySelector('.modal-wrap')) { visitas = n; pintar(); }
+      } catch (e) { /* se reintenta */ }
+    }, 30000);
+    AP.onLeave(function () { clearInterval(t); });
+    // Al registrarse un ingreso o una salida, la lista se actualiza (estado "Dentro" / "Salió")
+    AP.onLeave(AP.Sync.on(U.debounce(function () { if (visitas.length && !document.querySelector('.modal-wrap') && location.hash.indexOf('#/consola/visitas') === 0) pintar(); }, 800)));
+
+    function dePorteria(v) { return v.Origen === 'Portería'; }
     function pintar() {
       var hoy = U.ymd(), ahora = new Date();
       var grupos = {
@@ -40,81 +62,208 @@
         proximas: visitas.filter(function (v) { return U.ymd(v.FechaInicio) > hoy && v.Estado !== 'Cancelada'; }),
         historial: visitas.slice()
       };
-      var lista = (grupos[tab] || []).sort(function (a, b) { return a.FechaInicio < b.FechaInicio ? (tab === 'historial' ? 1 : -1) : (tab === 'historial' ? -1 : 1); });
+      var lista = (grupos[tab] || []).sort(function (a, b) {
+        var ka = dePorteria(a) ? (a.FechaSolicitud || a.FechaInicio) : a.FechaInicio, kb = dePorteria(b) ? (b.FechaSolicitud || b.FechaInicio) : b.FechaInicio;
+        return ka < kb ? (tab === 'historial' ? 1 : -1) : (tab === 'historial' ? -1 : 1);
+      });
       var tabs = h('div', { class: 'tabs' }, [['pendientes', 'Por aprobar'], ['hoy', 'Hoy'], ['proximas', 'Próximas'], ['historial', 'Últimos 60 días']].map(function (t) {
         return h('a', { class: t[0] === tab ? 'on' : '', href: '#/consola/visitas?t=' + t[0] }, t[1] + (t[0] !== 'historial' ? ' (' + grupos[t[0]].length + ')' : ''));
       }));
-      content.replaceChildren(tabs, simpleTable([
-        ['Visitante', function (v) { return h('div', null, h('strong', null, v.Title), h('small', { class: 'block muted' }, (v.TipoDoc || '') + ' ' + (v.NumDoc || '') + (v.Empresa ? ' · ' + v.Empresa : ''))); }],
-        ['Fecha y hora', function (v) { return U.fDateTime(v.FechaInicio) + ' – ' + U.fTime(v.FechaFin); }],
-        ['Anfitrión', function (v) { return [v.Anfitrion, v.Area].filter(Boolean).join(' · '); }],
+      var avisoPort = tab === 'pendientes' && grupos.pendientes.some(dePorteria)
+        ? h('p', { class: 'banner warn' }, AP.icon('alert', 18), h('span', null, 'Hay visitantes no anunciados esperando en portería. Apruebe o rechace con justificación; al aprobar, envíele el código QR por WhatsApp.'))
+        : null;
+      content.replaceChildren(tabs, avisoPort, simpleTable([
+        ['Visitante', function (v) {
+          return h('div', null, h('strong', null, v.Title), h('small', { class: 'block muted' }, (v.TipoDoc || '') + ' ' + (v.NumDoc || '') + (v.Empresa ? ' · ' + v.Empresa : '')),
+            dePorteria(v) ? h('small', { class: 'block' }, AP.pill('No anunciado · portería', 'warn')) : null);
+        }],
+        ['Fecha y hora', function (v) {
+          if (dePorteria(v) && v.Estado === 'Pendiente') return h('div', null, 'En portería desde ' + U.fTime(v.FechaSolicitud || v.FechaInicio), h('small', { class: 'block muted' }, 'Registró: ' + (v.SolicitadoPorNombre || v.SolicitadoPor || '—')));
+          return U.fDateTime(v.FechaInicio) + ' – ' + U.fTime(v.FechaFin);
+        }],
+        ['Anfitrión', function (v) {
+          return h('div', null, v.Anfitrion || '—', h('small', { class: 'block muted' }, [v.AnfitrionCargo, v.Area].filter(Boolean).join(' · ')),
+            v.Anfitrion && !v.AnfitrionId ? h('small', { class: 'block txt-warn' }, 'Sin vincular') : null);
+        }],
         ['Motivo', function (v) { return v.Motivo; }],
         ['Placa', function (v) { return v.Placa; }],
-        ['Estado', function (v) { return AP.estadoPill(v.Estado); }],
+        ['Estado', function (v) {
+          // Los movimientos de los últimos dos días están en el equipo: el estado se muestra solo para visitas recientes
+          var m = v.Estado === 'Aprobada' && new Date(v.FechaFin) >= U.addDays(new Date(), -1) ? AP.Access.estadoVisita(v) : null;
+          var txt = m ? (m.clave === 'porLlegar' && new Date(v.FechaFin) < new Date() ? 'No ingresó' : m.texto) : '';
+          return h('div', null, AP.estadoPill(v.Estado), txt ? h('small', { class: 'block ' + (m.clave === 'dentro' ? 'txt-ok' : 'muted') }, txt) : null);
+        }],
         ['', function (v) {
           return h('div', { class: 'row gap nowrap' },
-            v.Estado === 'Pendiente' ? h('button', { class: 'btn small primary', type: 'button', onclick: function () { aprobar(v, true); } }, AP.icon('check', 16), 'Aprobar') : null,
-            v.Estado === 'Pendiente' ? h('button', { class: 'btn small danger-outline', type: 'button', onclick: function () { aprobar(v, false); } }, 'Rechazar') : null,
+            v.Estado === 'Pendiente' ? h('button', { class: 'btn small primary', type: 'button', onclick: function () { decidir(v, true); } }, AP.icon('check', 16), 'Aprobar') : null,
+            v.Estado === 'Pendiente' ? h('button', { class: 'btn small danger-outline', type: 'button', onclick: function () { decidir(v, false); } }, 'Rechazar') : null,
             v.Estado === 'Aprobada' ? h('button', { class: 'btn small', type: 'button', onclick: function () { pase(v); } }, AP.icon('qr', 16), 'Pase') : null,
             h('button', { class: 'btn small', type: 'button', title: 'Editar', onclick: function () { editar(v); } }, AP.icon('edit', 16)),
             AP.Session.can('admin') ? h('button', { class: 'btn small danger-outline', type: 'button', title: 'Borrar registro', onclick: function (e) { e.stopPropagation(); borrarVisita(v); } }, AP.icon('trash', 16)) : null);
         }]
-      ], lista, editar));
+      ], lista, function (v) { if (v.Estado === 'Pendiente') decidir(v, true); else editar(v); }));
     }
     cargar();
 
-    async function aprobar(v, si) {
-      var motivo = '';
-      if (!si) {
-        motivo = await new Promise(function (res) {
-          AP.modal({ title: 'Rechazar visita de ' + v.Title, body: function (close) {
-            var t = AP.textarea('m', '', { placeholder: 'Motivo del rechazo' });
-            return h('div', { class: 'stack' }, t, h('button', { class: 'btn danger', type: 'button', onclick: function () { if (t.value.trim().length < 4) return AP.toast('Indique el motivo.', 'warn'); res(t.value.trim()); close(); } }, 'Rechazar'));
-          }, onClose: function () { res(null); } });
-        });
-        if (!motivo) return;
-      }
-      try {
-        var cambios = { Estado: si ? 'Aprobada' : 'Rechazada', AprobadoPor: AP.Session.user.upn, FechaAprobacion: new Date().toISOString() };
-        if (motivo) cambios.Observaciones = ((v.Observaciones ? v.Observaciones + '\n' : '') + 'Rechazo: ' + motivo);
-        await AP.B.update('AP_Visitas', v.id, cambios);
-        Object.assign(v, cambios);
-        await AP.Audit.log(si ? 'Aprobación de visita' : 'Rechazo de visita', v.Title + ' — ' + U.fDateTime(v.FechaInicio), motivo);
-        AP.toast(si ? 'Visita aprobada.' : 'Visita rechazada.');
-        AP.Sync.run();
-        if (si && v.Correo) pase(v); else pintar();
-      } catch (e) { AP.toast(e.message, 'error'); }
+    // ---------- Decisión: aprobar o rechazar, con justificación ----------
+    function decidir(v, si) {
+      var porteria = dePorteria(v);
+      AP.modal({
+        title: 'Visita de ' + v.Title, size: 'wide',
+        body: function (close) {
+          var I = AP.input;
+          var kv = function (k, val) { return val ? h('div', { class: 'kv' }, h('span', null, k), h('strong', null, val)) : null; };
+          var resumen = h('div', { class: 'card stack sm' },
+            porteria ? h('p', { class: 'note' }, 'Visitante NO anunciado, registrado en ' + (v.Porteria || 'portería') + ' por ' + (v.SolicitadoPorNombre || v.SolicitadoPor || '—') + ' el ' + U.fDateTime(v.FechaSolicitud || v.FechaInicio) + '. Está esperando su decisión.') : null,
+            kv('Documento', (v.TipoDoc ? v.TipoDoc + ' ' : '') + (v.NumDoc || '')),
+            kv('Celular', v.Telefono), kv('Correo', v.Correo), kv('Empresa / entidad', v.Empresa),
+            kv('Visita a', [v.Anfitrion, v.AnfitrionCargo, v.Area].filter(Boolean).join(' · ') + (v.Anfitrion ? (v.AnfitrionId ? ' (vinculado al colaborador)' : ' (sin vincular)') : '')),
+            kv('Motivo', v.Motivo), kv('Vehículo', [v.VehiculoTipo, v.Placa].filter(Boolean).join(' · ')),
+            porteria ? kv('Tratamiento de datos', v.AutorizaDatos ? 'Autorizado por el visitante ante el vigilante' : 'Sin constancia') : null,
+            v.Observaciones ? kv('Observaciones', v.Observaciones) : null);
+          var antecedentes = h('div', { class: 'stack sm' });
+          resumen.appendChild(antecedentes);
+          AP.Visitantes.historial(v.NumDoc, v.id).then(function (l) {
+            var r = AP.Visitantes.resumen(l);
+            antecedentes.replaceChildren(
+              h('div', { class: 'kv' }, h('span', null, 'Visitas anteriores'), h('strong', null, r.n ? r.n + ' (la última el ' + U.fDate(r.ultima.FechaInicio) + ', ' + (r.ultima.Estado || '') + ')' : 'Ninguna: primera visita')),
+              r.ultRechazo ? h('p', { class: 'banner deny' }, AP.icon('alert', 18), h('span', null, r.rechazadas.length + (r.rechazadas.length === 1 ? ' visita rechazada' : ' visitas rechazadas') + '. La última el ' + U.fDate(r.ultRechazo.FechaInicio) + (r.ultRechazo.JustificacionDecision ? ': ' + r.ultRechazo.JustificacionDecision : '') + '.')) : null);
+          }).catch(function () { /* los antecedentes son informativos */ });
+          var dec = AP.segmented('Decision', [
+            { value: 'Aprobada', label: 'Aprobar', icon: 'check', cls: 'in' },
+            { value: 'Rechazada', label: 'Rechazar', icon: 'x', cls: 'deny' }
+          ], si ? 'Aprobada' : 'Rechazada', function () { pintarDec(); });
+          var just = AP.textarea('JustificacionDecision', '', { rows: 3 });
+          var justHelp = h('small', { class: 'help' });
+          var a0 = porteria ? new Date(Math.floor(Date.now() / 60000) * 60000) : new Date(v.FechaInicio);
+          var b0 = porteria ? finSugerido(a0) : new Date(v.FechaFin);
+          var iniIn = I('ini', U.toLocalInput(a0), { type: 'datetime-local' }), finIn = I('fin', U.toLocalInput(b0), { type: 'datetime-local' });
+          var vigRes = h('p', { class: 'help' });
+          function resVig() {
+            var a = U.fromLocalInput(iniIn.value), b = U.fromLocalInput(finIn.value);
+            vigRes.textContent = a && b && b > a ? 'El QR servirá para ingresar entre el ' + U.fDateTime(a) + ' y el ' + U.fDateTime(b) + ' (' + U.duracion(a, b) + '). La salida siempre se registra.' : 'Revise las horas de vigencia del QR.';
+          }
+          iniIn.addEventListener('change', resVig); finIn.addEventListener('change', resVig); resVig();
+          var vigBox = h('div', { class: 'stack sm' }, h('h3', null, 'Vigencia del código QR'),
+            h('div', { class: 'form-grid' }, AP.field('Vale desde *', iniIn), AP.field('Vale hasta *', finIn)),
+            h('div', { class: 'presets' }, [['1 hora', 60], ['2 horas', 120], ['4 horas', 240], ['Hasta las 18:00', 'dia']].map(function (pr) {
+              return h('button', { class: 'btn small', type: 'button', onclick: function () {
+                var a = U.fromLocalInput(iniIn.value); if (!a) return AP.toast('Indique primero la hora de inicio.', 'warn');
+                var b = pr[1] === 'dia' ? U.fromLocal(U.ymd(a), '18:00') : new Date(a.getTime() + pr[1] * 60000);
+                if (b <= a) return AP.toast('La hora de inicio es posterior a las 18:00.', 'warn');
+                finIn.value = U.toLocalInput(b); resVig();
+              } }, pr[0]);
+            })), vigRes);
+          var btn = h('button', { class: 'btn primary', type: 'button' });
+          function aprobando() { return dec.dataset.value === 'Aprobada'; }
+          function oblig() { return !aprobando() || porteria; }
+          function pintarDec() {
+            vigBox.style.display = aprobando() ? '' : 'none';
+            just.placeholder = aprobando() ? 'Por qué se autoriza el ingreso sin prerregistro (quién lo solicita o confirma, necesidad, condiciones)' : 'Motivo del rechazo';
+            justHelp.textContent = (oblig() ? 'Obligatoria. ' : 'Opcional. ') + (aprobando() ? 'Queda en la bitácora; no la ve el vigilante.' : 'El vigilante la ve en portería para informar al visitante.');
+            btn.className = 'btn ' + (aprobando() ? 'primary' : 'danger');
+            btn.replaceChildren(AP.icon(aprobando() ? 'qr' : 'x', 18), aprobando() ? 'Aprobar y generar el QR' : 'Rechazar visita');
+          }
+          pintarDec();
+          var enviando = false;
+          btn.onclick = async function () {
+            if (enviando) return;
+            var ap = aprobando(), j = just.value.trim();
+            if (oblig() && j.length < 6) return AP.toast('Escriba la justificación de la decisión.', 'warn');
+            var cambios = { Estado: ap ? 'Aprobada' : 'Rechazada', AprobadoPor: AP.Session.user.upn, AprobadoPorNombre: AP.Session.user.nombre, FechaAprobacion: new Date().toISOString(), JustificacionDecision: j };
+            if (ap) {
+              var a = U.fromLocalInput(iniIn.value), b = U.fromLocalInput(finIn.value);
+              if (!a || !b || b <= a) return AP.toast('Revise la vigencia del QR.', 'warn');
+              if (b <= new Date()) return AP.toast('La hora final de la vigencia ya pasó.', 'warn');
+              cambios.FechaInicio = a.toISOString(); cambios.FechaFin = b.toISOString();
+            } else {
+              cambios.Observaciones = (v.Observaciones ? v.Observaciones + '\n' : '') + 'Rechazo: ' + j;
+            }
+            enviando = true; btn.disabled = true;
+            try {
+              await AP.B.update('AP_Visitas', v.id, cambios);
+              Object.assign(v, cambios);
+              await AP.Audit.log(ap ? 'Aprobación de visita' : 'Rechazo de visita', v.Title + ' — ' + (ap ? U.fDateTime(cambios.FechaInicio) + ' a ' + U.fTime(cambios.FechaFin) : U.fDateTime(new Date())),
+                (porteria ? 'Visitante no anunciado (solicitud de portería). ' : '') + (j ? 'Justificación: ' + j : 'Sin justificación'));
+              close();
+              AP.toast(ap ? 'Visita aprobada. Envíe el código QR al visitante.' : 'Visita rechazada. El vigilante lo ve en portería.', 'info', 5000);
+              AP.Sync.run();
+              if (ap) pase(v); else pintar();
+            } catch (e) { AP.toast('No se pudo guardar la decisión: ' + e.message, 'error', 8000); enviando = false; btn.disabled = false; }
+          };
+          return h('div', { class: 'stack' }, resumen, dec, vigBox, AP.field('Justificación', just), justHelp,
+            h('div', { class: 'row gap wrap end' },
+              h('button', { class: 'btn', type: 'button', onclick: function () { close(); editar(v); } }, AP.icon('edit', 18), 'Corregir datos'),
+              h('button', { class: 'btn', type: 'button', onclick: function () { close(); } }, 'Cerrar'), btn));
+        }
+      });
     }
 
+    // ---------- Pase con el código QR ----------
+    function textoWhatsApp(v) {
+      var mismoDia = U.ymd(v.FechaFin) === U.ymd(v.FechaInicio);
+      return 'Señor(a) ' + v.Title + ': la Dirección de Seguridad Integral de ' + AP.CFG.empresa + ' autorizó su visita del ' + U.fLong(v.FechaInicio) +
+        ' hasta las ' + U.fTime(v.FechaFin) + (mismoDia ? '' : ' del ' + U.fDate(v.FechaFin)) +
+        '. Le enviamos su código QR: preséntelo en portería, junto con su documento de identidad, para registrar su ingreso y su salida. El código es personal e intransferible.';
+    }
+    async function marcarEnviado(v, canal) {
+      try {
+        var upd = { QREnviado: new Date().toISOString() };
+        await AP.B.update('AP_Visitas', v.id, upd);
+        Object.assign(v, upd);
+        await AP.Audit.log('Envío de pase', v.Title, canal);
+      } catch (e) { /* el envío ya ocurrió; la marca es informativa */ }
+    }
     function pase(v) {
       AP.modal({
         title: 'Pase de ' + v.Title,
         body: function (close) {
           var img = h('img', { class: 'pase-img', alt: 'Pase de visitante' });
+          var blobListo = null;
           var blobP = AP.paseCanvas({ titulo: 'Pase de visitante', nombre: v.Title, linea2: v.Empresa || undefined, linea3: U.fLong(v.FechaInicio) + ' a ' + U.fTime(v.FechaFin), linea4: 'Visita a: ' + [v.Anfitrion, v.Area].filter(Boolean).join(' · '), linea5: AP.CFG.sede, token: v.Token, pie: 'Presente este código y su documento de identidad' })
-            .then(function (c) { img.src = c.toDataURL('image/png'); return new Promise(function (r) { c.toBlob(r, 'image/png'); }); });
+            .then(function (c) { img.src = c.toDataURL('image/png'); return new Promise(function (r) { c.toBlob(r, 'image/png'); }); })
+            .then(function (b) { blobListo = b; return b; });
+          var nombreArchivo = 'Pase_' + U.safeName(v.Title) + '.png';
           var correo = AP.input('correo', v.Correo || '', { type: 'email', placeholder: 'correo@visitante.com' });
+          var num = AP.waNum(v.Telefono);
+          // WhatsApp: se abre el chat con el celular que registró el vigilante; en el computador la imagen queda copiada
+          // para pegarla (Ctrl+V); en el celular se descarga para adjuntarla desde la galería.
+          var waBtn = num ? h('a', { class: 'btn primary', href: AP.waLink(num, textoWhatsApp(v)), target: '_blank', rel: 'noopener', onclick: function () {
+            var copia = null;
+            if (blobListo && !U.isMobile() && navigator.clipboard && window.ClipboardItem) {
+              try { copia = navigator.clipboard.write([new window.ClipboardItem({ 'image/png': blobListo })]); } catch (e) { copia = null; }
+            }
+            (copia || Promise.reject()).then(function () {
+              AP.toast('Se abrió el chat de WhatsApp del visitante y la imagen del QR quedó copiada: péguela en el chat (Ctrl+V) y envíela.', 'info', 12000);
+            }, function () {
+              if (blobListo) U.download(blobListo, nombreArchivo);
+              AP.toast('Se abrió el chat de WhatsApp del visitante y se descargó la imagen del QR (' + nombreArchivo + '): adjúntela en el chat y envíela.', 'info', 12000);
+            });
+            marcarEnviado(v, 'WhatsApp ' + v.Telefono);
+          } }, AP.icon('whatsapp', 18), 'Enviar por WhatsApp a ' + v.Telefono) : null;
           return h('div', { class: 'stack center' }, img,
+            num ? waBtn : h('p', { class: 'note' }, 'No hay un celular válido registrado para enviar el QR por WhatsApp. Use Compartir, Descargar o el correo.'),
             AP.field('Correo del visitante', correo),
             h('div', { class: 'row gap wrap center' },
-              h('button', { class: 'btn primary', type: 'button', onclick: async function () {
+              h('button', { class: 'btn', type: 'button', onclick: async function () {
                 var to = correo.value.trim();
-                if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) return AP.toast('Escriba un correo válido.', 'warn');
+                if (!EMAIL_RE.test(to)) return AP.toast('Escriba un correo válido.', 'warn');
                 try {
                   await enviarPase(v, to, await blobP);
                   AP.toast('Pase preparado para ' + to);
                   close(); pintar();
                 } catch (e) { AP.toast('No se pudo enviar: ' + e.message, 'error', 8000); }
-              } }, AP.icon('mail', 18), 'Enviar (correo o WhatsApp)'),
-              h('button', { class: 'btn', type: 'button', onclick: async function () { U.download(await blobP, 'Pase_' + U.safeName(v.Title) + '.png'); } }, AP.icon('download', 18), 'Descargar'),
+              } }, AP.icon('mail', 18), 'Enviar por correo'),
+              h('button', { class: 'btn', type: 'button', onclick: async function () { U.download(await blobP, nombreArchivo); } }, AP.icon('download', 18), 'Descargar'),
               navigator.canShare ? h('button', { class: 'btn', type: 'button', onclick: async function () {
-                var file = new File([await blobP], 'Pase_' + U.safeName(v.Title) + '.png', { type: 'image/png' });
-                if (navigator.canShare({ files: [file] })) navigator.share({ files: [file], title: 'Pase de visitante', text: 'Pase de visitante — ' + AP.CFG.empresa }).catch(function () {});
+                var file = new File([await blobP], nombreArchivo, { type: 'image/png' });
+                if (navigator.canShare({ files: [file] })) navigator.share({ files: [file], title: 'Pase de visitante', text: textoWhatsApp(v) }).then(function () { marcarEnviado(v, 'Compartido desde el dispositivo'); }).catch(function () {});
                 else AP.toast('Este navegador no permite compartir imágenes.', 'warn');
-              } }, AP.icon('share', 18), 'Compartir (WhatsApp)') : null,
+              } }, AP.icon('share', 18), 'Compartir') : null,
               h('button', { class: 'btn', type: 'button', onclick: function () { close(); AP.imprimirCarnes([v], 'visita'); } }, AP.icon('print', 18), 'Imprimir')),
-            h('p', { class: 'muted small' }, 'El pase contiene solo un código aleatorio; deja de funcionar si la visita se cancela o vence.'));
-        }
+            h('p', { class: 'muted small' }, 'El pase contiene solo un código aleatorio; deja de funcionar si la visita se cancela o vence. Con él, el vigilante registra el ingreso y la salida.'));
+        },
+        onClose: function () { pintar(); }
       });
     }
 
@@ -140,9 +289,11 @@
       await AP.Audit.log('Envío de pase', v.Title, 'Correo: ' + to);
     }
 
+    // ---------- Prerregistro y edición ----------
     function editar(v) {
       var nuevo = !v;
       var d0 = v || { TipoDoc: 'CC', Categoria: 'Visitante', Estado: 'Aprobada' };
+      var pendPort = !!(v && dePorteria(v) && v.Estado === 'Pendiente');
       var ini = v ? new Date(v.FechaInicio) : U.fromLocal(U.ymd(U.addDays(new Date(), 1)), '08:00');
       var fin = v ? new Date(v.FechaFin) : U.fromLocal(U.ymd(ini), '17:00');
       AP.modal({
@@ -153,19 +304,26 @@
           var resumenEl = h('p', { class: 'note' });
           function resumen() {
             var a = U.fromLocalInput(iniIn.value), b = U.fromLocalInput(finIn.value);
-            resumenEl.textContent = a && b && b > a ? 'El QR de este visitante solo servirá para ingresar entre el ' + U.fDateTime(a) + ' y el ' + U.fDateTime(b) + ' (' + U.duracion(a, b) + ').' : 'Revise las horas de vigencia del QR.';
+            resumenEl.textContent = pendPort ? 'Vigencia provisional: la definitiva se fija al aprobar la visita.'
+              : a && b && b > a ? 'El QR de este visitante solo servirá para ingresar entre el ' + U.fDateTime(a) + ' y el ' + U.fDateTime(b) + ' (' + U.duracion(a, b) + ').' : 'Revise las horas de vigencia del QR.';
           }
           iniIn.addEventListener('change', resumen); finIn.addEventListener('change', resumen); resumen();
+          var areaIn = I('Area', d0.Area), correoAnf = I('AnfitrionCorreo', d0.AnfitrionCorreo, { type: 'email' });
+          var anf = AP.anfitrionPicker({
+            fuente: function () { return AP.B.listAll('AP_Personas', { exclude: ['Foto'] }); },
+            valor: d0, libre: true,
+            onSelect: function (p) { if (p.Correo) correoAnf.value = p.Correo; if (p.Area) areaIn.value = p.Area; }
+          });
           var form = h('div', { class: 'form-grid' },
             AP.field('Nombres y apellidos *', I('Title', d0.Title)),
             AP.field('Empresa / entidad', I('Empresa', d0.Empresa)),
             AP.field('Tipo de documento', AP.select('TipoDoc', AP.CAT.tiposDoc, d0.TipoDoc)),
             AP.field('Número de documento *', I('NumDoc', d0.NumDoc)),
-            AP.field('Teléfono', I('Telefono', d0.Telefono, { inputmode: 'tel' })),
-            AP.field('Correo del visitante', I('Correo', d0.Correo, { type: 'email' }), 'Para enviarle el pase con el código QR.'),
-            AP.field('Anfitrión *', I('Anfitrion', d0.Anfitrion)),
-            AP.field('Correo del anfitrión', I('AnfitrionCorreo', d0.AnfitrionCorreo, { type: 'email' }), 'Recibe copia del pase.'),
-            AP.field('Área', I('Area', d0.Area)),
+            AP.field('Celular (WhatsApp)', I('Telefono', d0.Telefono, { inputmode: 'tel' }), 'Para enviarle el pase con el código QR por WhatsApp.'),
+            AP.field('Correo del visitante', I('Correo', d0.Correo, { type: 'email' }), 'Para enviarle el pase por correo.'),
+            AP.field('Anfitrión (colaborador de ' + AP.CFG.empresa + ') *', anf, 'Busque en el personal propio habilitado: la visita queda vinculada al colaborador.', 'span2'),
+            AP.field('Correo del anfitrión', correoAnf, 'Recibe copia del pase.'),
+            AP.field('Área', areaIn),
             AP.field('El QR vale desde *', iniIn, 'Antes de esta hora exacta el QR no abre el ingreso.'),
             AP.field('El QR vale hasta *', finIn, 'Después de esta hora exacta el QR queda vencido para ingresar (la salida siempre se registra).'),
             h('div', { class: 'span2 stack sm' }, h('div', { class: 'presets' }, [['1 hora', 60], ['2 horas', 120], ['4 horas', 240], ['Hasta las 18:00', 'dia']].map(function (pr) {
@@ -176,32 +334,57 @@
                 finIn.value = U.toLocalInput(b); resumen();
               } }, pr[0]);
             })), resumenEl),
-            AP.field('Estado', AP.select('Estado', AP.CAT.estadosVisita, d0.Estado)),
+            pendPort ? AP.field('Estado', h('p', { class: 'muted' }, 'Pendiente: apruebe o rechace con los botones de la lista.')) : AP.field('Estado', AP.select('Estado', AP.CAT.estadosVisita, d0.Estado)),
             AP.field('Placa del vehículo', I('Placa', d0.Placa, { autocapitalize: 'characters' })),
             AP.field('Tipo de vehículo', AP.select('VehiculoTipo', AP.CAT.vehiculos, d0.VehiculoTipo)),
             AP.field('Motivo de la visita *', AP.textarea('Motivo', d0.Motivo), null, 'span2'),
             AP.field('Observaciones de seguridad', AP.textarea('Observaciones', d0.Observaciones), 'Por ejemplo: áreas restringidas autorizadas, elementos que ingresa.', 'span2'));
+          // Visitante conocido: al escribir la cédula se llenan los datos de su última visita (o de Personas)
+          var infoVis = h('div', { class: 'span2 stack sm' });
+          var numDocIn = form.querySelector('input[name=NumDoc]');
+          if (nuevo && numDocIn) {
+            numDocIn.closest('.field').after(infoVis);
+            var campo = function (n) { return form.querySelector('[name=' + n + ']'); };
+            numDocIn.addEventListener('input', U.debounce(async function () {
+              var doc = numDocIn.value, d = U.normDoc(doc);
+              infoVis.replaceChildren();
+              if (d.length < 5) return;
+              var hist = await AP.Visitantes.historial(doc);
+              if (U.normDoc(numDocIn.value) !== d) return;
+              var per = null;
+              try { per = (await AP.B.listAll('AP_Personas', { exclude: ['Foto'] })).find(function (p) { return U.normDoc(p.NumDoc) === d; }) || null; } catch (e) { per = null; }
+              var r = AP.Visitantes.resumen(hist);
+              var campos = { Title: campo('Title'), TipoDoc: campo('TipoDoc'), Empresa: campo('Empresa'), Telefono: campo('Telefono'), Correo: campo('Correo'), Placa: campo('Placa'), VehiculoTipo: campo('VehiculoTipo') };
+              var llenos = AP.Visitantes.llenar(campos, r.ultima || per);
+              if (per) infoVis.appendChild(h('p', { class: 'banner warn' }, AP.icon('badge', 18), h('span', null, per.Title + ' está registrado en Personas (' + (per.Tipo || '') + ', ' + (per.Estado || '') + '). Si está habilitado, ingresa con su propio QR y no necesita visita.')));
+              if (r.ultima) infoVis.appendChild(h('p', { class: 'banner info' }, AP.icon('user', 18), h('span', null, 'Visitante conocido: ' + r.n + (r.n === 1 ? ' visita' : ' visitas') + ' registrada' + (r.n === 1 ? '' : 's') + '; la última el ' + U.fDate(r.ultima.FechaInicio) + ' (' + (r.ultima.Estado || '') + ').' + (llenos.length ? ' Se llenaron: ' + llenos.join(', ') + '. Verifique y corrija lo que haya cambiado.' : ''))));
+              if (r.ultRechazo) infoVis.appendChild(h('p', { class: 'banner deny' }, AP.icon('alert', 18), h('span', null, 'Atención: ' + r.rechazadas.length + (r.rechazadas.length === 1 ? ' visita rechazada' : ' visitas rechazadas') + '. La última el ' + U.fDate(r.ultRechazo.FechaInicio) + (r.ultRechazo.JustificacionDecision ? ': ' + r.ultRechazo.JustificacionDecision : '') + '.')));
+            }, 500));
+          }
           var guardar = async function (enviar) {
             var d = AP.formData(form);
             var a = U.fromLocalInput(d.ini), b = U.fromLocalInput(d.fin);
             delete d.ini; delete d.fin;
             if (d.Title.length < 5 || !d.NumDoc || !d.Anfitrion || !d.Motivo) return AP.toast('Complete los campos obligatorios (*).', 'warn');
             if (!a || !b || b <= a) return AP.toast('Revise la fecha y hora de la visita.', 'warn');
+            if (d.Correo && !EMAIL_RE.test(d.Correo)) return AP.toast('El correo del visitante no es válido.', 'warn');
+            if (!d.AnfitrionId && !(await AP.confirm('Anfitrión sin vincular', 'El anfitrión «' + d.Anfitrion + '» no corresponde a un colaborador del personal propio registrado. ¿Guardar la visita sin vincularla?', 'Guardar sin vincular'))) return;
             d.FechaInicio = a.toISOString(); d.FechaFin = b.toISOString();
             d.Placa = U.normPlaca(d.Placa);
             try {
               var rec;
               if (nuevo) {
-                d.Token = U.newToken(); d.Categoria = 'Visitante'; d.SolicitadoPor = AP.Session.user.upn;
-                if (d.Estado === 'Aprobada') { d.AprobadoPor = AP.Session.user.upn; d.FechaAprobacion = new Date().toISOString(); }
+                d.Token = U.newToken(); d.Categoria = 'Visitante'; d.SolicitadoPor = AP.Session.user.upn; d.Origen = 'Consola';
+                if (d.Estado === 'Aprobada') { d.AprobadoPor = AP.Session.user.upn; d.AprobadoPorNombre = AP.Session.user.nombre; d.FechaAprobacion = new Date().toISOString(); }
                 rec = await AP.B.create('AP_Visitas', d);
                 visitas.push(rec);
-                await AP.Audit.log('Prerregistro de visita', d.Title + ' — ' + U.fDateTime(d.FechaInicio), 'Estado: ' + d.Estado + '; anfitrión: ' + d.Anfitrion);
+                AP.Visitantes.olvidar(d.NumDoc);
+                await AP.Audit.log('Prerregistro de visita', d.Title + ' — ' + U.fDateTime(d.FechaInicio), 'Estado: ' + d.Estado + '; anfitrión: ' + d.Anfitrion + (d.AnfitrionId ? ' (vinculado)' : ' (sin vincular)'));
               } else {
-                if (d.Estado === 'Aprobada' && v.Estado !== 'Aprobada') { d.AprobadoPor = AP.Session.user.upn; d.FechaAprobacion = new Date().toISOString(); }
+                if (d.Estado === 'Aprobada' && v.Estado !== 'Aprobada') { d.AprobadoPor = AP.Session.user.upn; d.AprobadoPorNombre = AP.Session.user.nombre; d.FechaAprobacion = new Date().toISOString(); }
                 await AP.B.update('AP_Visitas', v.id, d);
                 Object.assign(v, d); rec = v;
-                await AP.Audit.log('Modificación de visita', d.Title, 'Estado: ' + d.Estado);
+                await AP.Audit.log('Modificación de visita', d.Title, 'Estado: ' + (d.Estado || v.Estado) + '; anfitrión: ' + d.Anfitrion + (d.AnfitrionId ? ' (vinculado)' : ' (sin vincular)'));
               }
               close(); AP.toast('Visita guardada.');
               AP.Sync.run();
@@ -213,7 +396,7 @@
             h('div', { class: 'row gap wrap end' },
               h('button', { class: 'btn', type: 'button', onclick: function () { close(); } }, 'Cancelar'),
               h('button', { class: 'btn', type: 'button', onclick: function () { guardar(false); } }, AP.icon('check', 18), 'Guardar'),
-              h('button', { class: 'btn primary', type: 'button', onclick: function () { guardar(true); } }, AP.icon('qr', 18), 'Guardar y generar pase')));
+              pendPort ? null : h('button', { class: 'btn primary', type: 'button', onclick: function () { guardar(true); } }, AP.icon('qr', 18), 'Guardar y generar pase')));
         }
       });
     }
@@ -248,6 +431,7 @@
     ['Tipo doc.', function (m) { return m.TipoDoc; }, 8], ['N.° documento', function (m) { return m.NumDoc; }, 15], ['Teléfono', function (m) { return m.Telefono; }, 13],
     ['Categoría', function (m) { return m.Categoria; }, 20], ['Empresa / dependencia', function (m) { return m.Empresa; }, 26],
     ['Motivo', function (m) { return m.Motivo; }, 26], ['Anfitrión / área', function (m) { return [m.Anfitrion, m.Area].filter(Boolean).join(' · '); }, 24],
+    ['Doc. anfitrión', function (m) { return m.AnfitrionDoc; }, 14],
     ['Vehículo', function (m) { return m.VehiculoTipo; }, 12], ['Placa', function (m) { return m.Placa; }, 10],
     ['Carné entregado', function (m) { return m.CarneEntregado; }, 10], ['Autorización confirmada', function (m) { return U.yesNo(m.AutorizacionConfirmada); }, 12],
     ['Documento en custodia', function (m) { return U.yesNo(m.DocumentoCustodia); }, 11], ['Carné devuelto', function (m) { return U.yesNo(m.CarneDevuelto); }, 10],
@@ -529,7 +713,7 @@
     var tab = qs.t || 'pendientes';
     var content = h('div', { class: 'stack' });
     AP.consolaShell('/consola/elementos', 'Control de elementos', content,
-      h('button', { class: 'btn primary', type: 'button', onclick: function () { editar(null); } }, AP.icon('plus', 18), 'Nueva solicitud'));
+      h('button', { class: 'btn primary', type: 'button', onclick: function () { editar(null); } }, AP.icon('plus', 18), 'Nuevo registro'));
     var registros = [];
     var MAX_FOTOS = 4;
 
@@ -568,7 +752,7 @@
         return h('a', { class: t[0] === tab ? 'on' : '', href: '#/consola/elementos?t=' + t[0] }, t[1] + ' (' + grupos[t[0]].length + ')');
       }));
       var barra = h('div', { class: 'row between wrap gap' },
-        h('p', { class: 'muted small' }, 'Las solicitudes pendientes aparecen al vigilante en la pantalla de verificación cuando lee el QR de la persona (el día previsto y el día siguiente).'),
+        h('p', { class: 'muted small' }, 'Los registros pendientes aparecen al vigilante en la pantalla de verificación cuando lee el QR de la persona (únicamente el día previsto).'),
         h('button', { class: 'btn', type: 'button', disabled: !lista.length, onclick: function () {
           AP.exportar('Control_elementos', COLS, lista, 'xlsx', [['Vista', { pendientes: 'Pendientes', hoy: 'Hoy', historial: 'Últimos 60 días' }[tab]], ['Generado por', AP.Session.user.nombre], ['Fecha', U.fDateTime(new Date())]]);
         } }, AP.icon('download', 18), 'Exportar a Excel'));
@@ -624,7 +808,7 @@
       var candidatos = null;
 
       AP.modal({
-        title: nuevo ? 'Nueva solicitud de ingreso o salida de elementos' : 'Editar solicitud de elementos',
+        title: nuevo ? 'Nuevo registro de elementos' : 'Editar registro de elementos',
         size: 'wide',
         persistent: true,
         body: function (close) {
@@ -715,7 +899,7 @@
           }
           pintarFotos();
 
-          var guardarBtn = h('button', { class: 'btn primary', type: 'button', onclick: guardar }, AP.icon('check', 18), nuevo ? 'Crear solicitud' : 'Guardar cambios');
+          var guardarBtn = h('button', { class: 'btn primary', type: 'button', onclick: guardar }, AP.icon('check', 18), nuevo ? 'Crear registro' : 'Guardar cambios');
           async function guardar() {
             var elems = Array.prototype.map.call(listaItems.querySelectorAll('.elem-fila'), function (f) { return f._leer(); }).filter(Boolean);
             var fecha = U.fromLocalInput(fechaIn.value);
@@ -743,27 +927,27 @@
               if (nuevo) {
                 Object.assign(data, { Estado: 'Pendiente', CreadoPor: AP.Session.user.nombre || AP.Session.user.usuario, FechaCreacion: new Date().toISOString() });
                 await AP.B.create('AP_Elementos', data);
-                await AP.Audit.log('Solicitud de elementos', ref, E.resumen(elems) + ' | Autoriza: ' + data.AutorizadoPor);
-                AP.toast('Solicitud creada. El vigilante la verá al leer el QR de ' + data.Title + '.', 'info', 5000);
+                await AP.Audit.log('Registro de elementos', ref, E.resumen(elems) + ' | Autoriza: ' + data.AutorizadoPor);
+                AP.toast('Registro creado. El vigilante lo verá al leer el QR de ' + data.Title + ' el día previsto.', 'info', 5000);
               } else {
                 await AP.B.update('AP_Elementos', x.id, data);
-                await AP.Audit.log('Modificación de solicitud de elementos', ref, E.resumen(elems));
+                await AP.Audit.log('Modificación de registro de elementos', ref, E.resumen(elems));
                 AP.toast('Solicitud actualizada.');
               }
               fotosNuevas.forEach(function (f) { URL.revokeObjectURL(f.url); });
               close(); cargar();
             } catch (e) {
               AP.toast('No se pudo guardar: ' + e.message, 'error', 8000);
-              guardarBtn.disabled = false; guardarBtn.lastChild.textContent = nuevo ? 'Crear solicitud' : 'Guardar cambios';
+              guardarBtn.disabled = false; guardarBtn.lastChild.textContent = nuevo ? 'Crear registro' : 'Guardar cambios';
             }
           }
 
           return h('div', { class: 'stack' },
             h('h3', null, '1. Persona'), personaBox,
-            h('h3', null, '2. Solicitud'),
+            h('h3', null, '2. Registro'),
             h('div', { class: 'form-grid' },
               AP.field('Sentido *', sentidoSel),
-              AP.field('Fecha y hora prevista *', fechaIn, 'El vigilante la ve desde ese día y hasta el día siguiente.'),
+              AP.field('Fecha y hora prevista *', fechaIn, 'El vigilante la ve únicamente en ese día.'),
               AP.field('Autorizado por *', autorizaIn, null, 'span2'),
               AP.field('Observaciones para el vigilante', obsIn, null, 'span2')),
             h('h3', null, '3. Elementos'), listaItems, h('div', null, addBtn),
@@ -777,10 +961,10 @@
     }
 
     async function cancelar(x) {
-      if (!(await AP.confirm('Cancelar solicitud', '¿Cancelar la solicitud de ' + x.Sentido.toLowerCase() + ' de elementos de ' + x.Title + '? El vigilante dejará de verla.', 'Sí, cancelar', 'danger'))) return;
+      if (!(await AP.confirm('Cancelar registro', '¿Cancelar el registro de ' + x.Sentido.toLowerCase() + ' de elementos de ' + x.Title + '? El vigilante dejará de verlo.', 'Sí, cancelar', 'danger'))) return;
       try {
         await AP.B.update('AP_Elementos', x.id, { Estado: 'Cancelado' });
-        await AP.Audit.log('Cancelación de solicitud de elementos', x.Title + ' (' + (x.PersonaDoc || '') + ') — ' + x.Sentido + ' ' + U.fDateTime(x.FechaPrevista), E.resumen(E.items(x)));
+        await AP.Audit.log('Cancelación de registro de elementos', x.Title + ' (' + (x.PersonaDoc || '') + ') — ' + x.Sentido + ' ' + U.fDateTime(x.FechaPrevista), E.resumen(E.items(x)));
         AP.toast('Solicitud cancelada.');
         cargar();
       } catch (e) { AP.toast(e.message, 'error'); }
@@ -861,7 +1045,7 @@
               });
             } }, AP.icon('bell', 18), 'Activar notificaciones en este dispositivo')
           : h('button', { class: 'btn', type: 'button', onclick: function () {
-              new Notification('✅ Prueba Avo Pak', { body: 'Las notificaciones push están funcionando correctamente.', icon: '/app/img/icon-192.png' });
+              new Notification('✅ Prueba Avo Pak', { body: 'Las notificaciones push están funcionando correctamente.', icon: 'img/icon-192.png' });
             } }, AP.icon('bell', 18), 'Enviar notificación de prueba')),
 
       h('section', { class: 'card stack' },

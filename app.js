@@ -6,7 +6,7 @@
   AP.CFG = window.AP_CONFIG || {};
   AP.TX = window.AP_TEXTOS || {};
   AP.State = {};
-  AP.VERSION = '2.1.0';
+  AP.VERSION = '2.3.0';
 
   var Session = (AP.Session = { user: null, rol: null, perms: {}, turno: null, dispositivo: false });
 
@@ -124,7 +124,8 @@
     var nav = h('nav', { class: 'side', 'aria-label': 'Consola' },
       h('div', { class: 'side-brand' }, h('img', { src: 'img/logo-avo.png', alt: 'Avo Pak' }), h('div', null, h('strong', null, 'Control de Acceso'), h('small', null, 'Dirección de Seguridad Integral'))),
       NAV.filter(function (n) { return !n[3] || Session.can(n[3]); }).map(function (n) {
-        return h('a', { href: '#' + n[0], class: active === n[0] ? 'on' : '' }, AP.icon(n[1], 19), h('span', null, n[2]));
+        var badge = n[0] === '/consola/visitas' ? h('b', { class: 'nav-badge', title: 'Visitas por aprobar' }, AP.visitasPorAprobar().length || '') : null;
+        return h('a', { href: '#' + n[0], class: active === n[0] ? 'on' : '' }, AP.icon(n[1], 19), h('span', null, n[2]), badge);
       }),
       h('div', { class: 'side-foot' },
         h('a', { href: '#/porteria' }, AP.icon('door', 19), h('span', null, 'Ir a portería')),
@@ -138,6 +139,30 @@
     AP.mount(page, 'is-consola');
     return page;
   };
+
+  // ---------- Visitas por aprobar (aviso al Director) ----------
+  AP.visitasPorAprobar = function () {
+    var ahora = new Date();
+    return (AP.Sync.visitas || []).filter(function (v) { return v.Estado === 'Pendiente' && new Date(v.FechaFin) >= ahora; });
+  };
+  var avisadas = null;
+  function avisarVisitas() {
+    if (!Session.user || !Session.can('consola')) return;
+    var pend = AP.visitasPorAprobar();
+    document.querySelectorAll('.nav-badge').forEach(function (b) { b.textContent = pend.length || ''; });
+    var port = pend.filter(function (v) { return v.Origen === 'Portería'; });
+    if (avisadas === null) {
+      avisadas = new Set(port.map(function (v) { return v.id; }));
+      if (port.length) AP.toast(port.length === 1 ? 'Hay un visitante no anunciado esperando su aprobación en portería.' : 'Hay ' + port.length + ' visitantes no anunciados esperando su aprobación en portería.', 'warn', 8000);
+      return;
+    }
+    port.filter(function (v) { return !avisadas.has(v.id); }).forEach(function (v) {
+      avisadas.add(v.id);
+      U.beep('warn');
+      AP.toast('Visitante no anunciado en portería: ' + v.Title + (v.Anfitrion ? ' (visita a ' + v.Anfitrion + ')' : '') + '. Apruébelo o recháselo en Visitas.', 'warn', 12000);
+      if (AP.Notif && AP.Notif.aviso) AP.Notif.aviso('Visita por aprobar — ' + v.Title, (v.Empresa ? v.Empresa + ' · ' : '') + 'Visita a ' + (v.Anfitrion || '—') + ' · registró ' + (v.SolicitadoPorNombre || v.SolicitadoPor || ''), 'vis-' + v.id);
+    });
+  }
 
   // ---------- Vistas comunes ----------
   AP.Views = AP.Views || {};
@@ -213,7 +238,7 @@
         AP.State.bootError ? h('p', { class: 'banner deny' }, AP.State.bootError) : null,
         AP.B.lastLoginError ? h('p', { class: 'banner warn' }, AP.B.lastLoginError) : null,
         form,
-        h('p', { class: 'muted small' }, AVISO_USO),
+        h('div', { class: 'login-sello' }, h('img', { src: 'img/sello-dsi.png', alt: 'Sello de la Dirección de Seguridad de Avo Pak' }), h('p', { class: 'muted small' }, AVISO_USO)),
         AP.State.configError ? null : h('button', { class: 'linkish small', type: 'button', onclick: function () { AP.State.instalado = false; render(); } }, 'Primera instalación')),
       h('p', { class: 'login-foot' }, AP.CFG.empresa + ' · v' + AP.VERSION));
     AP.mount(box, 'is-login');
@@ -329,6 +354,7 @@
       AP.Sync.start();
       AP.Sync.on(function () { if (Session.user && !Session.rol && Session.resolveRole()) render(); });
       AP.Sync.on(U.debounce(vigilarTurno, 500));
+      AP.Sync.on(U.debounce(avisarVisitas, 400));
       setInterval(vigilarTurno, 60000);
     }
   }
@@ -346,7 +372,7 @@
     render();
   }
   AP.startSession = startSession;
-  AP.endSession = function () { Session.user = null; Session.rol = null; Session.perms = {}; Session.turno = null; Session.dispositivo = false; };
+  AP.endSession = function () { avisadas = null; Session.user = null; Session.rol = null; Session.perms = {}; Session.turno = null; Session.dispositivo = false; };
 
   function registerSW() {
     if (!('serviceWorker' in navigator)) return;

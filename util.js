@@ -189,7 +189,7 @@
   // Avatar con iniciales (para personas sin foto)
   U.avatar = function (name, size) {
     size = size || 96;
-    var colors = ['#66754e', '#4f6b5a', '#7a6a3a', '#5a5f66', '#6d5a7a', '#3f6573'];
+    var colors = ['#587e50', '#4f6b5a', '#7a6a3a', '#5a5f66', '#6d5a7a', '#3f6573'];
     var n = 0; String(name || '').split('').forEach(function (ch) { n = (n + ch.charCodeAt(0)) % 997; });
     var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + size + '" height="' + Math.round(size * 1.25) + '" viewBox="0 0 80 100">' +
       '<rect width="80" height="100" fill="' + colors[n % colors.length] + '"/>' +

@@ -1,15 +1,15 @@
 /* Avo Pak — Control de Acceso. Paleta tomada del logotipo institucional. */
 :root {
-  --brand: #66754e;
-  --brand-d: #4c5839;
-  --brand-l: #e8ecdd;
-  --lime: #d2ce60;
-  --ink: #1f231a;
-  --ink-2: #4a5043;
-  --muted: #747a6b;
-  --bg: #f4f5f0;
+  --brand: #587e50;
+  --brand-d: #3d5a37;
+  --brand-l: #e4eedf;
+  --lime: #dfd57c;
+  --ink: #1c2419;
+  --ink-2: #465243;
+  --muted: #6f7a6b;
+  --bg: #f3f6f1;
   --card: #ffffff;
-  --line: #dfe2d6;
+  --line: #dbe3d6;
   --ok: #1e7a3c;
   --ok-bg: #e3f3e8;
   --warn: #9a6400;
@@ -23,28 +23,29 @@
   --solid-warn: #b07500;
   --solid-out: #2d3a4a;
   --on-solid: #ffffff;
-  --fill: #66754e;
-  --fill-2: #4c5839;
+  --fill: #587e50;
+  --fill-2: #3d5a37;
+  --side: #1f2c1c;
   --radius: 14px;
-  --shadow: 0 1px 2px rgba(20, 24, 14, .06), 0 4px 16px rgba(20, 24, 14, .06);
+  --shadow: 0 1px 2px rgba(16, 26, 14, .06), 0 4px 16px rgba(16, 26, 14, .06);
   --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --brand: #8a9b6c; --brand-d: #a7b78a; --brand-l: #2b3222; --lime: #d9d572;
-    --ink: #eef0e8; --ink-2: #c9cdbf; --muted: #9ba191; --bg: #121510; --card: #1b1f17; --line: #2f352a;
+    --brand: #8fbf83; --brand-d: #a9d39d; --brand-l: #20301d; --lime: #e3da86;
+    --ink: #edf2ea; --ink-2: #c6d0c2; --muted: #97a393; --bg: #111610; --card: #192017; --line: #2c3829;
     --ok: #6fd18f; --ok-bg: #173322; --warn: #f1c25a; --warn-bg: #3a2d10; --deny: #ff8a80; --deny-bg: #3d1714; --info: #8cc4e2; --info-bg: #13303f;
-    --solid-ok: #1e7a3c; --solid-deny: #b3261e; --solid-warn: #b07500; --solid-out: #3b4c61; --on-solid: #ffffff; --fill: #4f5e3a; --fill-2: #36412a;
+    --solid-ok: #1e7a3c; --solid-deny: #b3261e; --solid-warn: #b07500; --solid-out: #3b4c61; --on-solid: #ffffff; --fill: #45663e; --fill-2: #2f4a2b; --side: #141d12;
     --shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 16px rgba(0,0,0,.35);
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-    --brand: #8a9b6c; --brand-d: #a7b78a; --brand-l: #2b3222; --lime: #d9d572;
-    --ink: #eef0e8; --ink-2: #c9cdbf; --muted: #9ba191; --bg: #121510; --card: #1b1f17; --line: #2f352a;
+    --brand: #8fbf83; --brand-d: #a9d39d; --brand-l: #20301d; --lime: #e3da86;
+    --ink: #edf2ea; --ink-2: #c6d0c2; --muted: #97a393; --bg: #111610; --card: #192017; --line: #2c3829;
     --ok: #6fd18f; --ok-bg: #173322; --warn: #f1c25a; --warn-bg: #3a2d10; --deny: #ff8a80; --deny-bg: #3d1714; --info: #8cc4e2; --info-bg: #13303f;
-    --solid-ok: #1e7a3c; --solid-deny: #b3261e; --solid-warn: #b07500; --solid-out: #3b4c61; --on-solid: #ffffff; --fill: #4f5e3a; --fill-2: #36412a;
+    --solid-ok: #1e7a3c; --solid-deny: #b3261e; --solid-warn: #b07500; --solid-out: #3b4c61; --on-solid: #ffffff; --fill: #45663e; --fill-2: #2f4a2b; --side: #141d12;
     --shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 16px rgba(0,0,0,.35);
     color-scheme: dark;
 }
@@ -59,7 +60,7 @@ p { margin: 0; }
 code, .mono { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: .85em; word-break: break-all; }
 .hidden { display: none !important; }
 .muted { color: var(--muted); } .small { font-size: .85rem; } .block { display: block; } .center { text-align: center; }
-.txt-deny { color: var(--deny); } .txt-warn { color: var(--warn); }
+.txt-deny { color: var(--deny); } .txt-warn { color: var(--warn); } .txt-ok { color: var(--ok); }
 .row { display: flex; align-items: center; } .gap { gap: 10px; } .wrap { flex-wrap: wrap; } .nowrap { flex-wrap: nowrap; }
 .between { justify-content: space-between; } .end { justify-content: flex-end; } .row.center { justify-content: center; }
 .stack { display: flex; flex-direction: column; gap: 14px; } .stack.sm { gap: 8px; } .stack.center { align-items: center; }
@@ -170,13 +171,13 @@ button.banner { cursor: pointer; }
 .flash.ok { background: rgba(30, 122, 60, .96); } .flash.deny { background: rgba(179, 38, 30, .96); }
 .flash strong { font-size: 1.7rem; letter-spacing: .02em; } .flash span { font-size: 1.1rem; opacity: .95; }
 .flash.out { opacity: 0; }
-@keyframes pop { from { transform: scale(1.04); opacity: .6; } to { transform: none; opacity: 1; } }
+@keyframes pop { from { opacity: .6; } to { opacity: 1; } }
 
 /* ---------- Inicio de sesión ---------- */
 .is-login { min-height: 100vh; }
 .login { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px 16px; background: linear-gradient(160deg, var(--fill) 0%, var(--fill-2) 55%, #2f3824 100%); }
 .login-card { background: var(--card); border-radius: 22px; padding: 28px 24px; width: min(440px, 100%); display: flex; flex-direction: column; gap: 14px; text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,.3); }
-.login-logo { width: 150px; margin: 0 auto 4px; border-radius: 8px; }
+.login-logo { width: 168px; margin: 0 auto 4px; border-radius: 12px; background: #fff; padding: 6px; }
 .login-foot { color: rgba(255,255,255,.8); font-size: .8rem; margin-top: 16px; }
 
 /* ---------- Portería (celular) ---------- */
@@ -253,8 +254,8 @@ button.banner { cursor: pointer; }
 @media (max-width: 700px) { .chk-view { grid-template-columns: 1fr; } }
 
 /* ---------- Consola (web) ---------- */
-.consola { display: grid; grid-template-columns: 250px 1fr; min-height: 100vh; background: linear-gradient(to right, #2a3121 250px, var(--bg) 250px); }
-.side { position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; gap: 2px; padding: 16px 12px; background: #2a3121; color: #e8ecdd; overflow-y: auto; }
+.consola { display: grid; grid-template-columns: 250px 1fr; min-height: 100vh; background: linear-gradient(to right, var(--side) 250px, var(--bg) 250px); }
+.side { position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; gap: 2px; padding: 16px 12px; background: var(--side); color: #e4eedf; overflow-y: auto; }
 .side-brand { display: flex; align-items: center; gap: 10px; padding: 4px 6px 16px; border-bottom: 1px solid rgba(255,255,255,.1); margin-bottom: 10px; }
 .side-brand img { width: 74px; border-radius: 6px; }
 .side-brand strong { display: block; font-size: .95rem; color: #fff; } .side-brand small { font-size: .72rem; opacity: .75; }
@@ -342,7 +343,7 @@ progress { width: 100%; height: 14px; accent-color: var(--brand); }
 .print-bar { margin-bottom: 16px; }
 .print-sheet { display: grid; grid-template-columns: repeat(auto-fill, 85.6mm); gap: 6mm; }
 .id-card { width: 85.6mm; height: 54mm; border: 0.3mm dashed #aaa; border-radius: 3mm; overflow: hidden; display: flex; flex-direction: column; background: #fff; color: #1f231a; break-inside: avoid; page-break-inside: avoid; }
-.id-head { background: #66754e; color: #fff; display: flex; align-items: center; justify-content: space-between; padding: 1.5mm 3mm; height: 9mm; }
+.id-head { background: #587e50; color: #fff; display: flex; align-items: center; justify-content: space-between; padding: 1.5mm 3mm; height: 9mm; }
 .id-head img { height: 6mm; } .id-head span { font-size: 2.5mm; font-weight: 800; letter-spacing: .05em; }
 .id-card.visit .id-head { background: #2d3a4a; }
 .id-body { flex: 1; display: grid; grid-template-columns: auto 1fr 25mm; gap: 2mm; padding: 2mm 3mm; align-items: center; }
@@ -352,7 +353,7 @@ progress { width: 100%; height: 14px; accent-color: var(--brand); }
 .id-data strong { font-size: 3mm; line-height: 1.15; }
 .id-vig { color: #4c5839; font-weight: 700; }
 .id-qr svg { width: 100%; height: auto; display: block; }
-.id-foot { background: #d2ce60; color: #2b2f1e; font-size: 2mm; font-weight: 700; text-align: center; padding: .8mm; }
+.id-foot { background: #dfd57c; color: #2b2f1e; font-size: 2mm; font-weight: 700; text-align: center; padding: .8mm; }
 @media print {
   @page { size: letter; margin: 10mm; }
   body { background: #fff; }
@@ -379,7 +380,7 @@ progress { width: 100%; height: 14px; accent-color: var(--brand); }
 .sentido-auto { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 12px; border: 2px solid var(--line); flex-wrap: wrap; }
 .sentido-auto strong { font-size: 1.15rem; letter-spacing: .04em; }
 .sentido-auto small { flex-basis: 100%; color: var(--muted); }
-.sentido-auto.in { border-color: var(--solid-ok); } .sentido-auto.out { border-color: var(--brand, #66754e); }
+.sentido-auto.in { border-color: var(--solid-ok); } .sentido-auto.out { border-color: var(--brand, #587e50); }
 .dias-sel { display: flex; flex-wrap: wrap; gap: 8px; }
 .dias-sel label { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 999px; cursor: pointer; }
 .pick-list { max-height: 260px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; padding: 6px; display: grid; gap: 2px; }
@@ -403,3 +404,28 @@ progress { width: 100%; height: 14px; accent-color: var(--brand); }
 .elem-res { display: flex; gap: 8px; align-items: center; padding: 10px 12px; border-radius: 10px; font-weight: 600; }
 .elem-res.ok { background: var(--ok-bg); color: var(--ok); }
 .elem-res.deny { background: var(--deny-bg); color: var(--deny); }
+
+/* ---------- Visitantes no anunciados y anfitrión vinculado (v2.2.0) ---------- */
+.side a .nav-badge { margin-left: auto; min-width: 22px; padding: 1px 7px; border-radius: 999px; background: var(--solid-warn, #b07d00); color: #fff; font-size: .76rem; font-weight: 800; text-align: center; }
+.side a .nav-badge:empty { display: none; }
+.anf-pick .anf-buscar { width: 100%; }
+.anf-res { max-height: 300px; overflow-y: auto; }
+.anf-res:empty { display: none; }
+.anf-res .list-item svg { color: var(--brand); flex: none; }
+.segmented button.on.deny { background: var(--solid-deny); color: var(--on-solid); }
+a.list-item { text-decoration: none; }
+
+/* v2.2.2: los botones de ancho completo parten el texto en varias líneas; un texto largo ya no desborda la
+   pantalla del celular (eso hacía que el navegador redujera la página y cortara las ventanas inferiores). */
+.btn.block { white-space: normal; text-align: center; line-height: 1.25; padding-top: 8px; padding-bottom: 8px; }
+
+/* v2.3.0: sello de la Dirección de Seguridad en el inicio de sesión */
+.login-sello { display: flex; align-items: center; gap: 12px; text-align: left; border-top: 1px solid var(--line); padding-top: 14px; margin-top: 2px; }
+.login-sello img { width: 64px; height: 64px; flex: none; }
+.login-sello p { margin: 0; }
+/* Visitas de hoy (portería, solo consulta) */
+.tiles > :last-child:nth-child(odd) { grid-column: 1 / -1; min-height: 0; }
+.vis-hoy .list-item { align-items: flex-start; }
+.vis-hoy .vh-hora { flex: none; min-width: 64px; font-weight: 800; color: var(--brand-d); font-variant-numeric: tabular-nums; }
+.vis-hoy .vh-hora small { font-weight: 600; }
+.autollenado { background: color-mix(in srgb, var(--info-bg) 70%, var(--card)); }

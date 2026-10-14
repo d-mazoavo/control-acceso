@@ -5,7 +5,7 @@
   var U = AP.U;
   var H = (AP.Horario = {});
 
-  function cfg() { return Object.assign({ minutosPendiente: 10, minutosAntelacionTurno: 120, minutosSalidaAntesDeFin: 0, horasMaxSinSalida: 14 }, (AP.CFG && AP.CFG.puntualidad) || {}); }
+  function cfg() { return Object.assign({ minutosPendiente: 10, minutosAntelacionTurno: 30, minutosSalidaAntesDeFin: 0, horasMaxSinSalida: 14 }, (AP.CFG && AP.CFG.puntualidad) || {}); }
   H.cfg = cfg;
 
   function toMin(hm) { var m = /^(\d{1,2}):(\d{2})$/.exec(String(hm || '')); return m ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : null; }
@@ -104,14 +104,18 @@
       return { nivel: 'ok', etiqueta: 'REINGRESO', detalle: 'Regresa a su jornada (' + info + ').', horarioInfo: info };
     }
     var delta = Math.floor(now.getTime() / 60000) - Math.floor(j.start.getTime() / 60000);
-    var ant = Math.floor((j.start.getTime() - now.getTime()) / 60000);
+    // Minutos que faltan para la hora de entrada (por minuto de reloj, igual que la llegada tardía)
+    var ant = Math.floor(j.start.getTime() / 60000) - Math.floor(now.getTime() / 60000);
     if (now > j.end) {
       return { nivel: 'deny', sinExcepcion: true, novedad: 'Ingreso denegado: fuera de turno', etiqueta: 'INGRESO DENEGADO — FUERA DE SU TURNO',
         detalle: 'Su turno era ' + info + ' y ya terminó. Comuníquese con el Director de Seguridad Integral, que debe verificar y, si procede, registrar el permiso.', horarioInfo: info };
     }
     if (delta <= 0) {
+      // Antes de la ventana habilitada (por defecto, 30 min antes de la entrada): alerta de llegada muy temprano
       if (ant > c.minutosAntelacionTurno) {
-        return { nivel: 'warn', registrable: true, novedad: 'Ingreso anticipado', etiqueta: 'INGRESO ANTICIPADO — PENDIENTE', detalle: 'Su turno inicia a las ' + j.rec.HoraEntrada + '. Se registra y queda pendiente de verificación.', horarioInfo: info };
+        var desde = new Date(j.start.getTime() - c.minutosAntelacionTurno * 60000);
+        return { nivel: 'warn', registrable: true, novedad: 'Llegada muy temprano (' + ant + ' min antes del turno)', etiqueta: 'MUY TEMPRANO — FALTAN ' + ant + ' MIN PARA SU TURNO',
+          detalle: 'Su turno inicia a las ' + j.rec.HoraEntrada + ' y el ingreso se habilita desde las ' + hm(desde) + '. Si lo deja ingresar, queda como novedad pendiente de verificación por el Director de Seguridad Integral.', horarioInfo: info };
       }
       return { nivel: 'ok', etiqueta: 'HABILITADO — A TIEMPO', detalle: 'Turno ' + info + '.', horarioInfo: info };
     }
