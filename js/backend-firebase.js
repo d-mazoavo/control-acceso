@@ -588,9 +588,11 @@
       }
       if (file) U.download(file, file.name);
       var to = (msg.to || []).join(','), cc = (msg.cc || []).join(',');
-      location.href = 'mailto:' + encodeURIComponent(to).replace(/%2C/g, ',') + '?subject=' + encodeURIComponent(msg.subject) +
+      var mailtoUrl = 'mailto:' + to + '?subject=' + encodeURIComponent(msg.subject) +
         (cc ? '&cc=' + encodeURIComponent(cc) : '') + '&body=' + encodeURIComponent(texto + (file ? '\n\n(Adjunte la imagen descargada: ' + file.name + ')' : ''));
-      AP.toast('Se descargó la imagen y se abrió su correo: adjúntela antes de enviar.', 'info', 9000);
+      // Abrir en ventana nueva para no cerrar la app; si el navegador bloquea popups, usar location.href como respaldo
+      try { window.open(mailtoUrl, '_blank'); } catch (e) { location.href = mailtoUrl; }
+      AP.toast('Se descargó la imagen (' + (file ? file.name : '') + ') y se abrió su correo. Destinatario: ' + to + '. Adjunte la imagen antes de enviar.', 'info', 12000);
       return null;
     },
 

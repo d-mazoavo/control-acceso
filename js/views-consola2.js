@@ -229,16 +229,9 @@
           // WhatsApp: se abre el chat con el celular que registró el vigilante; en el computador la imagen queda copiada
           // para pegarla (Ctrl+V); en el celular se descarga para adjuntarla desde la galería.
           var waBtn = num ? h('a', { class: 'btn primary', href: AP.waLink(num, textoWhatsApp(v)), target: '_blank', rel: 'noopener', onclick: function () {
-            var copia = null;
-            if (blobListo && !U.isMobile() && navigator.clipboard && window.ClipboardItem) {
-              try { copia = navigator.clipboard.write([new window.ClipboardItem({ 'image/png': blobListo })]); } catch (e) { copia = null; }
-            }
-            (copia || Promise.reject()).then(function () {
-              AP.toast('Se abrió el chat de WhatsApp del visitante y la imagen del QR quedó copiada: péguela en el chat (Ctrl+V) y envíela.', 'info', 12000);
-            }, function () {
-              if (blobListo) U.download(blobListo, nombreArchivo);
-              AP.toast('Se abrió el chat de WhatsApp del visitante y se descargó la imagen del QR (' + nombreArchivo + '): adjúntela en el chat y envíela.', 'info', 12000);
-            });
+            // Siempre descarga la imagen para que quede lista para adjuntar en WhatsApp
+            if (blobListo) U.download(blobListo, nombreArchivo);
+            AP.toast('Se descargó la imagen del QR (' + nombreArchivo + ') y se abrió el chat de WhatsApp: adjúntela desde su galería/descargas y envíela.', 'info', 12000);
             marcarEnviado(v, 'WhatsApp ' + v.Telefono);
           } }, AP.icon('whatsapp', 18), 'Enviar por WhatsApp a ' + v.Telefono) : null;
           return h('div', { class: 'stack center' }, img,
@@ -334,7 +327,7 @@
                 finIn.value = U.toLocalInput(b); resumen();
               } }, pr[0]);
             })), resumenEl),
-            pendPort ? AP.field('Estado', h('p', { class: 'muted' }, 'Pendiente: apruebe o rechace con los botones de la lista.')) : AP.field('Estado', AP.select('Estado', AP.CAT.estadosVisita, d0.Estado)),
+            pendPort ? AP.field('Estado', h('p', { class: 'muted' }, 'Pendiente: apruebe o rechace con los botones de la lista.'), null, 'span2') : AP.field('Estado', AP.select('Estado', AP.CAT.estadosVisita, d0.Estado), null, 'span2'),
             AP.field('Placa del vehículo', I('Placa', d0.Placa, { autocapitalize: 'characters' })),
             AP.field('Tipo de vehículo', AP.select('VehiculoTipo', AP.CAT.vehiculos, d0.VehiculoTipo)),
             AP.field('Motivo de la visita *', AP.textarea('Motivo', d0.Motivo), null, 'span2'),
