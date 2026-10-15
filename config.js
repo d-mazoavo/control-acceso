@@ -60,7 +60,6 @@ window.AP_CONFIG = {
     nit: '901.557.939-1',
     domicilio: 'Km 5 vía La Ceja – Abejorral, La Ceja (Antioquia)',
     correoDatos: 'info@avo-pak.com]',
-    politicaUrl: 'https://avo-pak.com/'
   },
   versionAutorizacion: 'AUT-ACC-02'
 };
