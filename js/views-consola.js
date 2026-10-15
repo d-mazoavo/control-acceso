@@ -492,15 +492,25 @@
       AP.modal({
         title: 'Credencial de ' + p.Title,
         body: function (close) {
+          var blobCredencial = null;
+          var nombreArchivo = 'Credencial_' + U.safeName(p.Title) + '.png';
+          AP.paseCanvas({ titulo: 'Credencial de acceso', nombre: p.Title, linea2: (p.TipoDoc || '') + ' ' + (p.NumDoc || ''), linea3: p.Cargo || undefined, linea4: [p.Tipo, p.Empresa].filter(Boolean).join(' · '), linea5: p.Area || undefined, token: p.Token, pie: 'Personal e intransferible' })
+            .then(function (c) { return new Promise(function (r) { c.toBlob(r, 'image/png'); }); })
+            .then(function (b) { blobCredencial = b; });
+          var num = AP.waNum(p.Telefono);
+          var textoWa = 'Señor(a) ' + p.Title + ': la Dirección de Seguridad Integral de ' + AP.CFG.empresa + ' le remite su credencial digital de acceso. Preséntela en portería junto con su documento de identidad. Es personal e intransferible.';
           var qr = h('div', { class: 'qr big', html: U.qrSvg(U.qrPayload(p.Token), 6, 3) });
           return h('div', { class: 'stack center' }, qr,
             h('p', { class: 'muted small' }, 'El código no contiene datos personales: es un identificador aleatorio que se valida contra la lista de personas habilitadas.'),
             h('div', { class: 'row gap wrap center' },
               h('button', { class: 'btn', type: 'button', onclick: function () { close(); imprimirCarnes([p]); } }, AP.icon('print', 18), 'Imprimir carné'),
-              h('button', { class: 'btn', type: 'button', onclick: async function () {
-                var c = await AP.paseCanvas({ titulo: 'Credencial de acceso', nombre: p.Title, linea2: (p.TipoDoc || '') + ' ' + (p.NumDoc || ''), linea3: p.Cargo || undefined, linea4: [p.Tipo, p.Empresa].filter(Boolean).join(' · '), linea5: p.Area || undefined, token: p.Token, pie: 'Personal e intransferible' });
-                c.toBlob(function (b) { U.download(b, 'Credencial_' + U.safeName(p.Title) + '.png'); });
+              h('button', { class: 'btn', type: 'button', onclick: function () {
+                if (blobCredencial) U.download(blobCredencial, nombreArchivo);
               } }, AP.icon('download', 18), 'Descargar imagen'),
+              num ? h('a', { class: 'btn primary', href: AP.waLink(num, textoWa), target: '_blank', rel: 'noopener', onclick: function () {
+                if (blobCredencial) U.download(blobCredencial, nombreArchivo);
+                AP.toast('Se descargó la imagen (' + nombreArchivo + ') y se abrió el chat de WhatsApp: adjúntela desde su galería/descargas y envíela.', 'info', 12000);
+              } }, AP.icon('whatsapp', 18), 'Enviar por WhatsApp') : null,
               p.Correo ? h('button', { class: 'btn', type: 'button', onclick: async function () {
                 try {
                   await AP.enviarCredencial(p);
