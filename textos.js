@@ -65,6 +65,47 @@ window.AP_TEXTOS = {
       'Puede ejercer los derechos del artículo 8 de la Ley 1581 de 2012 en ' + r.correoDatos + '.';
   },
 
+  // ---- Inducción para visitantes (texto remitido por Calidad). Pendiente: sección de SST cuando la remita el área. ----
+  // Se muestra completa en induccion.html (enlace que recibe el visitante) y resumida en el WhatsApp y el correo del pase.
+  versionInduccion: 'IND-VIS-01',
+  induccionVisitantes: {
+    titulo: 'Inducción para Visitantes',
+    intro: 'Bienvenido(a). Nuestro compromiso es garantizar la inocuidad, calidad, legalidad y autenticidad alimentaria de los productos que elaboramos. ' +
+      'Como visitante, su comportamiento es fundamental para prevenir la contaminación de los alimentos.',
+    secciones: [
+      { titulo: 'Antes de ingresar', items: [
+        'Registre su ingreso y siga las instrucciones del personal autorizado.',
+        'Informe si presenta síntomas de enfermedad (gripa, fiebre, diarrea, vómito, infecciones en piel o heridas expuestas).',
+        'Ingrese únicamente a las áreas autorizadas y permanezca acompañado cuando sea requerido.'] },
+      { titulo: 'Requisitos de higiene', items: [
+        'Lávese y desinfecte las manos antes de entrar a las áreas productivas.',
+        'Use correctamente los elementos de protección personal suministrados: bata, cofia, cubre barba (si aplica) y demás elementos definidos por la empresa.',
+        'Mantenga una adecuada higiene personal durante toda la visita.'] },
+      { titulo: 'Prohibiciones', items: [
+        'No ingresar alimentos, bebidas, chicles, cigarrillos o medicamentos a las áreas de producción.',
+        'No portar joyas, relojes, aretes, piercings expuestos, objetos sueltos o elementos que puedan contaminar el producto.',
+        'No tocar producto, materias primas, equipos o superficies sin autorización.',
+        'No tomar fotografías ni divulgar información sin autorización previa.',
+        'No salga de la planta de producción a áreas externas con el uniforme y elementos de protección suministrados para el ingreso a las áreas productivas.'] },
+      { titulo: 'Calidad e inocuidad', items: [
+        'Reporte inmediatamente cualquier condición que pueda afectar la inocuidad del producto (material extraño, derrames, daños, actos inseguros o incumplimiento de normas).',
+        'Respete las normas de limpieza, control de contaminación cruzada y defensa alimentaria establecidas por la empresa.'] },
+      { titulo: 'Seguridad y defensa alimentaria', items: [
+        'Mantenga visible su identificación de visitante durante toda la permanencia en planta.',
+        'Reporte personas, objetos o actividades sospechosas.'] }
+    ],
+    cierre: 'Su cumplimiento contribuye a proteger la inocuidad de nuestros productos. ¡Muchas gracias!'
+  },
+  // Resumen para WhatsApp y correo (debe validarlo Calidad). El texto completo queda en el enlace.
+  induccionCorta: [
+    'Informe en portería si presenta síntomas de enfermedad (gripa, fiebre, diarrea, vómito, infecciones en piel o heridas expuestas).',
+    'Lávese y desinfecte las manos y use los elementos de protección que se le entreguen (bata, cofia, cubre barba si aplica).',
+    'No ingrese alimentos, bebidas, chicles, cigarrillos ni medicamentos a producción; no porte joyas, relojes, aretes ni objetos sueltos.',
+    'No toque producto, materias primas, equipos ni superficies, ni tome fotografías, sin autorización.',
+    'Permanezca en las áreas autorizadas, acompañado por su anfitrión y con su identificación visible.',
+    'Reporte de inmediato cualquier condición que afecte la inocuidad y cualquier persona, objeto o actividad sospechosa.'
+  ],
+
   pieExportacion:
     'Documento generado por la aplicación de control de acceso de la Dirección de Seguridad Integral. ' +
     'Información reservada — Ley 1581 de 2012. La huella SHA-256 del archivo queda registrada en la bitácora.'

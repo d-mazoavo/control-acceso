@@ -51,9 +51,28 @@
     }, 30000);
     AP.onLeave(function () { clearInterval(t); });
     // Al registrarse un ingreso o una salida, la lista se actualiza (estado "Dentro" / "Salió")
-    AP.onLeave(AP.Sync.on(U.debounce(function () { if (visitas.length && !document.querySelector('.modal-wrap') && location.hash.indexOf('#/consola/visitas') === 0) pintar(); }, 800)));
+    AP.onLeave(AP.Sync.on(U.debounce(function () { if (visitas.length && !document.querySelector('.modal-wrap') && location.hash.indexOf('#/consola/visitas') === 0) pintarTabla(); }, 800)));
 
     function dePorteria(v) { return v.Origen === 'Portería'; }
+    // Búsqueda y descarga (se conservan al cambiar de pestaña o al actualizarse la lista)
+    var qv = AP.buscador('Buscar visitante, documento, empresa, anfitrión, motivo o placa', function () { pintarTabla(); });
+    var listaActual = [];
+    var tablaBox = h('div');
+    var COLS_VIS = [
+      ['Visitante', function (v) { return v.Title; }, 30], ['Tipo doc.', function (v) { return v.TipoDoc; }, 8], ['N.° documento', function (v) { return v.NumDoc; }, 15],
+      ['Empresa / entidad', function (v) { return v.Empresa; }, 26], ['Celular', function (v) { return v.Telefono; }, 14], ['Correo', function (v) { return v.Correo; }, 26],
+      ['Vale desde', function (v) { return U.toDate(v.FechaInicio); }, 17], ['Vale hasta', function (v) { return U.toDate(v.FechaFin); }, 17],
+      ['Anfitrión', function (v) { return v.Anfitrion; }, 26], ['Cargo anfitrión', function (v) { return v.AnfitrionCargo; }, 20], ['Área', function (v) { return v.Area; }, 18],
+      ['Motivo', function (v) { return v.Motivo; }, 34], ['Placa', function (v) { return v.Placa; }, 10], ['Vehículo', function (v) { return v.VehiculoTipo; }, 12],
+      ['Estado', function (v) { return v.Estado; }, 12], ['Origen', function (v) { return v.Origen === 'Portería' ? 'No anunciado (portería)' : 'Prerregistro'; }, 20],
+      ['Registró / solicitó', function (v) { return v.SolicitadoPorNombre || v.SolicitadoPor; }, 22], ['Decidió', function (v) { return v.AprobadoPorNombre || v.AprobadoPor; }, 22],
+      ['Fecha de decisión', function (v) { return v.FechaAprobacion ? U.toDate(v.FechaAprobacion) : ''; }, 17], ['Justificación', function (v) { return v.JustificacionDecision; }, 34],
+      ['QR enviado', function (v) { return v.QREnviado ? U.toDate(v.QREnviado) : ''; }, 17], ['Observaciones', function (v) { return v.Observaciones; }, 34]
+    ];
+    var NOMBRES_TAB = { pendientes: 'Por aprobar', hoy: 'Hoy', proximas: 'Próximas', historial: 'Últimos 60 días' };
+    function filtradas() {
+      return listaActual.filter(function (v) { return AP.coincide(v, qv.value, ['Title', 'NumDoc', 'Empresa', 'Anfitrion', 'Area', 'Motivo', 'Placa', 'Telefono', 'Estado']); });
+    }
     function pintar() {
       var hoy = U.ymd(), ahora = new Date();
       var grupos = {
@@ -72,7 +91,19 @@
       var avisoPort = tab === 'pendientes' && grupos.pendientes.some(dePorteria)
         ? h('p', { class: 'banner warn' }, AP.icon('alert', 18), h('span', null, 'Hay visitantes no anunciados esperando en portería. Apruebe o rechace con justificación; al aprobar, envíele el código QR por WhatsApp.'))
         : null;
-      content.replaceChildren(tabs, avisoPort, simpleTable([
+      listaActual = lista;
+      content.replaceChildren(tabs, avisoPort,
+        h('div', { class: 'filters' }, qv, AP.btnExcel(function () {
+          var rows = filtradas();
+          if (!rows.length) return AP.toast('No hay visitas para descargar con el filtro actual.', 'warn');
+          AP.exportar('Visitas_' + NOMBRES_TAB[tab].replace(/\s+/g, '_'), COLS_VIS, rows, 'xlsx', [['Vista', NOMBRES_TAB[tab]], ['Filtro', qv.value || 'ninguno'],
+            ['Generado por', AP.Session.user.nombre + ' (' + AP.Session.user.upn + ')'], ['Fecha', U.fDateTime(new Date())]]);
+        })),
+        tablaBox);
+      pintarTabla();
+    }
+    function pintarTabla() {
+      tablaBox.replaceChildren(simpleTable([
         ['Visitante', function (v) {
           return h('div', null, h('strong', null, v.Title), h('small', { class: 'block muted' }, (v.TipoDoc || '') + ' ' + (v.NumDoc || '') + (v.Empresa ? ' · ' + v.Empresa : '')),
             dePorteria(v) ? h('small', { class: 'block' }, AP.pill('No anunciado · portería', 'warn')) : null);
@@ -98,10 +129,23 @@
             v.Estado === 'Pendiente' ? h('button', { class: 'btn small primary', type: 'button', onclick: function () { decidir(v, true); } }, AP.icon('check', 16), 'Aprobar') : null,
             v.Estado === 'Pendiente' ? h('button', { class: 'btn small danger-outline', type: 'button', onclick: function () { decidir(v, false); } }, 'Rechazar') : null,
             v.Estado === 'Aprobada' ? h('button', { class: 'btn small', type: 'button', onclick: function () { pase(v); } }, AP.icon('qr', 16), 'Pase') : null,
+            avisoAnfBtn(v),
             h('button', { class: 'btn small', type: 'button', title: 'Editar', onclick: function () { editar(v); } }, AP.icon('edit', 16)),
             AP.Session.can('admin') ? h('button', { class: 'btn small danger-outline', type: 'button', title: 'Borrar registro', onclick: function (e) { e.stopPropagation(); borrarVisita(v); } }, AP.icon('trash', 16)) : null);
         }]
-      ], lista, function (v) { if (v.Estado === 'Pendiente') decidir(v, true); else editar(v); }));
+      ], filtradas(), function (v) { if (v.Estado === 'Pendiente') decidir(v, true); else editar(v); }));
+    }
+    // Visitante dentro: aviso al anfitrión por WhatsApp para que lo reciba y lo acompañe
+    function avisoAnfBtn(v) {
+      if (v.Estado !== 'Aprobada' || new Date(v.FechaFin) < U.addDays(new Date(), -1)) return null;
+      var m = AP.Access.estadoVisita(v);
+      if (m.clave !== 'dentro') return null;
+      var av = AP.avisoAnfitrion(v, m.mov && m.mov.FechaHora);
+      if (!av) return null;
+      if (!av.num) return h('button', { class: 'btn small', type: 'button', title: 'Avisar al anfitrión', onclick: function () { AP.toast('El anfitrión ' + av.nombre + ' no tiene un celular válido registrado en Personas.', 'warn', 7000); } }, AP.icon('whatsapp', 16), 'Anfitrión');
+      return h('a', { class: 'btn small', href: AP.waLink(av.num, av.texto), target: '_blank', rel: 'noopener', title: 'Avisar al anfitrión por WhatsApp', onclick: function () {
+        AP.Audit.log('Aviso al anfitrión', v.Title + ' → ' + av.nombre, 'WhatsApp desde la consola');
+      } }, AP.icon('whatsapp', 16), 'Anfitrión');
     }
     cargar();
 
@@ -204,7 +248,8 @@
       var mismoDia = U.ymd(v.FechaFin) === U.ymd(v.FechaInicio);
       return 'Señor(a) ' + v.Title + ': la Dirección de Seguridad Integral de ' + AP.CFG.empresa + ' autorizó su visita del ' + U.fLong(v.FechaInicio) +
         ' hasta las ' + U.fTime(v.FechaFin) + (mismoDia ? '' : ' del ' + U.fDate(v.FechaFin)) +
-        '. Le enviamos su código QR: preséntelo en portería, junto con su documento de identidad, para registrar su ingreso y su salida. El código es personal e intransferible.';
+        '. Le enviamos su código QR: preséntelo en portería, junto con su documento de identidad, para registrar su ingreso y su salida. El código es personal e intransferible.' +
+        (AP.Induccion.texto() ? '\n\n' + AP.Induccion.texto() : '');
     }
     async function marcarEnviado(v, canal) {
       try {
@@ -254,6 +299,8 @@
                 else AP.toast('Este navegador no permite compartir imágenes.', 'warn');
               } }, AP.icon('share', 18), 'Compartir') : null,
               h('button', { class: 'btn', type: 'button', onclick: function () { close(); AP.imprimirCarnes([v], 'visita'); } }, AP.icon('print', 18), 'Imprimir')),
+            h('p', { class: 'muted small' }, 'El mensaje de WhatsApp y el correo incluyen el resumen de la inducción para visitantes y el enlace a la inducción completa. ',
+              h('a', { href: AP.Induccion.url(), target: '_blank', rel: 'noopener' }, 'Ver la inducción')),
             h('p', { class: 'muted small' }, 'El pase contiene solo un código aleatorio; deja de funcionar si la visita se cancela o vence. Con él, el vigilante registra el ingreso y la salida.'));
         },
         onClose: function () { pintar(); }
@@ -272,6 +319,7 @@
         '<tr><td style="padding:2px 12px 2px 0;color:#666">Lugar</td><td>' + e(AP.CFG.sede) + '</td></tr></table>' +
         '<p>Presente en la portería el código QR adjunto (en su celular o impreso) junto con su documento de identidad original. ' +
         'Durante su permanencia deberá estar acompañado por su anfitrión y atender las instrucciones del personal de seguridad.</p>' +
+        AP.Induccion.html() +
         '<p><img src="cid:pase" alt="Pase de visitante" width="320"></p>' +
         '<p style="font-size:11px;color:#666;border-top:1px solid #ddd;padding-top:8px"><b>Aviso de privacidad.</b> ' + e(AP.TX.avisoPrivacidad(AP.CFG)) + '</p></div>';
       await AP.B.sendMail({ to: [to], cc: v.AnfitrionCorreo ? [v.AnfitrionCorreo] : [], subject: 'Autorización de visita — ' + AP.CFG.empresa + ' — ' + U.fDate(v.FechaInicio), html: html, attachments: [{ name: 'pase-visitante.png', type: 'image/png', base64: b64, cid: 'pase' }] });
@@ -427,9 +475,11 @@
     ['Doc. anfitrión', function (m) { return m.AnfitrionDoc; }, 14],
     ['Vehículo', function (m) { return m.VehiculoTipo; }, 12], ['Placa', function (m) { return m.Placa; }, 10],
     ['Carné entregado', function (m) { return m.CarneEntregado; }, 10], ['Autorización confirmada', function (m) { return U.yesNo(m.AutorizacionConfirmada); }, 12],
+    ['Inducción de visitantes confirmada', function (m) { return U.yesNo(m.InduccionConfirmada); }, 12],
     ['Documento en custodia', function (m) { return U.yesNo(m.DocumentoCustodia); }, 11], ['Carné devuelto', function (m) { return U.yesNo(m.CarneDevuelto); }, 10],
     ['Estado mostrado', function (m) { return m.EstadoMostrado; }, 20], ['Novedad', function (m) { return m.Novedad; }, 30], ['Turno programado', function (m) { return m.HorarioInfo; }, 24], ['Excepción', function (m) { return U.yesNo(m.Excepcion); }, 9],
     ['Autorizado por', function (m) { return m.AutorizadoPor; }, 22], ['Motivo excepción / negación', function (m) { return m.MotivoExcepcion || m.MotivoNegacion; }, 30],
+    ['Solicitud de ingreso (Director)', function (m) { return m.SolicitudId; }, 22],
     ['Origen', function (m) { return m.Origen; }, 14], ['Vigilante', function (m) { return m.Vigilante; }, 22], ['Usuario vigilante', function (m) { return m.VigilanteUsuario; }, 14],
     ['Usuario que envió (verificado por el servidor)', function (m) { return m._createdBy || ''; }, 20], ['Dispositivo', function (m) { return m.Dispositivo; }, 12],
     ['Sin conexión', function (m) { return U.yesNo(m.SinConexion); }, 9], ['Observaciones', function (m) { return m.Observaciones; }, 30],
@@ -551,15 +601,18 @@
     var content = h('div', { class: 'stack' });
     var desde = AP.input('desde', U.ymd(U.addDays(new Date(), -30)), { type: 'date' });
     var hasta = AP.input('hasta', U.ymd(), { type: 'date' });
-    var txt = AP.input('txt', '', { type: 'search', placeholder: 'Placa, contenedor, precinto o conductor' });
+    var txt = AP.input('txt', '', { type: 'search', placeholder: 'Placa, contenedor, precinto, conductor o vigilante' });
+    var res = AP.select('res', [['', 'Todos los resultados'], 'Conforme', 'No conforme'], '');
     var box = h('div');
     var datos = [];
     AP.consolaShell('/consola/inspecciones', 'Inspecciones de carga', content);
     function filtrar() {
-      var t = U.fold(txt.value);
-      return datos.filter(function (i) { return !t || U.fold([i.Placa, i.Remolque, i.Contenedor, i.Precintos, i.Conductor, i.Transportadora].join(' ')).indexOf(t) >= 0; })
-        .sort(function (a, b) { return a.FechaHora < b.FechaHora ? 1 : -1; });
+      return datos.filter(function (i) {
+        if (res.value && i.Resultado !== res.value) return false;
+        return AP.coincide(i, txt.value, ['Placa', 'Remolque', 'Contenedor', 'Precintos', 'Conductor', 'DocConductor', 'Transportadora', 'Operacion', 'Vigilante']);
+      }).sort(function (a, b) { return a.FechaHora < b.FechaHora ? 1 : -1; });
     }
+    res.addEventListener('change', function () { pintar(); });
     var COLS = [
       ['Fecha', function (i) { return U.fDateTime(i.FechaHora); }, 16], ['Operación', function (i) { return i.Operacion; }, 24], ['Placa', function (i) { return i.Placa; }, 10],
       ['Remolque', function (i) { return i.Remolque; }, 10], ['Contenedor', function (i) { return i.Contenedor; }, 14], ['Transportadora', function (i) { return i.Transportadora; }, 24],
@@ -574,14 +627,15 @@
       box.replaceChildren(h('div', { class: 'row gap wrap between' },
         h('div', { class: 'row gap' }, AP.pill(rows.length + ' inspecciones', 'brand'), AP.pill(rows.filter(function (i) { return i.Resultado === 'No conforme'; }).length + ' no conformes', 'deny')),
         h('button', { class: 'btn', type: 'button', disabled: !rows.length, onclick: function () {
-          AP.exportar('Inspecciones_carga', COLS, rows, 'xlsx', [['Periodo', desde.value + ' a ' + hasta.value], ['Generado por', AP.Session.user.nombre], ['Fecha', U.fDateTime(new Date())]]);
-        } }, AP.icon('download', 18), 'Exportar')),
+          AP.exportar('Inspecciones_carga', COLS, rows, 'xlsx', [['Periodo', desde.value + ' a ' + hasta.value], ['Filtro', [res.value, txt.value].filter(Boolean).join(' · ') || 'ninguno'], ['Generado por', AP.Session.user.nombre], ['Fecha', U.fDateTime(new Date())]]);
+        } }, AP.icon('download', 18), 'Excel')),
         simpleTable([
           ['Fecha', function (i) { return U.fDateTime(i.FechaHora); }], ['Operación', function (i) { return i.Operacion; }],
           ['Vehículo', function (i) { return h('div', null, h('strong', null, i.Placa), h('small', { class: 'block muted' }, [i.Remolque, i.Contenedor].filter(Boolean).join(' · '))); }],
           ['Conductor', function (i) { return h('div', null, i.Conductor || '', h('small', { class: 'block muted' }, i.Transportadora || '')); }],
           ['Precintos', function (i) { return i.Precintos; }], ['Resultado', function (i) { return AP.estadoPill(i.Resultado); }],
-          ['Fotos', function (i) { return String(fotosDe(i).length); }]
+          ['Fotos', function (i) { return String(fotosDe(i).length); }],
+          ['', function (i) { return h('button', { class: 'btn small', type: 'button', title: 'Descargar informe en Word', onclick: function (e) { e.stopPropagation(); AP.informeInspeccion(i); } }, AP.icon('word', 16), 'Word'); }]
         ], rows, detalle));
     }
     function detalle(i) {
@@ -607,7 +661,8 @@
           pv.length ? h('h3', null, 'Precintos — verificación VVTT') : null,
           pv.map(function (p) { return h('div', { class: 'kv' }, h('span', null, p.numero), h('strong', null, ['ver', 'verificar', 'halar', 'girar'].map(function (k) { return (p[k] ? '✓ ' : '✗ ') + k; }).join('  '))); }),
           h('h3', null, 'Fotografías'), gal,
-          h('p', { class: 'muted small' }, 'Cada fotografía conserva su huella SHA-256 en el registro de la inspección.'))
+          h('p', { class: 'muted small' }, 'Cada fotografía conserva su huella SHA-256 en el registro de la inspección.'),
+          h('div', { class: 'row gap wrap' }, h('button', { class: 'btn primary', type: 'button', onclick: function () { AP.informeInspeccion(i); } }, AP.icon('word', 18), 'Descargar informe en Word')))
       });
     }
     async function consultar() {
@@ -617,7 +672,7 @@
       catch (e) { box.replaceChildren(errBox(e)); }
     }
     txt.addEventListener('input', U.debounce(pintar, 200));
-    AP.add(content, h('div', { class: 'filters' }, AP.field('Desde', desde), AP.field('Hasta', hasta), txt,
+    AP.add(content, h('div', { class: 'filters' }, AP.field('Desde', desde), AP.field('Hasta', hasta), res, txt,
       h('button', { class: 'btn primary', type: 'button', onclick: consultar }, AP.icon('search', 18), 'Consultar')), box);
     consultar();
   });
@@ -632,10 +687,27 @@
       rows.sort(function (a, b) { return a.FechaHora < b.FechaHora ? 1 : -1; });
       var COLS = [['Fecha', function (r) { return U.fDateTime(r.FechaHora); }, 16], ['Acción', function (r) { return r.Accion; }, 22], ['Referencia', function (r) { return r.Referencia; }, 30],
         ['Usuario (verificado por el servidor)', function (r) { return r._createdBy || ''; }, 18], ['Detalle del usuario', function (r) { return r.Usuario; }, 28], ['Detalle', function (r) { return r.Detalle; }, 50], ['Huella SHA-256', function (r) { return r.Hash; }, 66]];
+      var acciones = Array.from(new Set(rows.map(function (r) { return r.Accion; }).filter(Boolean))).sort();
+      var fAcc = AP.select('accion', [['', 'Todas las acciones']].concat(acciones), '');
+      var tbox = h('div');
+      var qb = AP.buscador('Buscar en acción, referencia, usuario o detalle', pintarB);
+      fAcc.addEventListener('change', pintarB);
+      function filtradas() { return rows.filter(function (r) { return (!fAcc.value || r.Accion === fAcc.value) && AP.coincide(r, qb.value, ['Accion', 'Referencia', 'Usuario', 'Detalle', '_createdBy']); }); }
+      function pintarB() {
+        var l = filtradas();
+        tbox.replaceChildren(h('p', { class: 'muted small' }, l.length + ' de ' + rows.length + ' anotaciones'),
+          simpleTable(COLS.map(function (c) { return [c[0], c[0] === 'Huella SHA-256' ? function (r) { return r.Hash ? h('code', { class: 'mono small' }, r.Hash.slice(0, 16) + '…') : ''; } : c[1]]; }), l.slice(0, 500)),
+          l.length > 500 ? h('p', { class: 'muted small' }, 'Se muestran 500; la descarga incluye todas las filtradas.') : null);
+      }
       content.replaceChildren(
-        h('div', { class: 'row between wrap gap' }, h('p', { class: 'muted' }, 'Últimos 90 días. Las anotaciones de la bitácora no pueden modificarse ni borrarse (las reglas del servidor lo impiden).'),
-          h('button', { class: 'btn', type: 'button', onclick: function () { AP.exportar('Bitacora', COLS, rows, 'xlsx', [['Generado por', AP.Session.user.nombre], ['Fecha', U.fDateTime(new Date())]]); } }, AP.icon('download', 18), 'Exportar')),
-        simpleTable(COLS.map(function (c) { return [c[0], c[0] === 'Huella SHA-256' ? function (r) { return r.Hash ? h('code', { class: 'mono small' }, r.Hash.slice(0, 16) + '…') : ''; } : c[1]]; }), rows));
+        h('p', { class: 'muted' }, 'Últimos 90 días. Las anotaciones de la bitácora no pueden modificarse ni borrarse (las reglas del servidor lo impiden).'),
+        h('div', { class: 'filters' }, fAcc, qb, AP.btnExcel(function () {
+          var l = filtradas();
+          if (!l.length) return AP.toast('No hay anotaciones con el filtro actual.', 'warn');
+          AP.exportar('Bitacora', COLS, l, 'xlsx', [['Filtro', [fAcc.value, qb.value].filter(Boolean).join(' · ') || 'ninguno'], ['Generado por', AP.Session.user.nombre], ['Fecha', U.fDateTime(new Date())]]);
+        })),
+        tbox);
+      pintarB();
     }).catch(function (e) { content.replaceChildren(errBox(e)); });
   });
 
@@ -715,7 +787,7 @@
       ['Tipo', function (x) { return x.PersonaTipo; }, 18], ['Empresa', function (x) { return x.PersonaEmpresa; }, 22],
       ['Sentido', function (x) { return x.Sentido; }, 10], ['Fecha prevista', function (x) { return U.toDate(x.FechaPrevista); }, 17],
       ['Elementos', function (x) { return E.resumen(E.items(x)); }, 60], ['Fotografías', function (x) { return E.fotos(x).length; }, 11],
-      ['Autorizado por', function (x) { return x.AutorizadoPor; }, 24], ['Estado', function (x) { return x.Estado; }, 12],
+      ['Autorizado por', function (x) { return x.AutorizadoPor; }, 28], ['Doc. de quien autoriza', function (x) { return x.AutorizadoPorDoc; }, 16], ['Estado', function (x) { return x.Estado; }, 12],
       ['Verificado por', function (x) { return x.Vigilante; }, 24], ['Fecha de verificación', function (x) { return x.FechaConfirmacion ? U.toDate(x.FechaConfirmacion) : ''; }, 17],
       ['Nota de portería', function (x) { return x.NotaPorteria; }, 40], ['Observaciones', function (x) { return x.Observaciones; }, 40],
       ['Registrado por', function (x) { return x._createdBy || x.CreadoPor; }, 18], ['Fecha de registro', function (x) { return U.toDate(x.FechaCreacion); }, 17]
@@ -730,6 +802,11 @@
     }
 
     function vencida(x) { return x.Estado === 'Pendiente' && U.ymd(x.FechaPrevista) < U.ymd(); }
+    var qe = AP.buscador('Buscar persona, documento, elemento, serial o quien autoriza', function () { pintarTabla(); });
+    var listaE = [], tablaE = h('div');
+    function filtradosE() {
+      return listaE.filter(function (x) { return AP.coincide(x, qe.value, ['Title', 'PersonaDoc', 'PersonaEmpresa', 'PersonaTipo', 'AutorizadoPor', 'Estado', 'Sentido', function (r) { return E.resumen(E.items(r)); }]); });
+    }
 
     function pintar() {
       var hoy = U.ymd();
@@ -744,12 +821,19 @@
       var tabs = h('div', { class: 'tabs' }, [['pendientes', 'Pendientes'], ['hoy', 'Hoy'], ['historial', 'Últimos 60 días']].map(function (t) {
         return h('a', { class: t[0] === tab ? 'on' : '', href: '#/consola/elementos?t=' + t[0] }, t[1] + ' (' + grupos[t[0]].length + ')');
       }));
-      var barra = h('div', { class: 'row between wrap gap' },
+      listaE = lista;
+      var barra = h('div', { class: 'stack sm' },
         h('p', { class: 'muted small' }, 'Los registros pendientes aparecen al vigilante en la pantalla de verificación cuando lee el QR de la persona (únicamente el día previsto).'),
-        h('button', { class: 'btn', type: 'button', disabled: !lista.length, onclick: function () {
-          AP.exportar('Control_elementos', COLS, lista, 'xlsx', [['Vista', { pendientes: 'Pendientes', hoy: 'Hoy', historial: 'Últimos 60 días' }[tab]], ['Generado por', AP.Session.user.nombre], ['Fecha', U.fDateTime(new Date())]]);
-        } }, AP.icon('download', 18), 'Exportar a Excel'));
-      content.replaceChildren(tabs, barra, simpleTable([
+        h('div', { class: 'filters' }, qe, AP.btnExcel(function () {
+          var l = filtradosE();
+          if (!l.length) return AP.toast('No hay registros con el filtro actual.', 'warn');
+          AP.exportar('Control_elementos', COLS, l, 'xlsx', [['Vista', { pendientes: 'Pendientes', hoy: 'Hoy', historial: 'Últimos 60 días' }[tab]], ['Filtro', qe.value || 'ninguno'], ['Generado por', AP.Session.user.nombre], ['Fecha', U.fDateTime(new Date())]]);
+        })));
+      content.replaceChildren(tabs, barra, tablaE);
+      pintarTabla();
+    }
+    function pintarTabla() {
+      tablaE.replaceChildren(simpleTable([
         ['Persona', function (x) { return h('div', null, h('strong', null, x.Title), h('small', { class: 'block muted' }, [x.PersonaDoc, x.PersonaTipo, x.PersonaEmpresa].filter(Boolean).join(' · '))); }],
         ['Sentido', function (x) { return AP.pill(x.Sentido, x.Sentido === 'Ingreso' ? 'ok' : 'warn'); }],
         ['Fecha prevista', function (x) { return h('div', null, U.fDateTime(x.FechaPrevista), vencida(x) ? h('small', { class: 'block', style: { color: 'var(--deny)' } }, 'Fecha vencida') : null); }],
@@ -768,7 +852,7 @@
             h('button', { class: 'btn small', type: 'button', title: 'Editar', onclick: function (e) { e.stopPropagation(); editar(x); } }, AP.icon('edit', 16)),
             h('button', { class: 'btn small danger-outline', type: 'button', onclick: function (e) { e.stopPropagation(); cancelar(x); } }, 'Cancelar'));
         }]
-      ], lista, detalle));
+      ], filtradosE(), detalle));
     }
     cargar();
 
@@ -854,7 +938,7 @@
           // --- Datos de la solicitud ---
           var sentidoSel = AP.select('Sentido', AP.CAT.sentidosElemento, x ? x.Sentido : 'Salida');
           var fechaIn = AP.input('FechaPrevista', U.toLocalInput(x ? x.FechaPrevista : new Date()), { type: 'datetime-local' });
-          var autorizaIn = AP.input('AutorizadoPor', x ? x.AutorizadoPor : (AP.Session.user.nombre || ''), { placeholder: 'Nombre y cargo de quien autoriza', maxlength: 120 });
+          var autoriza = AP.autorizaPicker({ fuente: function () { return AP.B.listAll('AP_Personas', { exclude: ['Foto'] }); }, valor: x || {} });
           var obsIn = AP.textarea('Observaciones', x ? x.Observaciones : '', { placeholder: 'Instrucciones para el vigilante (opcional)', rows: 2 });
 
           // --- Elementos ---
@@ -898,7 +982,7 @@
             var fecha = U.fromLocalInput(fechaIn.value);
             if (!sel) return AP.toast('Seleccione la persona registrada.', 'warn');
             if (!fecha || isNaN(fecha)) return AP.toast('Indique la fecha y hora prevista.', 'warn');
-            if (autorizaIn.value.trim().length < 4) return AP.toast('Indique quién autoriza.', 'warn');
+            if (!autoriza.elegido()) return AP.toast('Seleccione de la lista de personas quién autoriza.', 'warn');
             if (!elems.length) return AP.toast('Agregue al menos un elemento con su descripción.', 'warn');
             guardarBtn.disabled = true; guardarBtn.lastChild.textContent = 'Guardando…';
             try {
@@ -911,11 +995,11 @@
                 fotos.push({ nombre: nombre, etiqueta: 'Fotografía ' + (fotos.length + 1), ruta: up.path, sha256: fotosNuevas[i].sha256 });
               }
               var r0 = sel.rec;
-              var data = {
+              var data = Object.assign({
                 Title: r0.Title, Token: r0.Token || '', PersonaTipo: sel.tipo || '', PersonaDoc: r0.NumDoc || '', PersonaEmpresa: r0.Empresa || '',
-                Sentido: sentidoSel.value, FechaPrevista: fecha.toISOString(), AutorizadoPor: autorizaIn.value.trim(),
+                Sentido: sentidoSel.value, FechaPrevista: fecha.toISOString(),
                 Items: JSON.stringify(elems), Fotos: fotos.length ? JSON.stringify(fotos) : '', Observaciones: obsIn.value.trim()
-              };
+              }, autoriza.valor());
               var ref = data.Title + ' (' + data.PersonaDoc + ') — ' + data.Sentido + ' ' + U.fDateTime(fecha);
               if (nuevo) {
                 Object.assign(data, { Estado: 'Pendiente', CreadoPor: AP.Session.user.nombre || AP.Session.user.usuario, FechaCreacion: new Date().toISOString() });
@@ -941,7 +1025,7 @@
             h('div', { class: 'form-grid' },
               AP.field('Sentido *', sentidoSel),
               AP.field('Fecha y hora prevista *', fechaIn, 'El vigilante la ve únicamente en ese día.'),
-              AP.field('Autorizado por *', autorizaIn, null, 'span2'),
+              AP.field('Autorizado por *', autoriza, 'Búsquelo en la lista de personas registradas (por ejemplo, el jefe del área).', 'span2'),
               AP.field('Observaciones para el vigilante', obsIn, null, 'span2')),
             h('h3', null, '3. Elementos'), listaItems, h('div', null, addBtn),
             h('h3', null, '4. Fotografías (opcional, máximo ' + MAX_FOTOS + ')'),
@@ -974,7 +1058,7 @@
             h('div', { class: 'row gap wrap' }, AP.pill(x.Sentido, x.Sentido === 'Ingreso' ? 'ok' : 'warn'), AP.estadoPill(x.Estado), vencida(x) ? AP.pill('Fecha vencida', 'deny') : null),
             h('div', { class: 'kv-grid' },
               kv('Persona', x.Title), kv('Documento', x.PersonaDoc), kv('Tipo', x.PersonaTipo), kv('Empresa', x.PersonaEmpresa),
-              kv('Fecha prevista', U.fDateTime(x.FechaPrevista)), kv('Autorizado por', x.AutorizadoPor),
+              kv('Fecha prevista', U.fDateTime(x.FechaPrevista)), kv('Autorizado por', x.AutorizadoPor ? x.AutorizadoPor + (x.AutorizadoPorDoc ? ' (doc. ' + x.AutorizadoPorDoc + ')' : '') : ''),
               kv('Registrado por', (x._createdBy || x.CreadoPor || '') + (x.FechaCreacion ? ' · ' + U.fDateTime(x.FechaCreacion) : '')),
               kv('Verificado por', x.Vigilante ? x.Vigilante + (x.VigilanteUsuario ? ' (' + x.VigilanteUsuario + ')' : '') + (x.FechaConfirmacion ? ' · ' + U.fDateTime(x.FechaConfirmacion) : '') : ''),
               kv('Nota de portería', x.NotaPorteria), kv('Observaciones', x.Observaciones)),

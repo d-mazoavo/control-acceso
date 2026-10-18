@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="es-CO">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#587e50">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; base-uri 'self'; form-action 'none'">
+  <title>Inducción para visitantes · Avo Pak</title>
+  <link rel="icon" type="image/png" href="img/favicon.png">
+  <style>
+    :root { --brand: #587e50; --brand-d: #3d5a37; --lime: #dfd57c; --ink: #1c2419; --muted: #5d6859; --bg: #f3f6f1; --card: #fff; --line: #dbe3d6; color-scheme: light; }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) { --brand: #8fbf83; --brand-d: #a9d39d; --ink: #edf2ea; --muted: #a3ae9f; --bg: #111610; --card: #192017; --line: #2c3829; color-scheme: dark; }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
+    header { background: #587e50; color: #fff; padding: 18px 16px 16px; border-bottom: 6px solid var(--lime); }
+    header .wrap { display: flex; align-items: center; gap: 14px; }
+    header img { height: 44px; width: auto; background: #fff; border-radius: 8px; padding: 4px 8px; }
+    header h1 { margin: 0; font-size: 1.25rem; line-height: 1.2; }
+    header small { display: block; opacity: .9; font-size: .85rem; }
+    main { padding: 16px; }
+    .wrap { max-width: 720px; margin: 0 auto; }
+    .intro { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin: 0 0 14px; }
+    section { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 6px 16px 10px; margin: 0 0 12px; }
+    section h2 { font-size: 1.02rem; color: var(--brand-d); margin: 12px 0 6px; }
+    ul { margin: 0; padding: 0; list-style: none; }
+    li { position: relative; padding: 7px 0 7px 30px; border-top: 1px solid var(--line); }
+    li:first-child { border-top: 0; }
+    li::before { content: ""; position: absolute; left: 4px; top: 12px; width: 14px; height: 14px; border-radius: 4px; background: var(--brand); }
+    .cierre { font-weight: 600; text-align: center; margin: 18px 0 6px; }
+    footer { color: var(--muted); font-size: .8rem; text-align: center; padding: 8px 16px 28px; }
+    .btns { display: flex; justify-content: center; gap: 10px; margin: 10px 0; }
+    button { font: inherit; border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 10px; padding: 8px 14px; cursor: pointer; }
+    @media print { header { background: #fff; color: #000; border-bottom: 2px solid #587e50; } .btns { display: none; } body { background: #fff; } section, .intro { break-inside: avoid; } }
+  </style>
+</head>
+<body>
+  <header><div class="wrap"><img src="img/logo-avo.png" alt="Avo Pak"><div><h1 id="titulo">Inducción para Visitantes</h1><small id="empresa">Avo Pak S.A.S.</small></div></div></header>
+  <main><div class="wrap" id="contenido"><p>Cargando…</p></div></main>
+  <footer id="pie"></footer>
+  <script src="config.js"></script>
+  <script src="textos.js"></script>
+  <script src="js/induccion.js"></script>
+</body>
+</html>

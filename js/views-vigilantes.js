@@ -27,7 +27,8 @@
     Administrador: 'Consola completa: usuarios, horarios, permisos, novedades, bitácora y portería.',
     Analista: 'Consola de personas, visitas, historial e inspecciones, y portería.',
     Supervisor: 'Portería por turnos e historial de ingresos y salidas.',
-    Vigilante: 'Solo portería, por turnos.'
+    Vigilante: 'Solo portería, por turnos.',
+    Rondero: 'Solo rondas, por turnos: marca los puntos de control con su QR y reporta novedades con fotografía. No ve personas ni movimientos.'
   };
 
   AP.route('/consola/usuarios', function () { AP.go('/consola/vigilantes'); });
@@ -36,13 +37,14 @@
     if (!AP.Session.can('admin')) { AP.go('/porteria'); return; }
     var datos = { vig: [], turnos: [] };
     var filtro = qs.f || 'Activos';
-    var q = h('input', { type: 'search', placeholder: 'Buscar por nombre, usuario, documento o empresa', class: 'grow' });
+    var q = h('input', { type: 'search', placeholder: 'Buscar por nombre, usuario, documento, empresa o rol', class: 'grow' });
+    var qev = AP.buscador('Buscar evento, nombre, usuario o dispositivo', function () { pintarEventos(); });
     var chips = h('div', { class: 'chips' });
     var tablaBox = h('div', { class: 'stack' });
     var eventosBox = h('div', { class: 'stack' });
     var content = h('div', { class: 'stack' }, AP.spinner('Cargando…'));
     AP.consolaShell('/consola/vigilantes', 'Usuarios', content, [
-      h('button', { class: 'btn', type: 'button', onclick: exportar }, AP.icon('download', 18), 'Exportar'),
+      h('button', { class: 'btn', type: 'button', onclick: exportar }, AP.icon('download', 18), 'Excel'),
       h('button', { class: 'btn primary', type: 'button', onclick: crear }, AP.icon('plus', 18), 'Agregar usuario')]);
     q.addEventListener('input', U.debounce(pintar, 200));
 
@@ -59,7 +61,17 @@
             'en su primer ingreso la persona define su propia clave, que nadie más conoce. Las altas y bajas del personal del contratista se tramitan a solicitud escrita del supervisor designado por el contratista.')),
           h('div', { class: 'kv-grid roles' }, Object.keys(DESCRIPCION_ROL).map(function (r) { return h('div', { class: 'kv' }, h('span', null, r), h('strong', null, DESCRIPCION_ROL[r])); })),
           h('div', { class: 'filters' }, chips, q), tablaBox,
-          h('h3', null, 'Eventos de turno (últimos 60 días)'), eventosBox);
+          h('div', { class: 'row between wrap gap' }, h('h3', null, 'Eventos de turno (últimos 60 días)')),
+          h('div', { class: 'filters' }, qev, AP.btnExcel(function () {
+            var l = eventosFiltrados();
+            if (!l.length) return AP.toast('No hay eventos con el filtro actual.', 'warn');
+            AP.exportar('Eventos_de_turno', [
+              ['Fecha', function (e) { return U.toDate(e.FechaHora); }, 17], ['Evento', function (e) { return e.Evento; }, 30], ['Nombre', function (e) { return e.Title; }, 30],
+              ['Usuario', function (e) { return e.VigilanteUsuario; }, 14], ['Rol', function (e) { return e.Rol; }, 12], ['Inicio del turno', function (e) { return e.InicioTurno ? U.toDate(e.InicioTurno) : ''; }, 17],
+              ['Registros', function (e) { return e.Registros == null ? '' : Number(e.Registros); }, 10], ['Pendientes', function (e) { return e.Pendientes == null ? '' : Number(e.Pendientes); }, 10],
+              ['Dispositivo', function (e) { return e.Dispositivo; }, 14], ['Sin conexión', function (e) { return U.yesNo(e.SinConexion); }, 10], ['Detalle', function (e) { return e.Detalle; }, 40]
+            ], l, 'xlsx', [['Filtro', qev.value || 'ninguno'], ['Generado por', AP.Session.user.nombre], ['Fecha', U.fDateTime(new Date())]]);
+          })), eventosBox);
         pintar();
       } catch (e) { content.replaceChildren(errBox(e)); }
     }
@@ -80,15 +92,26 @@
       return U.fDateTime(ev.InicioTurno || ev.FechaHora) + ' a ' + U.fTime(ev.FechaHora);
     }
 
+    function usuariosFiltrados() {
+      var act = datos.vig.filter(function (v) { return v.Activo !== false; }), baja = datos.vig.filter(function (v) { return v.Activo === false; });
+      return (filtro === 'Activos' ? act : filtro === 'De baja' ? baja : datos.vig).filter(function (v) { return AP.coincide(v, q.value, ['Title', 'Usuario', 'NumDoc', 'Empresa', 'Cargo', 'Rol']); })
+        .sort(function (a, b) { return String(a.Title).localeCompare(String(b.Title), 'es'); });
+    }
+    function eventosFiltrados() { return datos.turnos.filter(function (e) { return AP.coincide(e, qev.value, ['Evento', 'Title', 'VigilanteUsuario', 'Rol', 'Dispositivo', 'Detalle']); }); }
+    function pintarEventos() {
+      eventosBox.replaceChildren(tabla([
+        ['Fecha', function (e) { return U.fDateTime(e.FechaHora); }], ['Evento', function (e) { return AP.pill(e.Evento, EVENTO_KIND[e.Evento] || ''); }],
+        ['Nombre', function (e) { return e.Title; }], ['Usuario', function (e) { return e.VigilanteUsuario; }],
+        ['Registros', function (e) { return e.Registros == null ? '' : String(e.Registros); }], ['Dispositivo', function (e) { return e.Dispositivo; }],
+        ['Detalle', function (e) { return e.Detalle; }]
+      ], eventosFiltrados().slice(0, 200)));
+    }
     function pintar() {
       var act = datos.vig.filter(function (v) { return v.Activo !== false; }), baja = datos.vig.filter(function (v) { return v.Activo === false; });
       chips.replaceChildren.apply(chips, [['Activos', act.length], ['De baja', baja.length], ['Todos', datos.vig.length]].map(function (c) {
         return h('a', { class: 'chip ' + (c[0] === filtro ? 'on' : ''), href: '#/consola/vigilantes?f=' + encodeURIComponent(c[0]) }, c[0] + ' (' + c[1] + ')');
       }));
-      var t = U.fold(q.value);
-      var rows = (filtro === 'Activos' ? act : filtro === 'De baja' ? baja : datos.vig).filter(function (v) {
-        return !t || U.fold([v.Title, v.Usuario, v.NumDoc, v.Empresa, v.Cargo, v.Rol].join(' ')).indexOf(t) >= 0;
-      }).sort(function (a, b) { return String(a.Title).localeCompare(String(b.Title), 'es'); });
+      var rows = usuariosFiltrados();
       tablaBox.replaceChildren(tabla([
         ['Usuario', function (v) { return h('code', null, v.Usuario); }], ['Nombre', function (v) { return v.Title; }],
         ['Documento', function (v) { return [v.TipoDoc, v.NumDoc].filter(Boolean).join(' '); }], ['Empresa', function (v) { return v.Empresa; }],
@@ -97,13 +120,7 @@
         ['Último turno', ultimoTurno],
         ['', function (v) { return h('button', { class: 'btn small', type: 'button', onclick: function () { detalle(v); } }, 'Ver'); }]
       ], rows, detalle));
-      var evs = datos.turnos.slice(0, 80);
-      eventosBox.replaceChildren(tabla([
-        ['Fecha', function (e) { return U.fDateTime(e.FechaHora); }], ['Evento', function (e) { return AP.pill(e.Evento, EVENTO_KIND[e.Evento] || ''); }],
-        ['Nombre', function (e) { return e.Title; }], ['Usuario', function (e) { return e.VigilanteUsuario; }],
-        ['Registros', function (e) { return e.Registros == null ? '' : String(e.Registros); }], ['Dispositivo', function (e) { return e.Dispositivo; }],
-        ['Detalle', function (e) { return e.Detalle; }]
-      ], evs));
+      pintarEventos();
     }
 
     // ---------- Ficha del usuario ----------
@@ -346,7 +363,7 @@
         ['Solicitado por', function (v) { return v.SolicitadoPor; }, 26], ['Soporte', function (v) { return v.Soporte; }, 26],
         ['Baja', function (v) { return U.fDateTime(v.FechaBaja); }, 18], ['Motivo de la baja', function (v) { return v.MotivoBaja; }, 36]
       ];
-      AP.exportar('Usuarios_control_acceso', COLS, datos.vig, 'xlsx', [['Generado por', AP.Session.user.nombre + ' (' + me() + ')'], ['Fecha', U.fDateTime(new Date())],
+      AP.exportar('Usuarios_control_acceso', COLS, usuariosFiltrados(), 'xlsx', [['Vista', filtro], ['Filtro', q.value || 'ninguno'], ['Generado por', AP.Session.user.nombre + ' (' + me() + ')'], ['Fecha', U.fDateTime(new Date())],
         ['Nota', 'Las claves no se exportan ni pueden consultarse: las custodia el servicio de autenticación de Google (Firebase).']]);
     }
 

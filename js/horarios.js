@@ -92,6 +92,12 @@
       return { nivel: 'ok', etiqueta: 'INGRESO AUTORIZADO — ' + perm.Tipo.toUpperCase(), detalle: 'Permiso vigente hasta las ' + hm(perm.Hasta) + (perm.AutorizadoPor ? ' (autoriza ' + perm.AutorizadoPor + ')' : '') + '.', permisoId: perm.id || perm.IdLocal, horarioInfo: info };
     }
     if (!j) {
+      // Contratistas: en un día que no les fue programado el vigilante no puede autorizar; decide el Director
+      if (p.Tipo === 'Contratista') {
+        return { nivel: 'deny', sinExcepcion: true, aprobacionDirector: true, tipoSolicitud: 'Día no programado', novedad: 'Ingreso en día no programado',
+          etiqueta: 'DÍA NO PROGRAMADO — REQUIERE APROBACIÓN DEL DIRECTOR',
+          detalle: 'El contratista no tiene turno programado para hoy. El vigilante no puede autorizar el ingreso: envíe la solicitud al Director de Seguridad Integral, que decide.', horarioInfo: '' };
+      }
       return { nivel: 'warn', registrable: true, novedad: 'Ingreso en día no programado', etiqueta: 'DÍA NO PROGRAMADO — INGRESO PENDIENTE',
         detalle: 'No tiene turno programado para hoy. Puede registrarse el ingreso, que queda pendiente de verificación por el Director de Seguridad Integral.', horarioInfo: '' };
     }
@@ -107,8 +113,8 @@
     // Minutos que faltan para la hora de entrada (por minuto de reloj, igual que la llegada tardía)
     var ant = Math.floor(j.start.getTime() / 60000) - Math.floor(now.getTime() / 60000);
     if (now > j.end) {
-      return { nivel: 'deny', sinExcepcion: true, novedad: 'Ingreso denegado: fuera de turno', etiqueta: 'INGRESO DENEGADO — FUERA DE SU TURNO',
-        detalle: 'Su turno era ' + info + ' y ya terminó. Comuníquese con el Director de Seguridad Integral, que debe verificar y, si procede, registrar el permiso.', horarioInfo: info };
+      return { nivel: 'deny', sinExcepcion: true, aprobacionDirector: true, tipoSolicitud: 'Fuera de turno', novedad: 'Ingreso fuera de turno', etiqueta: 'FUERA DE SU TURNO — REQUIERE APROBACIÓN DEL DIRECTOR',
+        detalle: 'Su turno era ' + info + ' y ya terminó. Envíe la solicitud al Director de Seguridad Integral, que aprueba o rechaza el ingreso.', horarioInfo: info };
     }
     if (delta <= 0) {
       // Antes de la ventana habilitada (por defecto, 30 min antes de la entrada): alerta de llegada muy temprano
@@ -123,8 +129,9 @@
       return { nivel: 'warn', registrable: true, novedad: 'Ingreso tardío (' + delta + ' min)', etiqueta: 'INGRESO PENDIENTE — LLEGÓ ' + delta + ' MIN TARDE',
         detalle: 'Turno ' + info + '. Se registra el ingreso y queda pendiente de verificación por el Director de Seguridad Integral.', horarioInfo: info };
     }
-    return { nivel: 'deny', sinExcepcion: true, novedad: 'Ingreso denegado: llegada tardía (' + delta + ' min)', etiqueta: 'INGRESO DENEGADO — LLEGADA TARDÍA (' + delta + ' MIN)',
-      detalle: 'Turno ' + info + '. El ingreso queda denegado hasta que el Director de Seguridad Integral verifique. Repórtele la novedad.', horarioInfo: info };
+    return { nivel: 'deny', sinExcepcion: true, aprobacionDirector: true, tipoSolicitud: 'Llegada tardía', novedad: 'Llegada tardía (' + delta + ' min)',
+      etiqueta: 'LLEGADA TARDÍA (' + delta + ' MIN) — REQUIERE APROBACIÓN DEL DIRECTOR',
+      detalle: 'Turno ' + info + '. El vigilante no puede autorizar este ingreso: envíe la solicitud al Director de Seguridad Integral, que lo aprueba o lo rechaza.', horarioInfo: info };
   };
 
   // Evalúa la SALIDA. Sin horarios: salida normal.

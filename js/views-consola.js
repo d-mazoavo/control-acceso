@@ -103,9 +103,11 @@
         B.listRange('AP_Movimientos', 'FechaHora', U.addDays(hoy0, -6), null),
         B.listRange('AP_Visitas', 'FechaFin', U.addDays(hoy0, -1), null),
         B.listAll('AP_Personas', { exclude: ['Foto', 'Observaciones'] }),
-        B.listRange('AP_Inspecciones', 'FechaHora', hoy0, null).catch(function () { return []; })
+        B.listRange('AP_Inspecciones', 'FechaHora', hoy0, null).catch(function () { return []; }),
+        AP.Session.can('admin') ? B.listRange('AP_Rondas', 'FechaHora', hoy0, null).catch(function () { return []; }) : Promise.resolve([]),
+        AP.Session.can('admin') ? AP.Sync.pullSolicitudes().catch(function () { return AP.Sync.solicitudes || []; }) : Promise.resolve([])
       ]);
-      var movs = res[0], vis = res[1], pers = res[2], insp = res[3];
+      var movs = res[0], vis = res[1], pers = res[2], insp = res[3], rondas = res[4], solic = res[5];
       // Se combinan los registros de este dispositivo que aún no se han enviado
       var seen = new Set(movs.map(function (m) { return m.IdLocal; }));
       AP.Sync.outbox.forEach(function (o) { if (o.kind === 'mov' && !seen.has(o.fields.IdLocal)) movs.push(Object.assign({ _pendiente: true }, o.fields)); });
@@ -152,6 +154,12 @@
         alertas.push(['badge', 'warn', 'Visita de autoridad: ' + [m.Empresa, m.Title].filter(Boolean).join(' — ') + (m.Area ? ' (' + m.Area + ')' : '') + ', ingresó a las ' + U.fTime(m.FechaHora) + (m.Vigilante ? ', registró ' + m.Vigilante : '') + '. Diligencie el formato AP-SG-FT-002.']);
       });
       nc.forEach(function (i) { alertas.push(['truck', 'deny', 'Inspección NO CONFORME: ' + i.Placa + ' (' + U.fTime(i.FechaHora) + '). ' + (i.NoConformidades || '')]); });
+      solic.filter(function (x) { return x.Estado === 'Pendiente'; }).forEach(function (x) {
+        alertas.unshift(['inbox', 'deny', 'Solicitud de ingreso esperando su decisión desde las ' + U.fTime(x.FechaSolicitud) + ': ' + x.Title + ' — ' + (x.Novedad || x.Tipo) + '. Decida en Solicitudes de ingreso.']);
+      });
+      rondas.filter(function (x) { return x.Novedad; }).forEach(function (x) {
+        alertas.push(['route', 'warn', 'Novedad de ronda en ' + x.Title + ' (' + U.fTime(x.FechaHora) + '): ' + [x.TipoNovedad, x.Descripcion].filter(Boolean).join(' — ') + (x.Rondero ? '. Reportó ' + x.Rondero : '') + '.']);
+      });
       pend.forEach(function (v) {
         alertas.push(v.Origen === 'Portería'
           ? ['user', 'warn', 'Visitante no anunciado esperando en portería desde las ' + U.fTime(v.FechaSolicitud || v.FechaInicio) + ': ' + v.Title + '. Apruebe o rechace en Visitas.']
@@ -163,12 +171,28 @@
         if (onclick) attrs.onclick = onclick;
         return h(href ? 'a' : 'div', attrs, AP.icon(icon, 22), h('strong', null, String(n)), h('span', null, l));
       };
+      // Lista del panel con búsqueda y descarga en Excel de lo filtrado
       function modalLista(titulo, cols, filas, vacia) {
-        AP.modal({ title: titulo, size: 'wide', body: filas.length
-          ? h('div', { class: 'tbl-scroll' }, h('table', { class: 'tbl' },
+        AP.modal({ title: titulo, size: 'wide', body: function () {
+          if (!filas.length) return h('p', { class: 'muted center' }, vacia || 'Sin registros.');
+          var tbox = h('div');
+          var q = AP.buscador('Buscar en la lista', pintarM);
+          function filtradas() { return filas.filter(function (r) { return AP.coincide(r, q.value, cols.map(function (c) { return c[1]; })); }); }
+          function pintarM() {
+            var l = filtradas();
+            tbox.replaceChildren(l.length ? h('div', { class: 'tbl-scroll' }, h('table', { class: 'tbl' },
               h('thead', null, h('tr', null, cols.map(function (c) { return h('th', null, c[0]); }))),
-              h('tbody', null, filas.map(function (r) { return h('tr', null, cols.map(function (c) { var v = c[1](r); return h('td', { 'data-label': c[0] }, v == null ? '' : v); })); }))))
-          : h('p', { class: 'muted center' }, vacia || 'Sin registros.') });
+              h('tbody', null, l.map(function (r) { return h('tr', null, cols.map(function (c) { var v = c[1](r); return h('td', { 'data-label': c[0] }, v == null ? '' : v); })); }))))
+              : h('p', { class: 'muted center' }, 'Ningún registro coincide con la búsqueda.'));
+          }
+          pintarM();
+          return h('div', { class: 'stack' }, h('div', { class: 'filters' }, q, AP.btnExcel(function () {
+            var l = filtradas();
+            if (!l.length) return AP.toast('No hay registros con el filtro actual.', 'warn');
+            exportar(titulo.replace(/\s*\(\d+\)$/, ''), cols.map(function (c) { return [c[0], c[1], 22]; }), l, 'xlsx',
+              [['Lista', titulo], ['Filtro', q.value || 'ninguno'], ['Generado por', AP.Session.user.nombre], ['Fecha', U.fDateTime(new Date())]]);
+          })), tbox);
+        } });
       }
       var cats = {};
       dentro.forEach(function (m) { var c = m.Categoria || 'Otro'; cats[c] = (cats[c] || 0) + 1; });
@@ -250,6 +274,16 @@
               ['Inspector', function (i) { return i.Inspector; }]
             ], insp, 'Sin inspecciones registradas hoy.');
           }),
+          AP.Session.can('admin') ? kpi(solic.filter(function (x) { return x.Estado === 'Pendiente'; }).length, 'Ingresos por decidir', 'inbox', solic.some(function (x) { return x.Estado === 'Pendiente'; }) ? 'deny' : '', '/consola/solicitudes') : null,
+          AP.Session.can('admin') ? kpi(rondas.length, 'Marcaciones de ronda hoy', 'route', rondas.some(function (x) { return x.Novedad; }) ? 'warn' : '', null, function () {
+            modalLista('Marcaciones de ronda de hoy (' + rondas.length + ')', [
+              ['Hora', function (x) { return U.fTime(x.FechaHora); }],
+              ['Punto', function (x) { return x.Title; }],
+              ['Rondero', function (x) { return x.Rondero; }],
+              ['Lectura', function (x) { return x.Origen; }],
+              ['Novedad', function (x) { return x.Novedad ? [x.TipoNovedad, x.Descripcion].filter(Boolean).join(' — ') : 'Sin novedad'; }]
+            ], rondas.slice().sort(function (a, b) { return a.FechaHora < b.FechaHora ? 1 : -1; }), 'Sin marcaciones de ronda hoy.');
+          }) : null,
           kpi(pers.filter(function (p) { return p.Estado === 'Habilitado'; }).length, 'Personas habilitadas', 'badge', '', '/consola/personas')),
         h('div', { class: 'grid-2' },
           h('section', { class: 'card' }, h('h3', null, 'Alertas'),
@@ -258,7 +292,8 @@
           h('section', { class: 'card' }, h('h3', null, 'Dentro de las instalaciones'),
             Object.keys(cats).length ? h('ul', { class: 'cats' }, Object.keys(cats).map(function (c) { return h('li', null, h('span', null, c), h('strong', null, String(cats[c]))); })) : h('p', { class: 'muted' }, 'Nadie registrado dentro.'),
             h('h3', { class: 'mt' }, 'Ingresos por hora (hoy)'), chart)),
-        h('section', { class: 'card' }, h('h3', null, 'Actividad reciente'),
+        h('section', { class: 'card' }, h('div', { class: 'row between wrap gap' }, h('h3', null, 'Actividad reciente'),
+          h('a', { class: 'btn small', href: '#/consola/historial' }, AP.icon('search', 16), 'Buscar y descargar en Ingresos y salidas')),
           table([
             { label: 'Hora', render: function (m) { return U.fDateTime(m.FechaHora); } },
             { label: 'Nombre', key: 'Title' },
@@ -484,7 +519,12 @@
               h('td', { 'data-label': 'Origen' }, v.Origen === 'Portería' ? 'No anunciado (portería)' : 'Prerregistro'), h('td', { 'data-label': 'Estado' }, AP.estadoPill(v.Estado)));
           }))))
           : AP.empty('user', 'Sin visitas vinculadas', 'En los últimos 90 días no hay visitas en las que este colaborador figure como anfitrión.');
-        m.el.querySelector('.modal-body').replaceChildren(h('p', { class: 'muted small' }, 'Últimos 90 días · ' + l.length + ' visita(s).'), cuerpo);
+        m.el.querySelector('.modal-body').replaceChildren(h('div', { class: 'row between wrap gap' }, h('p', { class: 'muted small' }, 'Últimos 90 días · ' + l.length + ' visita(s).'),
+          l.length ? AP.btnExcel(function () {
+            exportar('Visitas_recibidas_' + p.Title, [['Fecha', function (v) { return U.toDate(v.FechaInicio); }, 17], ['Visitante', function (v) { return v.Title; }, 30], ['Documento', function (v) { return v.NumDoc; }, 15],
+              ['Empresa', function (v) { return v.Empresa; }, 26], ['Motivo', function (v) { return v.Motivo; }, 34], ['Origen', function (v) { return v.Origen === 'Portería' ? 'No anunciado (portería)' : 'Prerregistro'; }, 20], ['Estado', function (v) { return v.Estado; }, 12]],
+              l, 'xlsx', [['Anfitrión', p.Title + ' (' + (p.NumDoc || '') + ')'], ['Periodo', 'Últimos 90 días'], ['Generado por', AP.Session.user.nombre], ['Fecha', U.fDateTime(new Date())]]);
+          }) : null), cuerpo);
       } catch (e) { m.el.querySelector('.modal-body').replaceChildren(h('p', { class: 'note' }, e.message)); }
     }
 
@@ -655,8 +695,12 @@
     x.fillStyle = '#ffffff'; x.fillRect(0, 0, W, H);
     x.fillStyle = '#587e50'; x.fillRect(0, 0, W, 150);
     try {
+      // Logo completo y proporcional dentro de la franja verde (sin recortes)
       var logo = await new Promise(function (res, rej) { var i = new Image(); i.onload = function () { res(i); }; i.onerror = rej; i.src = 'img/logo-avo.png'; });
-      var lw = 200, lh = lw * logo.height / logo.width; x.drawImage(logo, 36, (150 - lh) / 2, lw, lh);
+      var caja = 122, k = Math.min(caja / logo.width, caja / logo.height), lw = logo.width * k, lh = logo.height * k;
+      x.fillStyle = '#ffffff';
+      if (x.roundRect) { x.beginPath(); x.roundRect(30, 14, caja, caja, 12); x.fill(); } else x.fillRect(30, 14, caja, caja);
+      x.drawImage(logo, 30 + (caja - lw) / 2, 14 + (caja - lh) / 2, lw, lh);
     } catch (e) { /* sin logo */ }
     x.fillStyle = '#ffffff'; x.font = '700 30px system-ui, Arial'; x.textAlign = 'right';
     x.fillText(o.titulo.toUpperCase(), W - 36, 86);

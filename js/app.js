@@ -6,7 +6,7 @@
   AP.CFG = window.AP_CONFIG || {};
   AP.TX = window.AP_TEXTOS || {};
   AP.State = {};
-  AP.VERSION = '2.3.0';
+  AP.VERSION = '1.0.0';
 
   var Session = (AP.Session = { user: null, rol: null, perms: {}, turno: null, dispositivo: false });
 
@@ -59,6 +59,8 @@
     if (Session.user.perfil && Session.user.perfil.PinTemporal) return AP.Views.claveObligatoria();
     if (Session.dispositivo && !Session.turno) return AP.Views.pin();
     var path = r.path;
+    // El rondero solo usa las pantallas de rondas
+    if (Session.can('rondas') && !Session.can('porteria') && path.indexOf('/ronda') !== 0) path = '/rondas';
     if (path === '/' || path === '') path = Session.can('consola') && !U.isMobile() ? '/consola/panel' : '/porteria';
     var fn = routes[path];
     if (!fn) { var k = Object.keys(routes).find(function (p) { return p.slice(-1) === '*' && path.indexOf(p.slice(0, -1)) === 0; }); fn = k && routes[k]; }
@@ -109,6 +111,7 @@
     ['/consola/panel', 'chart', 'Panel'],
     ['/consola/personas', 'users', 'Personas'],
     ['/consola/visitas', 'user', 'Visitas'],
+    ['/consola/solicitudes', 'inbox', 'Solicitudes de ingreso', 'admin'],
     ['/consola/historial', 'history', 'Ingresos y salidas'],
     ['/consola/inspecciones', 'truck', 'Inspecciones'],
     ['/consola/horarios', 'clock', 'Horarios', 'admin'],
@@ -116,6 +119,8 @@
     ['/consola/novedades', 'alert', 'Novedades', 'admin'],
     ['/consola/vigilantes', 'badge', 'Usuarios', 'admin'],
     ['/consola/elementos', 'package', 'Elementos', 'admin'],
+    ['/consola/rondas', 'route', 'Rondas', 'admin'],
+    ['/consola/programacion', 'calendar', 'Programación', 'admin'],
     ['/consola/bitacora', 'file', 'Bitácora', 'admin'],
     ['/consola/instalacion', 'settings', 'Instalación', 'admin'],
     ['/consola/notificaciones', 'bell', 'Notificaciones', 'admin']
@@ -124,7 +129,8 @@
     var nav = h('nav', { class: 'side', 'aria-label': 'Consola' },
       h('div', { class: 'side-brand' }, h('img', { src: 'img/logo-avo.png', alt: 'Avo Pak' }), h('div', null, h('strong', null, 'Control de Acceso'), h('small', null, 'Dirección de Seguridad Integral'))),
       NAV.filter(function (n) { return !n[3] || Session.can(n[3]); }).map(function (n) {
-        var badge = n[0] === '/consola/visitas' ? h('b', { class: 'nav-badge', title: 'Visitas por aprobar' }, AP.visitasPorAprobar().length || '') : null;
+        var badge = n[0] === '/consola/visitas' ? h('b', { class: 'nav-badge', title: 'Visitas por aprobar', dataset: { k: 'vis' } }, AP.visitasPorAprobar().length || '')
+          : n[0] === '/consola/solicitudes' ? h('b', { class: 'nav-badge', title: 'Solicitudes de ingreso por decidir', dataset: { k: 'sol' } }, (AP.solicitudesPendientes ? AP.solicitudesPendientes().length : 0) || '') : null;
         return h('a', { href: '#' + n[0], class: active === n[0] ? 'on' : '' }, AP.icon(n[1], 19), h('span', null, n[2]), badge);
       }),
       h('div', { class: 'side-foot' },
@@ -149,7 +155,7 @@
   function avisarVisitas() {
     if (!Session.user || !Session.can('consola')) return;
     var pend = AP.visitasPorAprobar();
-    document.querySelectorAll('.nav-badge').forEach(function (b) { b.textContent = pend.length || ''; });
+    document.querySelectorAll('.nav-badge[data-k="vis"]').forEach(function (b) { b.textContent = pend.length || ''; });
     var port = pend.filter(function (v) { return v.Origen === 'Portería'; });
     if (avisadas === null) {
       avisadas = new Set(port.map(function (v) { return v.id; }));
@@ -161,6 +167,25 @@
       U.beep('warn');
       AP.toast('Visitante no anunciado en portería: ' + v.Title + (v.Anfitrion ? ' (visita a ' + v.Anfitrion + ')' : '') + '. Apruébelo o recháselo en Visitas.', 'warn', 12000);
       if (AP.Notif && AP.Notif.aviso) AP.Notif.aviso('Visita por aprobar — ' + v.Title, (v.Empresa ? v.Empresa + ' · ' : '') + 'Visita a ' + (v.Anfitrion || '—') + ' · registró ' + (v.SolicitadoPorNombre || v.SolicitadoPor || ''), 'vis-' + v.id);
+    });
+  }
+
+  // ---------- Solicitudes de ingreso por decidir (aviso al Director) ----------
+  var solAvisadas = null;
+  function avisarSolicitudes() {
+    if (!Session.user || !Session.can('admin') || !AP.solicitudesPendientes) return;
+    var pend = AP.solicitudesPendientes();
+    document.querySelectorAll('.nav-badge[data-k="sol"]').forEach(function (b) { b.textContent = pend.length || ''; });
+    if (solAvisadas === null) {
+      solAvisadas = new Set(pend.map(function (x) { return x.id; }));
+      if (pend.length) AP.toast(pend.length === 1 ? 'Hay una solicitud de ingreso esperando su decisión en portería.' : 'Hay ' + pend.length + ' solicitudes de ingreso esperando su decisión en portería.', 'warn', 8000);
+      return;
+    }
+    pend.filter(function (x) { return !solAvisadas.has(x.id); }).forEach(function (x) {
+      solAvisadas.add(x.id);
+      U.beep('warn');
+      AP.toast('Solicitud de ingreso en portería: ' + x.Title + ' — ' + (x.Novedad || x.Tipo) + '. Decida en Solicitudes de ingreso.', 'warn', 12000);
+      if (AP.Notif && AP.Notif.aviso) AP.Notif.aviso('Ingreso por decidir — ' + x.Title, (x.Novedad || x.Tipo) + ' · registró ' + (x.SolicitadoPorNombre || ''), 'sol-' + x.id);
     });
   }
 
@@ -355,7 +380,12 @@
       AP.Sync.on(function () { if (Session.user && !Session.rol && Session.resolveRole()) render(); });
       AP.Sync.on(U.debounce(vigilarTurno, 500));
       AP.Sync.on(U.debounce(avisarVisitas, 400));
+      AP.Sync.on(U.debounce(avisarSolicitudes, 450));
       setInterval(vigilarTurno, 60000);
+      // El Director recibe las solicitudes de ingreso de portería en menos de 30 segundos
+      setInterval(function () {
+        if (Session.user && Session.can('admin') && navigator.onLine !== false) AP.Sync.pullSolicitudes().then(avisarSolicitudes).catch(function () { /* se reintenta */ });
+      }, 30000);
     }
   }
   var saliendo = false;
@@ -372,7 +402,7 @@
     render();
   }
   AP.startSession = startSession;
-  AP.endSession = function () { avisadas = null; Session.user = null; Session.rol = null; Session.perms = {}; Session.turno = null; Session.dispositivo = false; };
+  AP.endSession = function () { avisadas = null; solAvisadas = null; Session.user = null; Session.rol = null; Session.perms = {}; Session.turno = null; Session.dispositivo = false; };
 
   function registerSW() {
     if (!('serviceWorker' in navigator)) return;

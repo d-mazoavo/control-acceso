@@ -45,7 +45,8 @@
         ['AutorizacionConfirmada', 'bool'], ['CarneEntregado', 'text'], ['DocumentoCustodia', 'bool'],
         ['CarneDevuelto', 'bool'], ['DatosAdicionales', 'note'], ['FechaHora', 'datetime', IDX], ['Vigilante', 'text'],
         ['VigilanteCorreo', 'text'], ['VigilanteUsuario', 'text'], ['TurnoId', 'text'], ['Dispositivo', 'text'], ['SinConexion', 'bool'],
-        ['DesfaseReloj', 'number'], ['Porteria', 'text'], ['EntradaId', 'text'], ['InspeccionId', 'text'], ['Novedad', 'text', IDX], ['PermisoId', 'text'], ['HorarioInfo', 'text'], ['Hash', 'text'], ['Observaciones', 'note']
+        ['DesfaseReloj', 'number'], ['Porteria', 'text'], ['EntradaId', 'text'], ['InspeccionId', 'text'], ['Novedad', 'text', IDX], ['PermisoId', 'text'], ['HorarioInfo', 'text'], ['Hash', 'text'], ['Observaciones', 'note'],
+        ['SolicitudId', 'text'], ['InduccionConfirmada', 'bool']
       ]
     },
     AP_Inspecciones: {
@@ -92,7 +93,43 @@
       desc: 'Permisos de ingreso tardío, salida anticipada o temporal y autorizaciones especiales',
       cols: [
         ['Token', 'text', IDX], ['NumDoc', 'text', IDX], ['Tipo', 'text'], ['Desde', 'datetime', IDX], ['Hasta', 'datetime', IDX],
-        ['Estado', 'text'], ['Detalle', 'note'], ['AutorizadoPor', 'text'], ['AnuladoPor', 'text'], ['MotivoAnulacion', 'text']
+        ['Estado', 'text'], ['Detalle', 'note'], ['AutorizadoPor', 'text'], ['AnuladoPor', 'text'], ['MotivoAnulacion', 'text'],
+        // Quién autoriza, elegido de la lista de personas registradas
+        ['AutorizadoPorId', 'text'], ['AutorizadoPorDoc', 'text'], ['AutorizadoPorCargo', 'text'], ['SolicitudId', 'text']
+      ]
+    },
+    AP_Solicitudes: {
+      titulo: 'Nombre de la persona',
+      desc: 'Ingresos que el vigilante no puede autorizar (llegada tardía, fuera de turno, día no programado): decide el Director de Seguridad Integral',
+      cols: [
+        ['Token', 'text', IDX], ['Tipo', 'text'], ['PersonaTipo', 'text'], ['TipoDoc', 'text'], ['NumDoc', 'text', IDX], ['Empresa', 'text'],
+        ['Cargo', 'text'], ['Area', 'text'], ['Novedad', 'text'], ['HorarioInfo', 'text'], ['Origen', 'text'], ['Estado', 'text', IDX],
+        ['Porteria', 'text'], ['SolicitadoPor', 'text'], ['SolicitadoPorNombre', 'text'], ['FechaSolicitud', 'datetime', IDX],
+        ['DecididoPor', 'text'], ['DecididoPorNombre', 'text'], ['FechaDecision', 'datetime'], ['Justificacion', 'note'],
+        ['PermisoId', 'text'], ['VigenteHasta', 'datetime'], ['Observaciones', 'note']
+      ]
+    },
+    AP_PuntosRonda: {
+      titulo: 'Nombre del punto',
+      desc: 'Puntos de control de las rondas (cada uno con su código QR fijo en sitio)',
+      cols: [
+        ['Codigo', 'text', UNQ], ['Ubicacion', 'text'], ['Instrucciones', 'note'], ['Orden', 'number'], ['Activo', 'bool']
+      ]
+    },
+    AP_Rondas: {
+      titulo: 'Punto de control',
+      desc: 'Marcaciones de los ronderos en los puntos de control, con novedades y fotografías (no se edita ni se borra)',
+      cols: [
+        ['IdLocal', 'text', UNQ], ['PuntoId', 'text', IDX], ['Codigo', 'text'], ['Origen', 'text'], ['FechaHora', 'datetime', IDX],
+        ['Rondero', 'text'], ['RonderoUsuario', 'text'], ['TurnoId', 'text'], ['Dispositivo', 'text'], ['SinConexion', 'bool'],
+        ['Novedad', 'bool'], ['TipoNovedad', 'text'], ['Descripcion', 'note'], ['Justificacion', 'note'], ['Fotos', 'note'], ['Hash', 'text']
+      ]
+    },
+    AP_Programacion: {
+      titulo: 'Programación',
+      desc: 'Programación mensual del servicio de vigilancia y rondas (día, noche, descanso) reportada por la empresa contratista',
+      cols: [
+        ['Mes', 'text', UNQ], ['Datos', 'note'], ['HorarioDia', 'text'], ['HorarioNoche', 'text'], ['Soporte', 'text'], ['Observaciones', 'note']
       ]
     },
     AP_Verificaciones: {
@@ -116,7 +153,8 @@
         ['Sentido', 'text', IDX], ['Estado', 'text', IDX], ['FechaPrevista', 'datetime', IDX], ['AutorizadoPor', 'text'],
         ['Items', 'note'], ['Fotos', 'note'],
         ['Vigilante', 'text'], ['VigilanteUsuario', 'text'], ['FechaConfirmacion', 'datetime'], ['NotaPorteria', 'note'],
-        ['Observaciones', 'note'], ['CreadoPor', 'text'], ['FechaCreacion', 'datetime', IDX]
+        ['Observaciones', 'note'], ['CreadoPor', 'text'], ['FechaCreacion', 'datetime', IDX],
+        ['AutorizadoPorId', 'text'], ['AutorizadoPorDoc', 'text'], ['AutorizadoPorCargo', 'text']
       ]
     }
   };
@@ -125,8 +163,8 @@
     tiposPersona: ['Personal propio', 'Personal de finca', 'Contratista', 'Conductor / transportador'],
     tiposDoc: ['CC', 'CE', 'PA', 'PPT', 'TI', 'NIT', 'Otro'],
     vehiculos: ['', 'Automóvil', 'Camioneta', 'Motocicleta', 'Bicicleta', 'Camión', 'Tractocamión', 'Furgón', 'Otro'],
-    roles: ['Administrador', 'Analista', 'Supervisor', 'Vigilante'],
-    rolesPin: ['Vigilante', 'Supervisor'],
+    roles: ['Administrador', 'Analista', 'Supervisor', 'Vigilante', 'Rondero'],
+    rolesPin: ['Vigilante', 'Supervisor', 'Rondero'],
     motivosBaja: ['Retiro del servicio informado por el contratista', 'Cambio de puesto o rotación informado por el contratista',
       'Terminación del contrato de vigilancia', 'Retiro o cambio de cargo del trabajador de Avo Pak', 'Credencial comprometida (PIN conocido por terceros)', 'Otro'],
     estadosVisita: ['Pendiente', 'Aprobada', 'Rechazada', 'Cancelada'],
@@ -151,15 +189,24 @@
     resultadosVerificacion: ['Justificada', 'No justificada', 'Pendiente de soporte'],
     operacionesCarga: ['Ingreso de vehículo de carga', 'Salida / despacho con carga', 'Salida en vacío', 'Ingreso de contenedor vacío'],
     sentidosElemento: ['Ingreso', 'Salida'],
-    estadosElemento: ['Pendiente', 'Confirmado', 'Rechazado', 'Cancelado']
+    estadosElemento: ['Pendiente', 'Confirmado', 'Rechazado', 'Cancelado'],
+    estadosSolicitud: ['Pendiente', 'Aprobada', 'Rechazada', 'Cancelada'],
+    tiposNovedadRonda: ['Puerta, ventana o acceso abierto', 'Persona sospechosa', 'Objeto o paquete sospechoso', 'Cerramiento o perímetro vulnerado',
+      'Daño en infraestructura o equipos', 'Iluminación deficiente', 'Fuga, derrame o goteo', 'Riesgo de incendio o eléctrico',
+      'Condición insegura', 'Animal o plaga', 'Otra'],
+    // Programación del servicio: D = día, N = noche, X = descanso
+    turnosProg: [['D', 'Día'], ['N', 'Noche'], ['X', 'Descanso']],
+    rolesProgramables: ['Vigilante', 'Supervisor', 'Rondero']
   };
 
   AP.ROLES = {
     Administrador: { consola: true, porteria: true, admin: true },
     Analista: { consola: true, porteria: true, admin: false },
     Supervisor: { consola: false, porteria: true, historial: true },
-    Vigilante: { consola: false, porteria: true }
+    Vigilante: { consola: false, porteria: true },
+    // El rondero solo marca los puntos de control de la ronda: no ve personas, visitas ni movimientos
+    Rondero: { consola: false, porteria: false, rondas: true }
   };
-  // Roles que operan la portería por turnos (abren turno al ingresar y lo cierran al salir)
-  AP.ROLES_TURNO = ['Vigilante', 'Supervisor'];
+  // Roles que trabajan por turnos (abren turno al ingresar y lo cierran al salir; ingresan con PIN)
+  AP.ROLES_TURNO = ['Vigilante', 'Supervisor', 'Rondero'];
 })();

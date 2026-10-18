@@ -23,7 +23,7 @@
   var LIMITE_CONSULTA = 5000;     // registros máximos de una consulta histórica (protege la cuota gratuita)
   var DIAS_COPIA = 120;           // días de historial que la consola conserva en su copia local
   // Colecciones cuyo identificador es el IdLocal generado en el celular: un reintento nunca duplica el registro.
-  var POR_IDLOCAL = { AP_Movimientos: 1, AP_Inspecciones: 1, AP_Turnos: 1, AP_Verificaciones: 1 };
+  var POR_IDLOCAL = { AP_Movimientos: 1, AP_Inspecciones: 1, AP_Turnos: 1, AP_Verificaciones: 1, AP_Rondas: 1 };
   // Campos pesados que se guardan aparte para no descargarlos en cada sincronización.
   var PESADOS = { AP_Personas: ['Foto'], AP_Visitas: ['Foto'] };
 
@@ -561,13 +561,18 @@
     },
 
     fileUrl: async function (relPath) {
+      var f = await FB.fileData(relPath);
+      return f ? URL.createObjectURL(new Blob([f.bytes], { type: f.type })) : '';
+    },
+    // Bytes de una fotografía guardada (para incluirla en informes de Word)
+    fileData: async function (relPath) {
       var s = await op(function () { return db.collection('AP_Archivos').doc(relPath.replace(/\//g, '|')).get({ source: 'server' }); });
-      if (!s.exists) return '';
+      if (!s.exists) return null;
       var d = s.data();
       var bin = atob(d.Datos || '');
       var arr = new Uint8Array(bin.length);
       for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-      return URL.createObjectURL(new Blob([arr], { type: d.Tipo || 'image/jpeg' }));
+      return { bytes: arr, type: d.Tipo || 'image/jpeg' };
     },
 
     // Sin servidor de correo: se comparte la imagen (WhatsApp, correo del celular) o se descarga y se abre el correo.

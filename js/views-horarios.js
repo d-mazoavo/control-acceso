@@ -22,7 +22,7 @@
     var l = await AP.B.listAll('AP_Personas', { exclude: ['Foto', 'Observaciones'] });
     return l.filter(function (p) { return p.Estado === 'Habilitado'; }).sort(function (a, b) { return U.fold(a.Title) < U.fold(b.Title) ? -1 : 1; });
   }
-  var RE_SALUD = /(diagn[oó]stic|enfermedad|c[aá]ncer|embaraz|psiqui|psicol|terapia|cirug|incapacidad m[eé]dica|v\.?i\.?h|medicament|tratamiento m[eé]dico)/i;
+  var RE_SALUD = /(diagn[oó]stic|enfermedad|c[aá]ncer|embaraz|psiqui|psicol|terapia|cirug|incapacidad|v\.?i\.?h|medicament|tratamiento|m[eé]dic[oa]|\beps\b|\bips\b|hospital|cl[ií]nica|urgencias|odontol|examen(es)? de laboratorio)/i;
 
   // =================== HORARIOS ===================
   AP.route('/consola/horarios', function () {
@@ -47,14 +47,26 @@
             ' minutos o más después, el ingreso queda DENEGADO hasta que usted verifique; entre 1 y ' + (AP.Horario.cfg().minutosPendiente - 1) + ' minutos queda PENDIENTE. ' +
             'La salida antes de la hora de fin exige un permiso suyo; sin él se muestra como NO AUTORIZADA (sin retención física). Las personas sin horario registrado no tienen estas reglas.')),
           sin.length ? h('div', { class: 'banner warn' }, AP.icon('alert', 18), h('span', null, sin.length + ' persona(s) habilitada(s) sin horario registrado (' + sin.slice(0, 4).map(function (p) { return p.Title; }).join(', ') + (sin.length > 4 ? '…' : '') + '). Las reglas de puntualidad y salida no se les aplican.')) : null,
-          h('div', { class: 'filters' }, q), box);
+          h('div', { class: 'filters' }, q, AP.btnExcel(function () {
+            var rows = filtrados();
+            if (!rows.length) return AP.toast('No hay horarios con el filtro actual.', 'warn');
+            AP.exportar('Horarios', [
+              ['Persona', function (x) { return x.Title; }, 30], ['Documento', function (x) { return x.NumDoc; }, 15], ['Área', function (x) { return x.Area; }, 18],
+              ['Turno', function (x) { return x.Turno; }, 18], ['Días', function (x) { return AP.Horario.nombreDias(x.Dias); }, 26],
+              ['Entrada', function (x) { return x.HoraEntrada; }, 9], ['Salida', function (x) { return x.HoraSalida; }, 9],
+              ['Vigente desde', function (x) { return x.VigenteDesde; }, 13], ['Vigente hasta', function (x) { return x.VigenteHasta; }, 13],
+              ['Estado', function (x) { return x.Activo === false ? 'Inactivo' : 'Activo'; }, 10], ['Observaciones', function (x) { return x.Observaciones; }, 30]
+            ], rows, 'xlsx', [['Filtro', q.value || 'ninguno'], ['Generado por', AP.Session.user.nombre], ['Fecha', U.fDateTime(new Date())]]);
+          })), box);
         pintar();
       } catch (e) { content.replaceChildren(errBox(e)); }
     }
-    function pintar() {
-      var t = U.fold(q.value);
-      var rows = datos.hor.filter(function (x) { return !t || U.fold([x.Title, x.NumDoc, x.Area, x.Turno].join(' ')).indexOf(t) >= 0; })
+    function filtrados() {
+      return datos.hor.filter(function (x) { return AP.coincide(x, q.value, ['Title', 'NumDoc', 'Area', 'Turno', 'HoraEntrada']); })
         .sort(function (a, b) { return (a.Activo === false) - (b.Activo === false) || (U.fold(a.Title) < U.fold(b.Title) ? -1 : 1); });
+    }
+    function pintar() {
+      var rows = filtrados();
       box.replaceChildren(tabla([
         ['Persona', function (x) { return h('div', null, h('strong', null, x.Title), h('small', { class: 'muted block' }, (x.NumDoc || '') + (x.Area ? ' · ' + x.Area : ''))); }],
         ['Turno', function (x) { return x.Turno || '—'; }],
@@ -178,26 +190,33 @@
             Tipo: AP.select('Tipo', AP.CAT.tiposPermiso, opt.tipo || 'Ingreso tardío'),
             Desde: AP.input('Desde', U.toLocalInput(opt.desde || ini), { type: 'datetime-local' }),
             Hasta: AP.input('Hasta', U.toLocalInput(opt.hasta || fin), { type: 'datetime-local' }),
-            Detalle: AP.textarea('Detalle', opt.detalle || '', { rows: 2, placeholder: 'Motivo general (p. ej., cita, diligencia personal, permiso autorizado). Sin datos de salud.' }),
-            AutorizadoPor: AP.input('AutorizadoPor', opt.autoriza || 'Director de Seguridad Integral')
+            Detalle: AP.textarea('Detalle', opt.detalle || '', { rows: 2, placeholder: 'Motivo general (p. ej., cita, diligencia personal, permiso autorizado). Sin datos de salud.' })
           };
+          var cargo = (AP.Session.user.perfil && AP.Session.user.perfil.Cargo) || 'Director de Seguridad Integral';
+          var autoriza = AP.autorizaPicker({
+            fuente: function () { return Promise.resolve(opt.todas || AP.B.listAll('AP_Personas', { exclude: ['Foto', 'Observaciones'] })); },
+            valor: opt.autorizaYo ? { AutorizadoPor: AP.Session.user.nombre + ' — ' + cargo, AutorizadoPorCargo: cargo } : {}
+          });
           var guardar = h('button', { class: 'btn primary', type: 'button', onclick: async function () {
             var p = per.find(function (z) { return (z.Title + ' — ' + (z.NumDoc || '')) === pers.value.trim(); });
             if (!p) return AP.toast('Elija a la persona de la lista (debe estar habilitada).', 'warn');
             var a = U.fromLocalInput(f.Desde.value), b = U.fromLocalInput(f.Hasta.value);
             if (!a || !b || b <= a) return AP.toast('Revise el lapso de vigencia del permiso.', 'warn');
             if (RE_SALUD.test(f.Detalle.value)) return AP.toast('El detalle parece contener información de salud (dato sensible, art. 5 Ley 1581 de 2012). Escriba solo «permiso autorizado» o «cita personal», sin diagnóstico ni tratamiento.', 'warn', 9000);
+            if (!autoriza.elegido()) return AP.toast('Seleccione de la lista de personas quién autoriza el permiso.', 'warn');
+            var au = autoriza.valor();
             guardar.disabled = true;
             try {
-              var rec = await AP.B.create('AP_Permisos', { Title: p.Title, Token: p.Token, NumDoc: p.NumDoc, Tipo: f.Tipo.value, Desde: a.toISOString(), Hasta: b.toISOString(),
-                Estado: 'Vigente', Detalle: f.Detalle.value.trim(), AutorizadoPor: f.AutorizadoPor.value.trim() });
-              await AP.Audit.log('Registro de permiso', p.Title + ' — ' + f.Tipo.value, U.fDateTime(a) + ' a ' + U.fDateTime(b) + '; autoriza: ' + f.AutorizadoPor.value.trim());
+              var rec = await AP.B.create('AP_Permisos', Object.assign({ Title: p.Title, Token: p.Token, NumDoc: p.NumDoc, Tipo: f.Tipo.value, Desde: a.toISOString(), Hasta: b.toISOString(),
+                Estado: 'Vigente', Detalle: f.Detalle.value.trim() }, au));
+              await AP.Audit.log('Registro de permiso', p.Title + ' — ' + f.Tipo.value, U.fDateTime(a) + ' a ' + U.fDateTime(b) + '; autoriza: ' + au.AutorizadoPor + (au.AutorizadoPorDoc ? ' (doc. ' + au.AutorizadoPorDoc + ')' : ''));
               hecho = rec; close(); AP.toast('Permiso registrado. Los celulares de portería lo reciben en su próxima actualización.'); AP.Sync.run();
             } catch (e) { AP.toast(e.message, 'error'); } finally { guardar.disabled = false; }
           } }, AP.icon('check', 18), 'Registrar permiso');
           return h('div', { class: 'stack' }, dl,
-            h('div', { class: 'form-grid' }, AP.field('Persona *', pers, null, 'span2'), AP.field('Tipo *', f.Tipo),
-              AP.field('Autorizado por', f.AutorizadoPor), AP.field('Vigente desde *', f.Desde), AP.field('Vigente hasta *', f.Hasta),
+            h('div', { class: 'form-grid' }, AP.field('Persona *', pers, null, 'span2'), AP.field('Tipo *', f.Tipo, null, 'span2'),
+              AP.field('Vigente desde *', f.Desde), AP.field('Vigente hasta *', f.Hasta),
+              AP.field('Autorizado por *', autoriza, 'Búsquelo en la lista de personas registradas (jefe inmediato, Talento Humano, etc.).', 'span2'),
               AP.field('Detalle', f.Detalle, null, 'span2')),
             h('p', { class: 'help' }, 'Ingreso tardío: acepta el ingreso aunque pase la hora. Salida anticipada o temporal: la salida se muestra como AUTORIZADA dentro del lapso. Ingreso y salida fuera de horario: ambas. ' +
               'No registre diagnósticos ni datos de salud: son datos sensibles (art. 5 Ley 1581 de 2012); basta indicar que el permiso fue autorizado.'),
@@ -218,11 +237,27 @@
         var todos = await AP.B.listRange('AP_Permisos', 'Hasta', U.addDays(new Date(), tab === 'historial' ? -90 : -1), null);
         var ahora = Date.now();
         var vig = todos.filter(function (p) { return p.Estado !== 'Anulado' && new Date(p.Hasta).getTime() >= ahora; });
-        var rows = (tab === 'vigentes' ? vig : todos.filter(function (p) { return vig.indexOf(p) < 0; })).sort(function (a, b) { return a.Desde < b.Desde ? 1 : -1; });
+        var base = (tab === 'vigentes' ? vig : todos.filter(function (p) { return vig.indexOf(p) < 0; })).sort(function (a, b) { return a.Desde < b.Desde ? 1 : -1; });
         var chips = h('div', { class: 'chips' }, [['vigentes', 'Vigentes y futuros'], ['historial', 'Historial (90 días)']].map(function (t) {
           return h('a', { class: 'chip ' + (t[0] === tab ? 'on' : ''), href: '#/consola/permisos?t=' + t[0] }, t[1]);
         }));
-        content.replaceChildren(chips, tabla([
+        var estadoDe = function (p) { return p.Estado === 'Anulado' ? 'Anulado' : new Date(p.Hasta).getTime() < ahora ? 'Vencido' : new Date(p.Desde).getTime() > ahora ? 'Programado' : 'Vigente'; };
+        var tbox = h('div');
+        var qp = AP.buscador('Buscar persona, documento, tipo, quien autoriza o detalle', pintarP);
+        var filtrados = function () { return base.filter(function (p) { return AP.coincide(p, qp.value, ['Title', 'NumDoc', 'Tipo', 'AutorizadoPor', 'AutorizadoPorDoc', 'Detalle', estadoDe]); }); };
+        content.replaceChildren(chips, h('div', { class: 'filters' }, qp, AP.btnExcel(function () {
+          var l = filtrados();
+          if (!l.length) return AP.toast('No hay permisos con el filtro actual.', 'warn');
+          AP.exportar('Permisos', [
+            ['Persona', function (p) { return p.Title; }, 30], ['Documento', function (p) { return p.NumDoc; }, 15], ['Tipo', function (p) { return p.Tipo; }, 30],
+            ['Desde', function (p) { return U.toDate(p.Desde); }, 17], ['Hasta', function (p) { return U.toDate(p.Hasta); }, 17], ['Estado', estadoDe, 12],
+            ['Autorizado por', function (p) { return p.AutorizadoPor; }, 30], ['Doc. de quien autoriza', function (p) { return p.AutorizadoPorDoc; }, 16],
+            ['Detalle', function (p) { return p.Detalle; }, 40], ['Anulado por', function (p) { return p.AnuladoPor; }, 16], ['Motivo de anulación', function (p) { return p.MotivoAnulacion; }, 30],
+            ['Registrado por', function (p) { return p._createdBy; }, 16]
+          ], l, 'xlsx', [['Vista', tab === 'vigentes' ? 'Vigentes y futuros' : 'Historial (90 días)'], ['Filtro', qp.value || 'ninguno'], ['Generado por', AP.Session.user.nombre], ['Fecha', U.fDateTime(new Date())]]);
+        })), tbox);
+        pintarP();
+        function pintarP() { tbox.replaceChildren(tabla([
           ['Persona', function (p) { return h('div', null, h('strong', null, p.Title), h('small', { class: 'muted block' }, p.NumDoc || '')); }],
           ['Tipo', function (p) { return p.Tipo; }],
           ['Vigencia', function (p) { return U.fDateTime(p.Desde) + ' → ' + U.fDateTime(p.Hasta); }],
@@ -230,7 +265,7 @@
           ['Detalle', function (p) { return p.Detalle || ''; }],
           ['Estado', function (p) { return p.Estado === 'Anulado' ? AP.pill('Anulado', 'deny') : new Date(p.Hasta).getTime() < ahora ? AP.pill('Vencido', 'muted') : new Date(p.Desde).getTime() > ahora ? AP.pill('Programado', 'warn') : AP.pill('Vigente', 'ok'); }],
           ['', function (p) { return p.Estado !== 'Anulado' && new Date(p.Hasta).getTime() >= ahora ? h('button', { class: 'btn small danger-outline', type: 'button', onclick: function () { anular(p); } }, 'Anular') : null; }]
-        ], rows));
+        ], filtrados())); }
       } catch (e) { content.replaceChildren(errBox(e)); }
     })();
     function anular(p) {
@@ -265,14 +300,31 @@
         r[1].sort(function (a, b) { return a.FechaHora < b.FechaHora ? -1 : 1; }).forEach(function (v) { ver.set(v.MovimientoId, v); });
         var nov = r[0].filter(function (m) { return m.Novedad || m.Excepcion; }).sort(function (a, b) { return a.FechaHora < b.FechaHora ? 1 : -1; });
         var sin = nov.filter(function (m) { return !ver.has(m.IdLocal); });
-        var lista = tab === 'sin' ? sin : nov;
+        var base = tab === 'sin' ? sin : nov;
         var chips = h('div', { class: 'chips' }, [['sin', 'Sin verificar (' + sin.length + ')'], ['todas', 'Últimos 14 días (' + nov.length + ')']].map(function (t) {
           return h('a', { class: 'chip ' + (t[0] === tab ? 'on' : ''), href: '#/consola/novedades?t=' + t[0] }, t[1]);
         }));
+        var verTxt = function (m) { var v = ver.get(m.IdLocal); return v ? v.Resultado + (v.Nota ? ': ' + v.Nota : '') : 'Sin verificar'; };
+        var tbox = h('div');
+        var qn = AP.buscador('Buscar persona, documento, novedad, vigilante o resultado', pintarN);
+        var filtradas = function () { return base.filter(function (m) { return AP.coincide(m, qn.value, ['Title', 'NumDoc', 'Categoria', 'Area', 'Novedad', 'Vigilante', 'AutorizadoPor', verTxt]); }); };
         content.replaceChildren(
           h('div', { class: 'banner info' }, AP.icon('shield', 18), h('span', null, 'Aquí llegan las llegadas tardías, ingresos pendientes o denegados por horario, salidas no autorizadas, salidas sin lectura de QR y excepciones. Su verificación queda registrada con su nombre y no modifica el registro original.')),
           chips,
-          tabla([
+          h('div', { class: 'filters' }, qn, AP.btnExcel(function () {
+            var l = filtradas();
+            if (!l.length) return AP.toast('No hay novedades con el filtro actual.', 'warn');
+            AP.exportar('Novedades', [
+              ['Fecha', function (m) { return U.toDate(m.FechaHora); }, 17], ['Persona', function (m) { return m.Title; }, 30], ['Documento', function (m) { return m.NumDoc; }, 15],
+              ['Categoría', function (m) { return m.Categoria; }, 18], ['Movimiento', function (m) { return m.Resultado === 'Negado' ? 'Ingreso negado' : m.Sentido; }, 14],
+              ['Novedad', function (m) { return m.Novedad || (m.Excepcion ? 'Excepción' : ''); }, 40], ['Turno programado', function (m) { return m.HorarioInfo; }, 24],
+              ['Autorizado por', function (m) { return m.AutorizadoPor; }, 26], ['Motivo excepción / negación', function (m) { return m.MotivoExcepcion || m.MotivoNegacion; }, 40],
+              ['Vigilante', function (m) { return m.Vigilante; }, 24], ['Verificación', verTxt, 40], ['Id. registro', function (m) { return m.IdLocal; }, 38]
+            ], l, 'xlsx', [['Vista', tab === 'sin' ? 'Sin verificar' : 'Últimos 14 días'], ['Filtro', qn.value || 'ninguno'], ['Generado por', AP.Session.user.nombre], ['Fecha', U.fDateTime(new Date())]]);
+          })),
+          tbox);
+        pintarN();
+        function pintarN() { tbox.replaceChildren(tabla([
             ['Fecha y hora', function (m) { return U.fDateTime(m.FechaHora); }],
             ['Persona', function (m) { return h('div', null, h('strong', null, m.Title), h('small', { class: 'muted block' }, [m.Categoria, m.Area].filter(Boolean).join(' · '))); }],
             ['Movimiento', function (m) { return m.Resultado === 'Negado' ? AP.pill('Ingreso negado', 'deny') : AP.pill(m.Sentido, m.Sentido === 'Ingreso' ? 'ok' : 'muted'); }],
@@ -286,7 +338,7 @@
                 h('button', { class: 'btn small', type: 'button', onclick: function () { verificar(m, v); } }, v ? 'Reverificar' : 'Verificar'),
                 tarde ? h('button', { class: 'btn small primary', type: 'button', onclick: function () { habilitar(m); } }, 'Habilitar ingreso') : null);
             }]
-          ], lista));
+          ], filtradas())); }
       } catch (e) { content.replaceChildren(errBox(e)); }
     })();
 
@@ -313,10 +365,181 @@
     }
     // Levanta la denegación: registra un permiso de ingreso tardío de corta duración y deja constancia de la verificación
     async function habilitar(m) {
-      var p = await crearPermiso({ persona: { Title: m.Title, NumDoc: m.NumDoc, Token: m.Token }, personas: [{ Title: m.Title, NumDoc: m.NumDoc, Token: m.Token }], tipo: 'Ingreso tardío', desde: new Date(), hasta: new Date(Date.now() + 2 * 3600000), detalle: 'Ingreso verificado por el Director tras denegación por horario' });
+      var p = await crearPermiso({ persona: { Title: m.Title, NumDoc: m.NumDoc, Token: m.Token }, personas: [{ Title: m.Title, NumDoc: m.NumDoc, Token: m.Token }], tipo: 'Ingreso tardío', desde: new Date(), hasta: new Date(Date.now() + 2 * 3600000), detalle: 'Ingreso verificado por el Director tras denegación por horario', autorizaYo: true });
       if (!p) return;
       try { await registrarVerificacion(m, 'Justificada', 'Se levantó la denegación mediante permiso de ingreso tardío vigente hasta ' + U.fTime(p.Hasta) + '.'); } catch (e) { AP.toast(e.message, 'error'); }
       AP.render();
     }
+  });
+  // =================== SOLICITUDES DE INGRESO (decide el Director) ===================
+  // Llegadas tardías, ingresos fuera de turno y contratistas en día no programado: el vigilante no puede autorizarlos;
+  // envía la solicitud y el Director la aprueba (se crea un permiso de corta duración) o la rechaza, con justificación.
+  var TIPO_PERMISO = { 'Llegada tardía': 'Ingreso tardío', 'Fuera de turno': 'Ingreso y salida fuera de horario', 'Día no programado': 'Ingreso y salida fuera de horario' };
+  function cargoDirector() { return (AP.Session.user.perfil && AP.Session.user.perfil.Cargo) || 'Director de Seguridad Integral'; }
+  AP.solicitudesPendientes = function () { return (AP.Sync.solicitudes || []).filter(function (x) { return x.Estado === 'Pendiente'; }); };
+
+  AP.route('/consola/solicitudes', function (qs) {
+    if (!guard()) return;
+    var tab = qs.t || 'pendientes';
+    var content = h('div', { class: 'stack' }, AP.spinner('Cargando…'));
+    AP.consolaShell('/consola/solicitudes', 'Solicitudes de ingreso', content);
+    var datos = [];
+    var qs2 = AP.buscador('Buscar persona, documento, empresa, novedad o vigilante', function () { pintarTabla(); });
+    var tbox = h('div');
+    var NOMBRES = { pendientes: 'Por decidir', hoy: 'Hoy', historial: 'Últimos 30 días' };
+    var COLS = [
+      ['Fecha de solicitud', function (x) { return U.toDate(x.FechaSolicitud); }, 17], ['Persona', function (x) { return x.Title; }, 30],
+      ['Tipo doc.', function (x) { return x.TipoDoc; }, 8], ['Documento', function (x) { return x.NumDoc; }, 15], ['Tipo de persona', function (x) { return x.PersonaTipo; }, 18],
+      ['Empresa', function (x) { return x.Empresa; }, 24], ['Cargo / área', function (x) { return [x.Cargo, x.Area].filter(Boolean).join(' · '); }, 24],
+      ['Motivo de la solicitud', function (x) { return x.Tipo; }, 18], ['Novedad', function (x) { return x.Novedad; }, 28], ['Turno programado', function (x) { return x.HorarioInfo; }, 24],
+      ['Lectura', function (x) { return x.Origen; }, 12], ['Portería', function (x) { return x.Porteria; }, 18], ['Solicitó (vigilante)', function (x) { return x.SolicitadoPorNombre || x.SolicitadoPor; }, 24],
+      ['Decisión', function (x) { return x.Estado; }, 12], ['Decidió', function (x) { return x.DecididoPorNombre || x.DecididoPor; }, 24],
+      ['Fecha de decisión', function (x) { return x.FechaDecision ? U.toDate(x.FechaDecision) : ''; }, 17], ['Autorizado hasta', function (x) { return x.VigenteHasta ? U.toDate(x.VigenteHasta) : ''; }, 17],
+      ['Justificación', function (x) { return x.Justificacion; }, 40], ['Observaciones', function (x) { return x.Observaciones; }, 30]
+    ];
+    async function consultar() { return AP.B.listRange('AP_Solicitudes', 'FechaSolicitud', U.addDays(new Date(), tab === 'historial' ? -30 : -1), null); }
+    async function cargar() {
+      try { datos = await consultar(); actualizarSync(); pintar(); }
+      catch (e) { content.replaceChildren(errBox(e)); }
+    }
+    function actualizarSync() {
+      var desde = U.addDays(new Date(), -1).toISOString();
+      AP.Sync.solicitudes = datos.filter(function (x) { return x.FechaSolicitud >= desde; });
+      document.querySelectorAll('.nav-badge[data-k="sol"]').forEach(function (b) { b.textContent = AP.solicitudesPendientes().length || ''; });
+    }
+    var t = setInterval(async function () {
+      if (document.querySelector('.modal-wrap')) return;
+      try {
+        var n = await consultar();
+        var firma = function (l) { return l.map(function (x) { return x.id + x.Estado + x._etag; }).sort().join('|'); };
+        if (firma(n) !== firma(datos) && !document.querySelector('.modal-wrap')) { datos = n; actualizarSync(); pintar(); }
+      } catch (e) { /* se reintenta */ }
+    }, 20000);
+    AP.onLeave(function () { clearInterval(t); });
+
+    function grupo() {
+      var hoy = U.ymd();
+      var l = tab === 'pendientes' ? datos.filter(function (x) { return x.Estado === 'Pendiente'; })
+        : tab === 'hoy' ? datos.filter(function (x) { return U.ymd(x.FechaSolicitud) === hoy; }) : datos.slice();
+      return l.sort(function (a, b) { return a.FechaSolicitud < b.FechaSolicitud ? (tab === 'pendientes' ? -1 : 1) : (tab === 'pendientes' ? 1 : -1); });
+    }
+    function filtradas() { return grupo().filter(function (x) { return AP.coincide(x, qs2.value, ['Title', 'NumDoc', 'Empresa', 'PersonaTipo', 'Tipo', 'Novedad', 'SolicitadoPorNombre', 'Estado', 'Justificacion']); }); }
+    function pintar() {
+      var pend = datos.filter(function (x) { return x.Estado === 'Pendiente'; }).length;
+      var tabs = h('div', { class: 'tabs' }, [['pendientes', 'Por decidir (' + pend + ')'], ['hoy', 'Hoy'], ['historial', 'Últimos 30 días']].map(function (x) {
+        return h('a', { class: x[0] === tab ? 'on' : '', href: '#/consola/solicitudes?t=' + x[0] }, x[1]);
+      }));
+      content.replaceChildren(
+        h('div', { class: 'banner info' }, AP.icon('shield', 18), h('span', null, 'Aquí llegan, desde portería, las llegadas tardías (desde ' + AP.Horario.cfg().minutosPendiente + ' minutos), los ingresos fuera de turno y los contratistas que llegan en un día que no se les programó. ' +
+          'El vigilante no puede autorizarlos: espera su decisión. Al aprobar se registra un permiso a su nombre; al rechazar, el vigilante registra el ingreso negado con su justificación.')),
+        tabs,
+        h('div', { class: 'filters' }, qs2, AP.btnExcel(function () {
+          var l = filtradas();
+          if (!l.length) return AP.toast('No hay solicitudes con el filtro actual.', 'warn');
+          AP.exportar('Solicitudes_ingreso', COLS, l, 'xlsx', [['Vista', NOMBRES[tab]], ['Filtro', qs2.value || 'ninguno'], ['Generado por', AP.Session.user.nombre], ['Fecha', U.fDateTime(new Date())]]);
+        })),
+        tbox);
+      pintarTabla();
+    }
+    function pintarTabla() {
+      tbox.replaceChildren(tabla([
+        ['Solicitud', function (x) { return h('div', null, U.fDateTime(x.FechaSolicitud), h('small', { class: 'block muted' }, 'Registró: ' + (x.SolicitadoPorNombre || x.SolicitadoPor || '—'))); }],
+        ['Persona', function (x) { return h('div', null, h('strong', null, x.Title), h('small', { class: 'block muted' }, [(x.TipoDoc || '') + ' ' + (x.NumDoc || ''), x.PersonaTipo, x.Empresa].filter(function (z) { return String(z || '').trim(); }).join(' · '))); }],
+        ['Motivo', function (x) { return h('div', null, AP.pill(x.Tipo || 'Solicitud', 'warn'), h('small', { class: 'block' }, x.Novedad || ''), x.HorarioInfo ? h('small', { class: 'block muted' }, 'Turno: ' + x.HorarioInfo) : null); }],
+        ['Decisión', function (x) {
+          return h('div', null, AP.estadoPill(x.Estado), x.DecididoPorNombre ? h('small', { class: 'block muted' }, x.DecididoPorNombre + ' · ' + U.fDateTime(x.FechaDecision)) : null,
+            x.Estado === 'Aprobada' && x.VigenteHasta ? h('small', { class: 'block muted' }, 'Hasta ' + U.fDateTime(x.VigenteHasta)) : null);
+        }],
+        ['', function (x) {
+          return x.Estado !== 'Pendiente' ? h('button', { class: 'btn small', type: 'button', onclick: function () { detalle(x); } }, 'Ver')
+            : h('div', { class: 'row gap nowrap' },
+              h('button', { class: 'btn small primary', type: 'button', onclick: function () { decidir(x, true); } }, AP.icon('check', 16), 'Aprobar'),
+              h('button', { class: 'btn small danger-outline', type: 'button', onclick: function () { decidir(x, false); } }, 'Rechazar'));
+        }]
+      ], filtradas()));
+    }
+    function kv(k, v) { return v ? h('div', { class: 'kv' }, h('span', null, k), h('strong', null, v)) : null; }
+    function resumen(x) {
+      return h('div', { class: 'card stack sm' },
+        kv('Persona', x.Title), kv('Documento', ((x.TipoDoc || '') + ' ' + (x.NumDoc || '')).trim()), kv('Tipo / empresa', [x.PersonaTipo, x.Empresa].filter(Boolean).join(' · ')),
+        kv('Cargo / área', [x.Cargo, x.Area].filter(Boolean).join(' · ')), kv('Motivo', x.Tipo), kv('Novedad', x.Novedad), kv('Turno programado', x.HorarioInfo || (x.Tipo === 'Día no programado' ? 'Sin turno programado hoy' : '')),
+        kv('Lectura', x.Origen), kv('Solicitud', U.fDateTime(x.FechaSolicitud) + ' · ' + (x.Porteria || '') + ' · registró ' + (x.SolicitadoPorNombre || x.SolicitadoPor || '—')),
+        x.Estado !== 'Pendiente' ? kv('Decisión', x.Estado + ' · ' + (x.DecididoPorNombre || '') + ' · ' + U.fDateTime(x.FechaDecision)) : null,
+        x.Justificacion ? kv('Justificación', x.Justificacion) : null, x.Observaciones ? kv('Observaciones', x.Observaciones) : null);
+    }
+    function detalle(x) { AP.modal({ title: 'Solicitud de ingreso — ' + x.Title, size: 'wide', body: resumen(x) }); }
+
+    function decidir(x, si) {
+      AP.modal({
+        title: 'Solicitud de ingreso — ' + x.Title, size: 'wide',
+        body: function (close) {
+          var ant = h('p', { class: 'muted small' }, 'Consultando antecedentes…');
+          AP.B.listRange('AP_Solicitudes', 'FechaSolicitud', U.addDays(new Date(), -30), null).then(function (l) {
+            var mias = l.filter(function (z) { return z.Token === x.Token && z.id !== x.id; });
+            var rech = mias.filter(function (z) { return z.Estado === 'Rechazada'; }).length;
+            ant.textContent = mias.length ? 'En los últimos 30 días esta persona tuvo ' + mias.length + ' solicitud(es) más' + (rech ? ' (' + rech + ' rechazada(s))' : '') + '.' : 'Sin otras solicitudes en los últimos 30 días.';
+          }).catch(function () { ant.textContent = ''; });
+          var dec = AP.segmented('Decision', [{ value: 'Aprobada', label: 'Aprobar', icon: 'check', cls: 'in' }, { value: 'Rechazada', label: 'Rechazar', icon: 'x', cls: 'deny' }], si ? 'Aprobada' : 'Rechazada', function () { pintarDec(); });
+          var tarde = x.Tipo === 'Llegada tardía';
+          var ahora = new Date();
+          var def = tarde ? new Date(ahora.getTime() + 60 * 60000) : (function () { var b = U.fromLocal(U.ymd(ahora), '18:00'); return b.getTime() - ahora.getTime() < 2 * 3600000 ? new Date(ahora.getTime() + 8 * 3600000) : b; })();
+          var hasta = AP.input('hasta', U.toLocalInput(def), { type: 'datetime-local' });
+          var just = AP.textarea('Justificacion', '', { rows: 3 });
+          var vigBox = h('div', { class: 'stack sm' },
+            AP.field(tarde ? 'El vigilante puede registrar el ingreso hasta *' : 'Autorizado a ingresar y salir hasta *', hasta,
+              tarde ? 'Se registra un permiso de «Ingreso tardío». La salida se rige por su turno.' : 'Se registra un permiso de «Ingreso y salida fuera de horario» hasta esa hora.'),
+            h('div', { class: 'presets' }, [['1 hora', 60], ['4 horas', 240], ['Hasta las 18:00', '18:00'], ['Hasta las 23:59', '23:59']].map(function (pr) {
+              return h('button', { class: 'btn small', type: 'button', onclick: function () {
+                var b = typeof pr[1] === 'number' ? new Date(Date.now() + pr[1] * 60000) : U.fromLocal(U.ymd(), pr[1]);
+                if (b <= new Date()) return AP.toast('Esa hora ya pasó.', 'warn');
+                hasta.value = U.toLocalInput(b);
+              } }, pr[0]);
+            })));
+          var btn = h('button', { class: 'btn primary', type: 'button' });
+          function aprobando() { return dec.dataset.value === 'Aprobada'; }
+          function pintarDec() {
+            vigBox.style.display = aprobando() ? '' : 'none';
+            just.placeholder = aprobando() ? 'Por qué se autoriza (quién lo solicitó, necesidad del servicio, condiciones)' : 'Motivo del rechazo (el vigilante lo ve y lo anota en el ingreso negado)';
+            btn.className = 'btn ' + (aprobando() ? 'primary' : 'danger');
+            btn.replaceChildren(AP.icon(aprobando() ? 'check' : 'x', 18), aprobando() ? 'Aprobar ingreso' : 'Rechazar ingreso');
+          }
+          pintarDec();
+          var enviando = false;
+          btn.onclick = async function () {
+            if (enviando) return;
+            var j = just.value.trim();
+            if (j.length < 6) return AP.toast('Escriba la justificación de la decisión.', 'warn');
+            if (RE_SALUD.test(j)) return AP.toast('La justificación parece contener información de salud (dato sensible, art. 5 Ley 1581 de 2012). Escriba solo el hecho general, sin diagnóstico.', 'warn', 9000);
+            var ap = aprobando();
+            var b = U.fromLocalInput(hasta.value);
+            if (ap && (!b || b <= new Date())) return AP.toast('Revise hasta cuándo se autoriza: la hora ya pasó.', 'warn');
+            enviando = true; btn.disabled = true;
+            var yo = AP.Session.user;
+            var cambios = { Estado: ap ? 'Aprobada' : 'Rechazada', DecididoPor: yo.upn, DecididoPorNombre: yo.nombre, FechaDecision: new Date().toISOString(), Justificacion: j };
+            try {
+              if (ap) {
+                var desde = new Date(Math.min(new Date(x.FechaSolicitud).getTime(), Date.now()) - 5 * 60000);
+                var perm = await AP.B.create('AP_Permisos', {
+                  Title: x.Title, Token: x.Token, NumDoc: x.NumDoc, Tipo: TIPO_PERMISO[x.Tipo] || 'Ingreso tardío', Desde: desde.toISOString(), Hasta: b.toISOString(), Estado: 'Vigente',
+                  Detalle: 'Aprobación de solicitud de portería (' + (x.Novedad || x.Tipo) + '). ' + j,
+                  AutorizadoPor: yo.nombre + ' — ' + cargoDirector(), AutorizadoPorDoc: (yo.perfil && yo.perfil.NumDoc) || '', AutorizadoPorCargo: cargoDirector(), SolicitudId: x.id
+                });
+                cambios.PermisoId = perm.id; cambios.VigenteHasta = b.toISOString();
+              }
+              await AP.B.update('AP_Solicitudes', x.id, cambios);
+              Object.assign(x, cambios);
+              await AP.Audit.log(ap ? 'Aprobación de solicitud de ingreso' : 'Rechazo de solicitud de ingreso', x.Title + ' (' + (x.NumDoc || '') + ') — ' + (x.Novedad || x.Tipo),
+                (ap ? 'Autorizado hasta ' + U.fDateTime(b) + '. ' : '') + 'Justificación: ' + j);
+              close();
+              AP.toast(ap ? 'Ingreso aprobado. El vigilante lo ve en portería y registra el ingreso.' : 'Ingreso rechazado. El vigilante lo ve en portería y registra el ingreso negado.', 'info', 6000);
+              actualizarSync(); pintar(); AP.Sync.run();
+            } catch (e) { AP.toast('No se pudo guardar la decisión: ' + e.message, 'error', 8000); enviando = false; btn.disabled = false; }
+          };
+          return h('div', { class: 'stack' }, resumen(x), ant, dec, vigBox, AP.field('Justificación *', just),
+            h('div', { class: 'row gap wrap end' }, h('button', { class: 'btn', type: 'button', onclick: function () { close(); } }, 'Cerrar'), btn));
+        }
+      });
+    }
+    cargar();
   });
 })();

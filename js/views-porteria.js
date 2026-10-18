@@ -55,6 +55,23 @@
         }))));
     }
     pintarSolicitudes();
+    // Solicitudes de ingreso enviadas hoy al Director (llegadas tardías, fuera de turno, día no programado)
+    var solIng = h('div');
+    function pintarSolIng() {
+      var hoy = U.ymd();
+      var l = (AP.Sync.solicitudes || []).filter(function (x) { return U.ymd(x.FechaSolicitud) === hoy && !AP.solicitudUsada(x) && x.Estado !== 'Cancelada'; })
+        .sort(function (a, b) { return a.FechaSolicitud < b.FechaSolicitud ? 1 : -1; });
+      if (!l.length) { solIng.replaceChildren(); return; }
+      var txt = { Pendiente: 'Esperando al Director', Aprobada: 'Aprobada: registrar ingreso', Rechazada: 'Rechazada: registrar' };
+      solIng.replaceChildren(h('section', { class: 'card stack sm' },
+        h('h3', { class: 'row gap' }, AP.icon('clock', 20), h('span', null, 'Ingresos en decisión del Director')),
+        h('div', { class: 'list' }, l.slice(0, 8).map(function (x) {
+          return h('a', { class: 'list-item', href: '#/espera-ingreso?id=' + encodeURIComponent(x.id) }, AP.icon('user', 20),
+            h('div', null, h('strong', null, x.Title), h('small', null, U.fTime(x.FechaSolicitud) + ' · ' + (x.Novedad || x.Tipo || ''))),
+            AP.pill(txt[x.Estado] || x.Estado, x.Estado === 'Aprobada' ? 'ok' : x.Estado === 'Pendiente' ? 'warn' : 'deny'));
+        }))));
+    }
+    pintarSolIng();
     var content = h('div', { class: 'stack' },
       h('a', { class: 'scan-cta', href: '#/escanear' }, h('span', { class: 'scan-ico' }, AP.icon('qr', 44)),
         h('span', null, h('strong', null, 'Leer código QR'), h('small', null, 'Ingreso y salida: siempre con lectura del QR'))),
@@ -66,6 +83,7 @@
         tile('badge', 'Autoridad', 'Visita de autoridad', '/manual?cat=Autoridad'),
         tile('truck', 'Vehículo de carga', 'Inspección y precintos', '/carga'),
         tile('history', 'Mi turno', AP.Sync.pendingCount() ? AP.Sync.pendingCount() + ' por enviar' : 'Registros del celular', '/turno')),
+      solIng,
       solicitudes,
       h('div', { class: 'quick-dial' },
         tel.director ? h('a', { class: 'btn', href: 'tel:' + tel.director }, AP.icon('phone', 18), 'Director') : null,
@@ -88,6 +106,7 @@
       var tv = document.querySelector('a.tile[href="#/visitas-hoy"]');
       if (tv) { tv.querySelector('small').textContent = porLlegarTxt(); tv.classList.toggle('accent', AP.Access.visitasPorLlegar().length > 0); }
       pintarSolicitudes();
+      pintarSolIng();
     }, 200)));
   });
 
@@ -350,7 +369,8 @@
     var carne = AP.input('CarneEntregado', '', { placeholder: 'N.° de carné temporal entregado (si aplica)' });
     var custodia = AP.check('DocumentoCustodia', 'Documento de identidad dejado en custodia', false);
     var devuelto = AP.check('CarneDevuelto', 'Carné temporal devuelto', !!(ult && ult.CarneEntregado));
-    var visIn = h('div', { class: 'stack sm' }, autoriza, h('p', { class: 'help' }, AP.TX.confirmacionVisitante), AP.field('Carné temporal', carne), custodia);
+    var induc = AP.check('InduccionConfirmada', 'El visitante recibió la inducción para visitantes (inocuidad y SST) y se compromete a cumplirla', false);
+    var visIn = h('div', { class: 'stack sm' }, autoriza, h('p', { class: 'help' }, AP.TX.confirmacionVisitante), induc, AP.field('Carné temporal', carne), custodia);
     var visOut = h('div', { class: 'stack sm' }, devuelto, ult && ult.DocumentoCustodia ? h('p', { class: 'note' }, 'Se dejó documento en custodia: devuélvalo al visitante.') : null);
     var obs = AP.textarea('Observaciones', '', { placeholder: 'Observaciones (opcional): elementos que ingresa, novedades…', rows: 2 });
     var acciones = h('div', { class: 'actions-sticky' });
@@ -389,6 +409,20 @@
           h('button', { class: 'btn big block go-in', type: 'button', onclick: function () { excepcion({ titulo: 'Ingreso sin lectura de QR', novedad: NOV_SIN_QR, sent: 'Ingreso', nota: TX_INGRESO_SIN_QR, boton: 'Registrar ingreso por excepción' }); } }, AP.icon('key', 22), 'Registrar ingreso sin QR (excepción)'));
       } else if (r.nivel === 'ok') {
         AP.add(acciones, h('button', { class: 'btn big block go-in', type: 'button', onclick: function () { guardar('Ingreso', 'Permitido'); } }, AP.icon('check', 22), 'Registrar INGRESO'));
+      } else if (r.aprobacionDirector && r.token && rec.id) {
+        // Llegada tardía, fuera de turno o contratista en día no programado: decide el Director
+        var abierta = AP.solicitudAbierta(r.token);
+        if (abierta) {
+          AP.add(acciones,
+            h('p', { class: 'note' }, abierta.Estado === 'Pendiente' ? 'Ya se envió la solicitud al Director a las ' + U.fTime(abierta.FechaSolicitud) + '. Espere su decisión.' : 'El Director ya decidió esta solicitud (' + abierta.Estado.toLowerCase() + '). Ábrala para registrar el resultado.'),
+            h('a', { class: 'btn big block primary', href: '#/espera-ingreso?id=' + encodeURIComponent(abierta.id) }, AP.icon('clock', 22), abierta.Estado === 'Pendiente' ? 'Ver la solicitud (esperando al Director)' : 'Ver la decisión del Director'),
+            llamar);
+        } else {
+          AP.add(acciones,
+            h('p', { class: 'note' }, AP.TX.aprobacionDirector || 'Este ingreso no lo puede autorizar el vigilante. Envíe la solicitud: el Director de Seguridad Integral la aprueba o la rechaza y usted ve la decisión en esta pantalla.'),
+            h('button', { class: 'btn big block primary', type: 'button', onclick: function (e) { enviarSolicitud(e.currentTarget); } }, AP.icon('inbox', 22), 'Enviar a aprobación del Director'),
+            llamar);
+        }
       } else if (r.registrable) {
         AP.add(acciones,
           sinQR ? h('p', { class: 'note' }, TX_INGRESO_SIN_QR) : null,
@@ -421,6 +455,32 @@
             } }, o.boton || 'Registrar ingreso por excepción'));
         }
       });
+    }
+
+    async function enviarSolicitud(btn) {
+      if (saving) return;
+      saving = true; btn.disabled = true; btn.lastChild.textContent = 'Enviando…';
+      var u = user(), ahora = new Date();
+      var data = {
+        Title: rec.Title, Token: r.token, Tipo: r.tipoSolicitud || 'Solicitud', PersonaTipo: rec.Tipo, TipoDoc: rec.TipoDoc, NumDoc: rec.NumDoc, Empresa: rec.Empresa,
+        Cargo: rec.Cargo, Area: rec.Area, Novedad: r.novedad, HorarioInfo: r.horarioInfo, Origen: r.origen || 'QR', Estado: 'Pendiente', Porteria: AP.CFG.porteria,
+        SolicitadoPor: AP.Session.user.usuario, SolicitadoPorNombre: u.nombre, FechaSolicitud: ahora.toISOString()
+      };
+      try {
+        var sol = await AP.B.create('AP_Solicitudes', data);
+        AP.Sync.solicitudes.push(sol);
+        AP.Audit.log('Solicitud de ingreso a aprobación del Director', rec.Title + ' (' + (rec.NumDoc || '') + ') — ' + (r.novedad || data.Tipo), 'Registró ' + u.nombre + ' en ' + AP.CFG.porteria);
+        if (AP.Notif && AP.Notif.aviso) AP.Notif.aviso('Solicitud enviada al Director', rec.Title + ' — ' + (r.novedad || data.Tipo), 'sol-' + sol.id);
+        U.beep('ok');
+        AP.State.result = null;
+        AP.go('/espera-ingreso?id=' + encodeURIComponent(sol.id) + '&nueva=1');
+      } catch (e) {
+        if (e.offline) {
+          var neg = await AP.confirm('Sin conexión', 'No fue posible enviar la solicitud al Director. Llámelo o escríbale por WhatsApp. Mientras no haya aprobación, la persona no ingresa. ¿Registrar ahora el ingreso negado?', 'Registrar ingreso negado', 'danger');
+          saving = false;
+          if (neg) return await guardar('Ingreso', 'Negado');
+        } else AP.toast('No se pudo enviar la solicitud: ' + e.message, 'error', 8000);
+      } finally { saving = false; btn.disabled = false; btn.lastChild.textContent = 'Enviar a aprobación del Director'; }
     }
 
     var saving = false;
@@ -461,10 +521,16 @@
         f.Novedad = [mx && mx.Novedad, nov, r.novedadPrevia && sent === 'Ingreso' ? r.novedadPrevia : ''].filter(Boolean).join(' | ') || undefined;
         if (mx) delete mx.Novedad;
         if (r.permisoId) f.PermisoId = String(r.permisoId);
+        if (r.solicitud) {
+          f.SolicitudId = r.solicitud.id;
+          if (r.solicitud.PermisoId) f.PermisoId = r.solicitud.PermisoId;
+          f.AutorizadoPor = (r.solicitud.DecididoPorNombre || r.solicitud.DecididoPor || '') + ' (Director de Seguridad Integral)';
+        }
         if (r.horarioInfo) f.HorarioInfo = r.horarioInfo;
         if (sent === 'Salida' && ult) f.EntradaId = ult.IdLocal;
         if (esVisitante && sent === 'Ingreso') {
           f.AutorizacionConfirmada = autoriza.querySelector('input').checked;
+          f.InduccionConfirmada = induc.querySelector('input').checked;
           f.CarneEntregado = carne.value.trim();
           f.DocumentoCustodia = custodia.querySelector('input').checked;
         }
@@ -475,10 +541,31 @@
         if (AP.Notif) AP.Notif.movimiento(mov);
         await flash(resultado === 'Permitido', resultado === 'Negado' ? 'INGRESO NEGADO' : sent === 'Ingreso' ? 'INGRESO REGISTRADO' : 'SALIDA REGISTRADA', rec.Title);
         AP.State.result = null;
+        if (esVisita && sent === 'Ingreso' && resultado === 'Permitido' && rec.Anfitrion && location.hash.indexOf('#/resultado') === 0) { avisarAnfitrion(mov); return; }
         if (location.hash.indexOf('#/resultado') === 0) AP.go(vuelta);
       } catch (e) {
         AP.toast('No se pudo guardar: ' + e.message, 'error');
       } finally { saving = false; }
+    }
+
+    // Después de registrar el ingreso de un visitante: WhatsApp al anfitrión para que lo reciba y lo acompañe
+    function avisarAnfitrion(mov) {
+      var av = AP.avisoAnfitrion(rec, mov.FechaHora);
+      AP.modal({
+        title: 'Avise al anfitrión',
+        onClose: function () { if (location.hash.indexOf('#/resultado') === 0) AP.go(vuelta); },
+        body: function (close) {
+          return h('div', { class: 'stack' },
+            h('p', null, h('strong', null, rec.Title), ' ingresó. Avise a su anfitrión, ', h('strong', null, av.nombre), ', para que lo reciba y lo acompañe durante toda la visita.'),
+            av.num
+              ? h('a', { class: 'btn big block primary', href: AP.waLink(av.num, av.texto), target: '_blank', rel: 'noopener', onclick: function () {
+                AP.Audit.log('Aviso al anfitrión', rec.Title + ' → ' + av.nombre, 'WhatsApp desde portería (' + AP.CFG.porteria + ')');
+                setTimeout(close, 400);
+              } }, AP.icon('whatsapp', 22), 'Avisar por WhatsApp a ' + av.nombre)
+              : h('p', { class: 'note' }, 'El anfitrión no tiene un celular válido registrado en Personas. Avísele por teléfono o radio.'),
+            h('button', { class: 'btn block', type: 'button', onclick: function () { close(); } }, av.num ? 'Ahora no' : 'Continuar'));
+        }
+      });
     }
 
     var cont = h('div', { class: 'stack' }, banner, ficha, ultimo, elem.el,
@@ -800,6 +887,123 @@
     if (!visita()) AP.Sync.run().then(function () { if (!visita()) box.replaceChildren(AP.empty('search', 'Solicitud no encontrada', 'Verifique la conexión e intente de nuevo.', h('a', { class: 'btn', href: '#/porteria' }, 'Volver a portería'))); });
     // Mientras se espera la decisión, se consulta el servidor cada 15 segundos
     var t = setInterval(function () { var v = visita(); if (document.visibilityState === 'visible' && (!v || v.Estado === 'Pendiente')) AP.Sync.run(); }, 15000);
+    AP.onLeave(function () { clearInterval(t); });
+    AP.onLeave(AP.Sync.on(U.debounce(pintar, 250)));
+  });
+
+  // =================== SOLICITUD DE INGRESO: ESPERA DE LA DECISIÓN DEL DIRECTOR ===================
+  // Ya registrado el resultado (ingreso o ingreso negado) con esta solicitud
+  AP.solicitudUsada = function (x) { return AP.Sync.allMovs().some(function (m) { return m.SolicitudId === x.id; }); };
+  // Solicitud de hoy que sigue abierta para la persona: pendiente, o decidida y sin registrar en portería
+  AP.solicitudAbierta = function (token) {
+    var hoy = U.ymd(), ahora = new Date();
+    return (AP.Sync.solicitudes || []).filter(function (x) {
+      if (x.Token !== token || U.ymd(x.FechaSolicitud) !== hoy || AP.solicitudUsada(x)) return false;
+      if (x.Estado === 'Pendiente' || x.Estado === 'Rechazada') return true;
+      return x.Estado === 'Aprobada' && x.VigenteHasta && new Date(x.VigenteHasta) > ahora;
+    }).sort(function (a, b) { return a.FechaSolicitud < b.FechaSolicitud ? 1 : -1; })[0] || null;
+  };
+  function textoSolDirector(x) {
+    return 'Solicitud de ingreso en ' + (x.Porteria || AP.CFG.porteria) + ': ' + x.Title + (x.Empresa ? ' (' + x.Empresa + ')' : '') + ' — ' + (x.Novedad || x.Tipo) +
+      (x.HorarioInfo ? '. Turno: ' + x.HorarioInfo : '') + '. Registró: ' + (x.SolicitadoPorNombre || x.SolicitadoPor || '') + ' a las ' + U.fTime(x.FechaSolicitud) +
+      '. Pendiente de su decisión en la app (Consola > Solicitudes de ingreso).';
+  }
+  AP.route('/espera-ingreso', function (qs) {
+    var id = qs.id;
+    var box = h('div', { class: 'stack' });
+    AP.porteriaShell('Solicitud de ingreso', box, { back: '/porteria' });
+    var previo = null, ocupado = false;
+    function sol() { return (AP.Sync.solicitudes || []).find(function (x) { return x.id === id; }) || null; }
+    function persona(x) { var hit = x.Token ? AP.Sync.byToken.get(x.Token) : null; return hit && hit.tipo === 'persona' ? hit.rec : null; }
+    function pintar() {
+      if (document.querySelector('.modal-wrap') || ocupado) return;
+      var x = sol();
+      if (!x) { box.replaceChildren(AP.spinner('Consultando la solicitud…')); return; }
+      if (previo === 'Pendiente' && x.Estado !== 'Pendiente') U.beep(x.Estado === 'Aprobada' ? 'ok' : 'deny');
+      previo = x.Estado;
+      var usada = AP.solicitudUsada(x);
+      var vence = x.Estado === 'Aprobada' && x.VigenteHasta && new Date(x.VigenteHasta) <= new Date();
+      var v;
+      if (x.Estado === 'Pendiente') v = ['warn', 'clock', 'ESPERANDO DECISIÓN DEL DIRECTOR', 'La persona NO ingresa todavía. Esta pantalla se actualiza sola cuando el Director decida.'];
+      else if (x.Estado === 'Aprobada') v = usada ? ['ok', 'check', 'INGRESO YA REGISTRADO', 'El ingreso aprobado ya quedó registrado.']
+        : vence ? ['deny', 'x', 'APROBACIÓN VENCIDA', 'La aprobación permitía registrar el ingreso hasta las ' + U.fTime(x.VigenteHasta) + '. Comuníquese con el Director.']
+          : ['ok', 'check', 'INGRESO APROBADO POR EL DIRECTOR', 'Registre el ingreso' + (x.VigenteHasta ? ' antes de las ' + U.fTime(x.VigenteHasta) : '') + '.'];
+      else if (x.Estado === 'Rechazada') v = ['deny', 'x', 'INGRESO RECHAZADO POR EL DIRECTOR', usada ? 'El ingreso negado ya quedó registrado.' : 'No se permite el ingreso. Registre el ingreso negado e informe a la persona con cortesía.'];
+      else v = ['muted', 'x', 'SOLICITUD ' + String(x.Estado || '').toUpperCase(), 'La persona no ingresa con esta solicitud.'];
+      var verdict = h('div', { class: 'verdict ' + v[0] }, AP.icon(v[1], 40), h('div', null, h('strong', null, v[2]), h('span', null, v[3])));
+      var kv = function (k, val) { return val ? h('div', { class: 'kv' }, h('span', null, k), h('strong', null, val)) : null; };
+      var datos = h('section', { class: 'card stack sm' },
+        h('h3', null, x.Title),
+        kv('Documento', ((x.TipoDoc || '') + ' ' + (x.NumDoc || '')).trim()), kv('Tipo / empresa', [x.PersonaTipo, x.Empresa].filter(Boolean).join(' · ')),
+        kv('Motivo', x.Novedad || x.Tipo), kv('Turno programado', x.HorarioInfo),
+        kv('Solicitud', U.fDateTime(x.FechaSolicitud) + (x.SolicitadoPorNombre ? ' · registró ' + x.SolicitadoPorNombre : '')),
+        x.Estado !== 'Pendiente' && x.FechaDecision ? kv('Decisión', U.fDateTime(x.FechaDecision) + (x.DecididoPorNombre ? ' · ' + x.DecididoPorNombre : '')) : null,
+        x.Estado !== 'Pendiente' ? kv(x.Estado === 'Rechazada' ? 'Motivo del rechazo' : 'Justificación', x.Justificacion) : null);
+      var acciones = h('div', { class: 'stack sm' });
+      if (x.Estado === 'Pendiente') {
+        AP.add(acciones,
+          h('a', { class: 'btn block', href: AP.waLink(AP.WA_DIRECTOR, textoSolDirector(x)), target: '_blank', rel: 'noopener' }, AP.icon('whatsapp', 18), 'Avisar al Director por WhatsApp'),
+          (AP.CFG.telefonos || {}).director ? h('a', { class: 'btn block', href: 'tel:' + AP.CFG.telefonos.director }, AP.icon('phone', 18), 'Llamar al Director') : null,
+          h('button', { class: 'btn block danger-outline', type: 'button', onclick: function () { seRetiro(x); } }, AP.icon('x', 18), 'La persona se retiró: registrar ingreso negado'));
+      } else if (x.Estado === 'Aprobada' && !usada && !vence) {
+        AP.add(acciones, h('button', { class: 'btn big block go-in', type: 'button', onclick: function () { ingresar(x); } }, AP.icon('check', 22), 'Registrar INGRESO'));
+      } else if (x.Estado === 'Rechazada' && !usada) {
+        AP.add(acciones, h('button', { class: 'btn big block danger', type: 'button', onclick: function () {
+          negar(x, 'Ingreso rechazado por el Director de Seguridad Integral' + (x.Justificacion ? ': ' + x.Justificacion : ''), 'rechazado por el Director');
+        } }, AP.icon('x', 22), 'Registrar ingreso negado'));
+      }
+      AP.add(acciones, h('a', { class: 'btn block', href: '#/porteria' }, 'Volver a portería'));
+      box.replaceChildren(verdict,
+        qs.nueva && x.Estado === 'Pendiente' ? h('p', { class: 'banner info' }, AP.icon('check', 18), h('span', null, 'Solicitud enviada al Director de Seguridad Integral. Si es urgente, avísele también por WhatsApp o llámelo.')) : null,
+        datos, acciones);
+    }
+    // Ingreso aprobado: se registra con la constancia de la aprobación (sin depender de que el permiso ya esté en el celular)
+    function ingresar(x) {
+      var ev = AP.Access.evaluate(x.Token);
+      if (!ev.rec) return AP.toast('La persona no figura en los datos del celular. Sincronice e intente de nuevo.', 'warn');
+      var r2 = Object.assign({}, ev, {
+        nivel: 'ok', etiqueta: 'INGRESO APROBADO POR EL DIRECTOR', sentido: 'Ingreso', solicitud: x,
+        detalle: 'Aprobó ' + (x.DecididoPorNombre || 'el Director') + ' a las ' + U.fTime(x.FechaDecision) + (x.Justificacion ? '. ' + x.Justificacion : '') + '.',
+        origen: (x.Origen === 'Documento' ? 'Documento' : 'QR') + ' (aprobación del Director)',
+        novedad: (x.Novedad || x.Tipo) + ' — ingreso aprobado por el Director' + (x.Origen === 'Documento' ? ' | ' + NOV_SIN_QR : '')
+      });
+      delete r2.aprobacionDirector; delete r2.sinExcepcion; delete r2.registrable;
+      AP.State.result = r2; AP.State.fromScan = false;
+      AP.go('/resultado');
+    }
+    async function negar(x, motivo, como) {
+      if (ocupado) return;
+      ocupado = true;
+      try {
+        var p = persona(x) || {};
+        var mov = await registrar({
+          Title: x.Title, Sentido: 'Ingreso', Resultado: 'Negado', Categoria: x.PersonaTipo || p.Tipo, Origen: x.Origen || 'QR', Token: x.Token,
+          RefLista: 'AP_Personas', RefId: p.id, TipoDoc: x.TipoDoc, NumDoc: x.NumDoc, Telefono: p.Telefono, Empresa: x.Empresa, Cargo: x.Cargo, Area: x.Area,
+          EstadoMostrado: como === 'se retiró' ? 'SE RETIRÓ ANTES DE LA DECISIÓN DEL DIRECTOR' : 'INGRESO RECHAZADO POR EL DIRECTOR', MotivoNegacion: motivo,
+          Novedad: (x.Novedad || x.Tipo) + ' — ' + como, HorarioInfo: x.HorarioInfo, SolicitudId: x.id
+        });
+        if (AP.Notif) AP.Notif.movimiento(mov);
+        await flash(false, 'INGRESO NEGADO', x.Title);
+      } catch (e) { AP.toast('No se pudo registrar: ' + e.message, 'error', 8000); }
+      finally { ocupado = false; pintar(); }
+    }
+    async function seRetiro(x) {
+      if (!(await AP.confirm('La persona se retiró', 'Se registra el ingreso negado de ' + x.Title + ' y la solicitud queda cancelada; el Director ya no la verá por decidir.', 'Registrar y cancelar', 'danger'))) return;
+      try {
+        var u = user();
+        await AP.B.update('AP_Solicitudes', x.id, { Estado: 'Cancelada', Observaciones: (x.Observaciones ? x.Observaciones + '\n' : '') + 'Cancelada en portería por ' + u.nombre + ' el ' + U.fDateTime(new Date()) + ': la persona se retiró.' });
+        x.Estado = 'Cancelada';
+      } catch (e) { AP.toast('No se pudo cancelar la solicitud (' + e.message + '). Se registra igual el ingreso negado.', 'warn', 7000); }
+      await negar(x, 'La persona se retiró antes de la decisión del Director de Seguridad Integral', 'se retiró');
+      AP.Sync.run();
+    }
+    pintar();
+    if (!sol()) AP.Sync.run().then(function () { if (!sol()) box.replaceChildren(AP.empty('search', 'Solicitud no encontrada', 'Verifique la conexión e intente de nuevo.', h('a', { class: 'btn', href: '#/porteria' }, 'Volver a portería'))); });
+    // Mientras se espera la decisión se consulta el servidor cada 15 segundos
+    var t = setInterval(function () {
+      var x = sol();
+      if (document.visibilityState === 'visible' && (!x || x.Estado === 'Pendiente')) AP.Sync.pullSolicitudes().then(pintar).catch(function () { /* se reintenta */ });
+    }, 15000);
     AP.onLeave(function () { clearInterval(t); });
     AP.onLeave(AP.Sync.on(U.debounce(pintar, 250)));
   });

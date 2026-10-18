@@ -7,7 +7,7 @@
   // ======================= SINCRONIZACIÓN =======================
   var listeners = [];
   var Sync = (AP.Sync = {
-    personas: [], visitas: [], movs: [], vigilantes: [], horarios: [], permisos: [], outbox: [],
+    personas: [], visitas: [], movs: [], vigilantes: [], horarios: [], permisos: [], solicitudes: [], puntos: [], outbox: [],
     byToken: new Map(),
     state: { online: navigator.onLine, syncing: false, lastPull: null, lastPush: null, lastError: null, authProblem: false, skew: null, pullErrors: {} },
     on: function (fn) { listeners.push(fn); return function () { listeners = listeners.filter(function (f) { return f !== fn; }); }; },
@@ -21,6 +21,8 @@
       Sync.vigilantes = (await S.get('c:vigilantes')) || [];
       Sync.horarios = (await S.get('c:horarios')) || [];
       Sync.permisos = (await S.get('c:permisos')) || [];
+      Sync.solicitudes = (await S.get('c:solicitudes')) || [];
+      Sync.puntos = (await S.get('c:puntos')) || [];
       var meta = (await S.get('c:meta')) || {};
       Sync.state.lastPull = meta.lastPull || null;
       Sync.state.lastPush = meta.lastPush || null;
@@ -101,6 +103,7 @@
         var it = items[i];
         try {
           if (it.kind === 'insp') await Sync._pushInsp(it);
+          else if (it.kind === 'ronda') await Sync._pushRonda(it);
           else if (SIMPLE[it.kind]) await Sync._pushSimple(SIMPLE[it.kind], it);
           else await Sync._pushMov(it);
           await AP.Store.outboxDel(it.id);
@@ -111,8 +114,8 @@
           await Sync.saveMeta();
           Sync.emit();
         } catch (e) {
-          // Una inspección con fotos en conexión lenta no detiene el envío de los demás registros
-          if (e.timeout && navigator.onLine !== false && it.kind === 'insp') {
+          // Una inspección o ronda con fotos en conexión lenta no detiene el envío de los demás registros
+          if (e.timeout && navigator.onLine !== false && (it.kind === 'insp' || it.kind === 'ronda')) {
             it.error = 'Envío lento de fotografías: se reintentará automáticamente.';
             await AP.Store.outboxPut(it);
             Sync.outbox = Sync.outbox.map(function (o) { return o.id === it.id ? it : o; });
@@ -173,6 +176,34 @@
         throw e;
       }
     },
+    // Marcación de ronda: primero las fotografías de la novedad (si las hay), luego el registro
+    _pushRonda: async function (it) {
+      var B = AP.B;
+      var f = Object.assign({}, it.fields);
+      var p = U.partsCO(f.FechaHora);
+      var folder = 'AP_Rondas/' + p.year + '/' + p.month + '/' + f.IdLocal.slice(0, 12);
+      var fotos = [];
+      for (var j = 0; j < it.photos.length; j++) {
+        var ph = it.photos[j];
+        var done = it.uploaded[ph.name];
+        if (!done) {
+          done = await B.upload(folder + '/' + ph.name, new Blob([ph.data], { type: ph.type || 'image/jpeg' }));
+          it.uploaded[ph.name] = done;
+          await AP.Store.outboxPut(it);
+        }
+        fotos.push({ nombre: ph.name, etiqueta: ph.label, ruta: done.path, sha256: ph.sha256 });
+      }
+      if (fotos.length) f.Fotos = JSON.stringify(fotos);
+      if (it.attempts > 0) {
+        var ya = await B.findBy('AP_Rondas', 'IdLocal', f.IdLocal);
+        if (ya.length) return;
+      }
+      try { await B.create('AP_Rondas', f); }
+      catch (e) {
+        if (e.status === 409) { var r = await B.findBy('AP_Rondas', 'IdLocal', f.IdLocal); if (r.length) return; }
+        throw e;
+      }
+    },
     // Registros de solo agregar (turnos), con la misma protección contra duplicados
     _pushSimple: async function (list, it) {
       var B = AP.B;
@@ -193,9 +224,35 @@
       AP.Store.set('c:movs', Sync.movs);
     },
 
+    // Solicitudes de ingreso de las últimas 24 horas (las ve el vigilante que espera y el Director que decide)
+    pullSolicitudes: async function () {
+      var sol = await AP.B.listRange('AP_Solicitudes', 'FechaSolicitud', U.addDays(new Date(), -1), null);
+      Sync.solicitudes = sol;
+      await AP.Store.set('c:solicitudes', sol);
+      Sync.emit();
+      return sol;
+    },
+
     pull: async function () {
       var B = AP.B, S = AP.Store;
       var errs = {};
+      // El rondero solo necesita los puntos de control y su propio perfil (minimización de datos, Ley 1581 de 2012)
+      if (AP.Session.can('rondas') && !AP.Session.can('porteria')) {
+        try {
+          var pts = await B.listAll('AP_PuntosRonda');
+          Sync.puntos = pts; await S.set('c:puntos', pts);
+          var yo = await B.miPerfil();
+          Sync.vigilantes = [yo].filter(Boolean); await S.set('c:vigilantes', Sync.vigilantes);
+          Sync.state.lastPull = new Date().toISOString();
+          Sync.state.pullErrors = {};
+          await Sync.saveMeta();
+        } catch (e) {
+          if (e.offline || e.authRequired) throw e;
+          Sync.state.pullErrors = { puntos: e.message };
+          throw AP.mkErr('api', 'No fue posible actualizar los puntos de ronda: ' + e.message);
+        }
+        return;
+      }
       // Personas: primero sin fotos; luego solo las fotos que cambiaron.
       try {
         var lista = await B.listAll('AP_Personas', { exclude: ['Foto'] });
@@ -234,6 +291,11 @@
         await S.set('c:vigilantes', vg);
       } catch (e) { if (e.offline || e.authRequired) throw e; errs.vigilantes = e.message; }
 
+      // Solicitudes de ingreso: se leen ANTES que los permisos, porque al aprobar el Director primero crea el permiso
+      // (si fallan, no se detiene la sincronización de lo demás)
+      try { await Sync.pullSolicitudes(); }
+      catch (e) { if (e.offline || e.authRequired) throw e; console.warn('[AP] Solicitudes de ingreso:', e.message); }
+
       // Horarios programados y permisos (los registra el Director; el celular solo los lee)
       try {
         var hr = await B.listAll('AP_Horarios');
@@ -258,9 +320,9 @@
     // Borra la copia local de datos (no los registros pendientes de envío)
     limpiarLocal: async function () {
       var S = AP.Store;
-      var keys = ['c:personas', 'c:visitas', 'c:movs', 'c:vigilantes', 'c:horarios', 'c:permisos', 'c:meta'];
+      var keys = ['c:personas', 'c:visitas', 'c:movs', 'c:vigilantes', 'c:horarios', 'c:permisos', 'c:solicitudes', 'c:puntos', 'c:meta'];
       for (var i = 0; i < keys.length; i++) await S.del(keys[i]);
-      Sync.personas = []; Sync.visitas = []; Sync.movs = []; Sync.vigilantes = []; Sync.horarios = []; Sync.permisos = [];
+      Sync.personas = []; Sync.visitas = []; Sync.movs = []; Sync.vigilantes = []; Sync.horarios = []; Sync.permisos = []; Sync.solicitudes = []; Sync.puntos = [];
       Sync.state.lastPull = null; Sync.state.pullErrors = {};
       Sync.reindex();
     },

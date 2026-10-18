@@ -92,6 +92,10 @@
     trash: 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13',
     bell: 'M6 10a6 6 0 0 1 12 0c0 5 2 7 2 7H4s2-2 2-7M10 21a2 2 0 0 0 4 0',
     package: 'M21 8l-9-5-9 5v8l9 5 9-5zM3 8l9 5 9-5M12 13v8',
+    calendar: 'M4 6h16v14H4zM4 10h16M8 3v5M16 3v5M8 14h2M12 14h2M16 14h.01M8 17h2M12 17h2',
+    pin: 'M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21zM12 12.5a3 3 0 1 0 0-6a3 3 0 0 0 0 6z',
+    route: 'M6 19a2 2 0 1 0 0-.01M18 5a2 2 0 1 0 0-.01M6 17V9a3 3 0 0 1 3-3h1M18 7v8a3 3 0 0 1-3 3h-1M10 6l2-2M10 6l2 2M14 18l-2-2M14 18l-2 2',
+    word: 'M6 3h8l4 4v14H6zM14 3v4h4M8.5 11l1.2 6l1.8-4.5l1.8 4.5l1.2-6',
     whatsapp: 'M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z'
   };
   AP.icon = function (name, size, cls) {
@@ -317,6 +321,92 @@
     return box;
   };
 
+  // ---------- Quién autoriza: se elige de la lista de personas registradas ----------
+  // Guarda en campos ocultos AutorizadoPor ("Nombre — Cargo"), AutorizadoPorId, AutorizadoPorDoc y AutorizadoPorCargo.
+  // opt: { fuente: async () => personas, valor: registro previo, placeholder }
+  AP.autorizaPicker = function (opt) {
+    opt = opt || {};
+    var v0 = opt.valor || {};
+    var K = ['AutorizadoPor', 'AutorizadoPorId', 'AutorizadoPorDoc', 'AutorizadoPorCargo'];
+    var hid = {};
+    K.forEach(function (k) { hid[k] = h('input', { type: 'hidden', name: k, value: v0[k] || '' }); });
+    var buscar = h('input', { type: 'search', autocomplete: 'off', placeholder: opt.placeholder || 'Nombre, documento, cargo o área de quien autoriza', 'aria-label': 'Buscar a quien autoriza' });
+    var res = h('div', { class: 'list anf-res' });
+    var vista = h('div', { class: 'stack sm' });
+    var box = h('div', { class: 'anf-pick' }, vista, h('div', { hidden: true }, K.map(function (k) { return hid[k]; })));
+    var cache = null;
+    async function personas() {
+      if (!cache) {
+        var l = await opt.fuente();
+        // Primero el personal propio (jefes de área); luego los demás registrados habilitados
+        cache = (l || []).filter(function (p) { return p.Estado === 'Habilitado' && p.Title; })
+          .sort(function (a, b) { return (a.Tipo === 'Personal propio' ? 0 : 1) - (b.Tipo === 'Personal propio' ? 0 : 1) || (U.fold(a.Title) < U.fold(b.Title) ? -1 : 1); });
+      }
+      return cache;
+    }
+    function texto(nombre, cargo) { return nombre + (cargo ? ' — ' + cargo : ''); }
+    function miCargo() { return (AP.Session.user.perfil && AP.Session.user.perfil.Cargo) || 'Director de Seguridad Integral'; }
+    function fijar(p, yo) {
+      if (yo) {
+        hid.AutorizadoPor.value = texto(AP.Session.user.nombre, miCargo());
+        hid.AutorizadoPorId.value = ''; hid.AutorizadoPorDoc.value = (AP.Session.user.perfil && AP.Session.user.perfil.NumDoc) || ''; hid.AutorizadoPorCargo.value = miCargo();
+        return;
+      }
+      hid.AutorizadoPor.value = p ? texto(p.Title, p.Cargo) : '';
+      hid.AutorizadoPorId.value = p ? p.id : '';
+      hid.AutorizadoPorDoc.value = p ? (p.NumDoc || '') : '';
+      hid.AutorizadoPorCargo.value = p ? (p.Cargo || '') : '';
+    }
+    var filtrar = U.debounce(async function () {
+      var t = U.fold(buscar.value), d = U.normDoc(buscar.value);
+      if (t.length < 2) { res.replaceChildren(); return; }
+      try {
+        var l = (await personas()).filter(function (p) {
+          return U.fold([p.Title, p.Cargo, p.Area, p.Empresa].join(' ')).indexOf(t) >= 0 || (d.length >= 3 && U.normDoc(p.NumDoc).indexOf(d) >= 0);
+        }).slice(0, 8);
+        if (!l.length) { res.replaceChildren(h('p', { class: 'muted small' }, 'No aparece entre las personas habilitadas. Regístrela primero en Personas.')); return; }
+        res.replaceChildren.apply(res, l.map(function (p) {
+          return h('button', { class: 'list-item', type: 'button', onclick: function () { fijar(p); pintar(); if (opt.onSelect) opt.onSelect(p); } },
+            AP.icon('badge', 20), h('div', null, h('strong', null, p.Title), h('small', null, [p.Cargo, p.Area, p.Tipo !== 'Personal propio' ? p.Tipo + (p.Empresa ? ' · ' + p.Empresa : '') : ''].filter(Boolean).join(' · ') || p.Tipo || '')));
+        }));
+      } catch (e) { res.replaceChildren(h('p', { class: 'note' }, 'No fue posible consultar las personas: ' + e.message)); }
+    }, 200);
+    buscar.addEventListener('input', filtrar);
+    function pintar() {
+      if (hid.AutorizadoPor.value) {
+        vista.replaceChildren(h('div', { class: 'sel-persona' }, AP.icon('badge', 22),
+          h('div', null, h('strong', null, hid.AutorizadoPor.value),
+            h('small', { class: 'block muted' }, hid.AutorizadoPorId.value ? 'Persona registrada' + (hid.AutorizadoPorDoc.value ? ' · doc. ' + hid.AutorizadoPorDoc.value : '') : (hid.AutorizadoPorCargo.value ? 'Usuario de la consola' : 'Registro anterior (texto libre)'))),
+          h('button', { class: 'btn small', type: 'button', onclick: function () { buscar.value = ''; K.forEach(function (k) { hid[k].value = ''; }); res.replaceChildren(); pintar(); setTimeout(function () { try { buscar.focus(); } catch (e) { /* */ } }, 30); } }, 'Cambiar')));
+      } else {
+        vista.replaceChildren(buscar, res,
+          AP.Session.can('admin') ? h('button', { class: 'btn small ghost', type: 'button', onclick: function () { fijar(null, true); pintar(); } }, AP.icon('shield', 16), 'Autorizo yo (' + miCargo() + ')') : null);
+      }
+    }
+    pintar();
+    box.valor = function () { var o = {}; K.forEach(function (k) { o[k] = hid[k].value; }); return o; };
+    box.elegido = function () { return !!hid.AutorizadoPor.value; };
+    return box;
+  };
+
+  // ---------- Búsqueda y descarga en las listas ----------
+  // Coincide si cada palabra escrita aparece en alguno de los campos (sin tildes; documentos y placas sin signos).
+  AP.coincide = function (r, txt, campos) {
+    var palabras = U.fold(txt).split(/\s+/).filter(Boolean);
+    if (!palabras.length) return true;
+    var vals = campos.map(function (k) { var v = typeof k === 'function' ? k(r) : r[k]; return v == null ? '' : String(v); });
+    var s = U.fold(vals.join(' | ')), sd = vals.map(U.normDoc).join('|');
+    return palabras.every(function (p) { var pd = U.normDoc(p); return s.indexOf(p) >= 0 || (pd.length >= 3 && sd.indexOf(pd) >= 0); });
+  };
+  AP.buscador = function (placeholder, alCambiar) {
+    var i = h('input', { type: 'search', class: 'grow', placeholder: placeholder || 'Buscar en la lista', 'aria-label': placeholder || 'Buscar en la lista', autocomplete: 'off' });
+    i.addEventListener('input', U.debounce(alCambiar, 200));
+    return i;
+  };
+  AP.btnExcel = function (onclick, texto) {
+    return h('button', { class: 'btn', type: 'button', onclick: onclick }, AP.icon('download', 18), texto || 'Excel');
+  };
+
   // ---------- Visitantes ya conocidos (v2.3.0) ----------
   // Las visitas anteriores de la misma cédula llenan el formulario de una visita nueva. El visitante NO se crea en
   // Personas: allí solo figuran quienes tienen QR permanente (personal propio, contratistas y conductores).
@@ -373,6 +463,41 @@
   };
   AP.waLink = function (num, texto) { return 'https://wa.me/' + num + (texto ? '?text=' + encodeURIComponent(texto) : ''); };
   AP.WA_DIRECTOR = '573106453940';
+
+  // ---------- Inducción para visitantes ----------
+  AP.Induccion = {
+    // Página pública con el texto completo, en el mismo sitio de la aplicación
+    url: function () { try { return new URL('induccion.html', location.href.split('#')[0]).href; } catch (e) { return 'induccion.html'; } },
+    texto: function () {
+      var c = (AP.TX && AP.TX.induccionCorta) || [];
+      if (!c.length) return '';
+      return 'INDUCCIÓN PARA VISITANTES — inocuidad y seguridad (de obligatorio cumplimiento):\n' +
+        c.map(function (x) { return '• ' + x; }).join('\n') +
+        '\nLea la inducción completa antes de su visita: ' + AP.Induccion.url();
+    },
+    html: function () {
+      var c = (AP.TX && AP.TX.induccionCorta) || [], e = AP.esc || function (s) { return String(s); };
+      if (!c.length) return '';
+      return '<p style="margin:16px 0 4px"><b>Inducción para visitantes — inocuidad y seguridad (de obligatorio cumplimiento)</b></p><ul style="margin:0 0 6px;padding-left:20px">' +
+        c.map(function (x) { return '<li>' + e(x) + '</li>'; }).join('') + '</ul>' +
+        '<p>Lea la inducción completa antes de su visita: <a href="' + e(AP.Induccion.url()) + '">' + e(AP.Induccion.url()) + '</a></p>';
+    }
+  };
+
+  // ---------- Aviso al anfitrión de que su visitante ya ingresó ----------
+  // Devuelve { num, texto, persona } o null si no hay anfitrión. El celular se toma de su registro en Personas.
+  AP.avisoAnfitrion = function (v, cuando, personas) {
+    if (!v || !v.Anfitrion) return null;
+    var lista = personas || (AP.Sync && AP.Sync.personas) || [];
+    var d = U.normDoc(v.AnfitrionDoc);
+    var p = lista.find(function (x) { return (v.AnfitrionId && x.id === v.AnfitrionId) || (d && U.normDoc(x.NumDoc) === d); }) || null;
+    var nombre = (p && p.Title) || v.Anfitrion;
+    var texto = 'Avo Pak S.A.S. — Dirección de Seguridad Integral. ' + nombre + ': su visitante ' + v.Title + (v.Empresa ? ' (' + v.Empresa + ')' : '') +
+      ' registró su ingreso por ' + (v.Porteria || (AP.CFG && AP.CFG.porteria) || 'portería') + ' a las ' + U.fTime(cuando || new Date()) + '. ' +
+      'Preséntese a recibirlo. Desde este momento usted es responsable de acompañarlo durante toda su permanencia y de que cumpla el protocolo de visitantes ' +
+      '(inducción de inocuidad y SST, elementos de protección y áreas autorizadas) hasta su salida.';
+    return { num: p ? AP.waNum(p.Telefono) : '', texto: texto, persona: p, nombre: nombre };
+  };
 
   AP.pickImage = function (capture) {
     return new Promise(function (res) {
