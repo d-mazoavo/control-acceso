@@ -38,6 +38,8 @@
       return h('a', { class: 'tile ' + (cls || ''), href: '#' + path }, AP.icon(icon, 28), h('strong', null, title), sub ? h('small', null, sub) : null);
     };
     function porLlegarTxt() { var n = AP.Access.visitasPorLlegar().length; return n ? n + ' por llegar' : 'Ninguna por llegar'; }
+    function permisosTxt() { var n = AP.permisosDelTurno().vigentes.length; return n ? n + (n === 1 ? ' vigente ahora' : ' vigentes ahora') : 'Ninguno vigente ahora'; }
+    function elementosTxt() { var n = AP.elementosDelDia().pendSalida.length; return n ? n + ' por salir' : 'Nada pendiente por salir'; }
     // Visitantes no anunciados registrados hoy en portería y la decisión del Director sobre cada uno
     var solicitudes = h('div');
     function pintarSolicitudes() {
@@ -79,6 +81,8 @@
         tile('search', 'Buscar', 'Por documento o nombre', '/buscar'),
         tile('edit', 'Registro manual', 'No anunciado / sin QR / salidas', '/manual'),
         tile('user', 'Visitas de hoy', porLlegarTxt(), '/visitas-hoy', AP.Access.visitasPorLlegar().length ? 'accent' : ''),
+        tile('key', 'Permisos', permisosTxt(), '/permisos-hoy', AP.permisosDelTurno().vigentes.length ? 'accent' : ''),
+        tile('package', 'Elementos', elementosTxt(), '/elementos-hoy', AP.elementosDelDia().pendSalida.length ? 'accent' : ''),
         tile('users', 'Personas dentro', String(dentro.length) + (AP.Session.can('admin') ? '' : ' · solo consulta'), '/dentro', dentro.length ? 'accent' : ''),
         tile('badge', 'Autoridad', 'Visita de autoridad', '/manual?cat=Autoridad'),
         tile('truck', 'Vehículo de carga', 'Inspección y precintos', '/carga'),
@@ -105,6 +109,10 @@
       if (t) t.textContent = String(AP.Access.inside().length) + (AP.Session.can('admin') ? '' : ' · solo consulta');
       var tv = document.querySelector('a.tile[href="#/visitas-hoy"]');
       if (tv) { tv.querySelector('small').textContent = porLlegarTxt(); tv.classList.toggle('accent', AP.Access.visitasPorLlegar().length > 0); }
+      var tp = document.querySelector('a.tile[href="#/permisos-hoy"]');
+      if (tp) { tp.querySelector('small').textContent = permisosTxt(); tp.classList.toggle('accent', AP.permisosDelTurno().vigentes.length > 0); }
+      var te = document.querySelector('a.tile[href="#/elementos-hoy"]');
+      if (te) { te.querySelector('small').textContent = elementosTxt(); te.classList.toggle('accent', AP.elementosDelDia().pendSalida.length > 0); }
       pintarSolicitudes();
       pintarSolIng();
     }, 200)));
@@ -337,6 +345,7 @@
       try {
         await AP.B.update('AP_Elementos', x.id, cambios);
         elem.resueltos[x.id] = { estado: estado, nota: nota, sentido: x.Sentido, resumen: EL.resumen(EL.items(x)) };
+        AP.Sync.elementos = (AP.Sync.elementos || []).map(function (z) { return z.id === x.id ? Object.assign({}, z, cambios) : z; });
         U.beep(estado === 'Confirmado' ? 'ok' : 'deny');
         AP.toast(estado === 'Confirmado' ? 'Elementos verificados.' : 'Novedad de elementos registrada. Informe a la Dirección de Seguridad Integral.', estado === 'Confirmado' ? 'info' : 'warn', 5000);
         pintarElementos();
@@ -1054,8 +1063,10 @@
       vis.length ? h('div', { class: 'list' }, vis.map(function (m) {
         var largo = Date.now() - new Date(m.FechaHora).getTime() > max;
         var p = m.Token ? (AP.Sync.byToken.get(m.Token) || {}).rec : null;
+        var porSalir = AP.elementosDe(m, 'Salida');
         var cuerpo = [AP.photoEl(p || { Title: m.Title }, 'sm'),
-          h('div', null, h('strong', null, m.Title), h('small', null, (m.Categoria || '') + ' · desde ' + U.fTime(m.FechaHora) + (U.ymd(m.FechaHora) !== U.ymd() ? ' del ' + U.fDate(m.FechaHora) : '') + ' (' + U.duracion(m.FechaHora) + ')' + (m.Placa ? ' · ' + m.Placa : ''))),
+          h('div', null, h('strong', null, m.Title), h('small', null, (m.Categoria || '') + ' · desde ' + U.fTime(m.FechaHora) + (U.ymd(m.FechaHora) !== U.ymd() ? ' del ' + U.fDate(m.FechaHora) : '') + ' (' + U.duracion(m.FechaHora) + ')' + (m.Placa ? ' · ' + m.Placa : '')),
+            porSalir.length ? h('small', null, AP.pill('Elementos por salir: ' + AP.Elem.resumen(AP.Elem.items(porSalir[0])) + (porSalir.length > 1 ? ' y ' + (porSalir.length - 1) + ' registro(s) más' : ''), 'warn')) : null),
           m._pendiente ? AP.icon('sync', 16) : null,
           editar ? h('span', { class: 'btn small' }, 'Salida') : null];
         return editar
@@ -1077,6 +1088,142 @@
       };
     }
     AP.porteriaShell('Personas dentro', cont, { back: '/porteria', sub: lista.length + ' en instalaciones' + (editar ? '' : ' (solo consulta)') });
+  });
+
+  // =================== PERMISOS DEL DÍA Y DEL TURNO (solo consulta) ===================
+  // El vigilante sabe qué permisos registró el Director para hoy y para su turno (también uno nocturno que cruce la
+  // medianoche). No se registra nada desde aquí: el permiso se aplica solo al leer el QR de la persona.
+  function ventanaTurno(now) {
+    var d0 = U.startOfDayCO(now), d1 = U.addDays(d0, 1), t = AP.Session.turno;
+    if (t && t.inicio) {
+      var ti = new Date(t.inicio), tf = new Date(ti.getTime() + (AP.CFG.horasMaxTurno || 13) * 3600000);
+      if (ti < d0) d0 = ti;
+      if (tf > d1) d1 = tf;
+    }
+    return [d0, d1];
+  }
+  function estadoPermiso(p, now) {
+    if (p.Estado === 'Anulado') return 'anulado';
+    var a = new Date(p.Desde).getTime(), b = new Date(p.Hasta).getTime(), t = now.getTime();
+    return b < t ? 'vencido' : a > t ? 'programado' : 'vigente';
+  }
+  AP.permisosDelTurno = function (now) {
+    now = now || new Date();
+    var w = ventanaTurno(now), out = { vigentes: [], programados: [], vencidos: [], anulados: [], todos: [] };
+    (AP.Sync.permisos || []).forEach(function (p) {
+      if (!(new Date(p.Desde) < w[1] && new Date(p.Hasta) > w[0])) return;
+      out[{ vigente: 'vigentes', programado: 'programados', vencido: 'vencidos', anulado: 'anulados' }[estadoPermiso(p, now)]].push(p);
+      out.todos.push(p);
+    });
+    out.vigentes.sort(function (a, b) { return a.Hasta < b.Hasta ? -1 : 1; });
+    out.programados.sort(function (a, b) { return a.Desde < b.Desde ? -1 : 1; });
+    out.vencidos.sort(function (a, b) { return a.Hasta < b.Hasta ? 1 : -1; });
+    return out;
+  };
+  // Dónde está la persona según el último registro del celular (para saber si ya usó el permiso)
+  function presencia(token) {
+    var m = token ? AP.Access.lastFor(token) : null;
+    if (!m) return 'Sin registros recientes en portería';
+    return (m.Sentido === 'Ingreso' ? 'Dentro desde las ' : 'Salió a las ') + U.fTime(m.FechaHora) + (U.ymd(m.FechaHora) !== U.ymd() ? ' del ' + U.fDate(m.FechaHora) : '');
+  }
+  function horaCorta(v) { return U.ymd(v) === U.ymd() ? U.fTime(v) : U.fDateTime(v); }
+
+  AP.route('/permisos-hoy', function () {
+    var q = AP.buscador('Buscar por nombre o documento', function () { pintar(); });
+    var box = h('div', { class: 'stack vis-hoy' });
+    AP.porteriaShell('Permisos', h('div', { class: 'stack' }, q, box), { back: '/porteria', sub: 'Hoy y su turno · solo consulta' });
+    var ETQ = { vigentes: ['Vigentes ahora', 'ok', 'Vigente'], programados: ['Más tarde', 'warn', 'Programado'], vencidos: ['Ya vencieron', 'muted', 'Vencido'], anulados: ['Anulados por el Director', 'deny', 'Anulado'] };
+    function item(p, k) {
+      var per = p.Token ? (AP.Sync.byToken.get(p.Token) || {}).rec : null;
+      return h('div', { class: 'list-item static' },
+        h('div', { class: 'vh-hora' }, horaCorta(p.Desde), h('small', { class: 'block muted' }, 'a ' + horaCorta(p.Hasta))),
+        h('div', null, h('strong', null, p.Title),
+          h('small', null, [p.NumDoc, per && per.Tipo, per && (per.Cargo || per.Area)].filter(Boolean).join(' · ')),
+          h('small', null, h('strong', null, p.Tipo), p.AutorizadoPor ? ' — autoriza ' + p.AutorizadoPor : ''),
+          k === 'anulados' ? null : h('small', null, presencia(p.Token))),
+        AP.pill(ETQ[k][2], ETQ[k][1]));
+    }
+    function pintar() {
+      var g = AP.permisosDelTurno(new Date());
+      var filtra = function (l) { return l.filter(function (p) { return AP.coincide(p, q.value, ['Title', 'NumDoc', 'Tipo', 'AutorizadoPor']); }); };
+      var secciones = ['vigentes', 'programados', 'vencidos', 'anulados'].map(function (k) {
+        var l = filtra(g[k]);
+        return l.length ? h('section', { class: 'card stack sm' }, h('h3', null, ETQ[k][0] + ' (' + l.length + ')'), h('div', { class: 'list' }, l.map(function (p) { return item(p, k); }))) : null;
+      }).filter(Boolean);
+      box.replaceChildren(
+        h('p', { class: 'note' }, 'Solo consulta. El permiso se aplica únicamente al leer el QR de la persona: la pantalla de verificación muestra si el ingreso o la salida están autorizados.'),
+        secciones.length ? h('div', { class: 'stack' }, secciones)
+          : AP.empty('key', q.value ? 'Ningún permiso coincide con la búsqueda' : 'No hay permisos para hoy ni para su turno', 'Aquí aparecen los permisos de ingreso tardío, salida anticipada o temporal y fuera de horario que registra el Director de Seguridad Integral.'),
+        h('p', { class: 'muted small' }, 'Datos del celular: ' + (AP.Sync.state.lastPull ? 'actualizados ' + U.rel(AP.Sync.state.lastPull) : 'sin descargar') + '.'));
+    }
+    pintar();
+    AP.onLeave(AP.Sync.on(U.debounce(pintar, 250)));
+    AP.Sync.run();
+  });
+
+  // =================== ELEMENTOS DEL DÍA (solo consulta) ===================
+  // Lo que el Director programó para hoy: primero lo que está pendiente por SALIR. La verificación se hace al leer el QR.
+  AP.elementosDelDia = function (now) {
+    var hoy = U.ymd(now || new Date());
+    var l = (AP.Sync.elementos || []).filter(function (x) { return x.Estado !== 'Cancelado' && U.ymd(x.FechaPrevista) === hoy; })
+      .sort(function (a, b) { return a.FechaPrevista < b.FechaPrevista ? -1 : 1; });
+    return {
+      pendSalida: l.filter(function (x) { return x.Estado === 'Pendiente' && x.Sentido === 'Salida'; }),
+      pendIngreso: l.filter(function (x) { return x.Estado === 'Pendiente' && x.Sentido === 'Ingreso'; }),
+      verificados: l.filter(function (x) { return x.Estado !== 'Pendiente'; }).sort(function (a, b) { return (a.FechaConfirmacion || '') < (b.FechaConfirmacion || '') ? 1 : -1; })
+    };
+  };
+  // Registros pendientes de hoy de una persona (por su QR o por su documento)
+  AP.elementosDe = function (m, sentido) {
+    var d = U.normDoc(m.NumDoc || ''), g = AP.elementosDelDia();
+    return (sentido === 'Ingreso' ? g.pendIngreso : sentido === 'Salida' ? g.pendSalida : g.pendSalida.concat(g.pendIngreso)).filter(function (x) {
+      return (m.Token && x.Token && x.Token === m.Token) || (d && x.PersonaDoc && U.normDoc(x.PersonaDoc) === d);
+    });
+  };
+  AP.route('/elementos-hoy', function () {
+    var EL = AP.Elem;
+    var box = h('div', { class: 'stack' });
+    AP.porteriaShell('Elementos de hoy', box, { back: '/porteria', sub: 'Solo consulta' });
+    function detalle(x) {
+      var fotos = EL.fotos(x);
+      AP.modal({
+        title: x.Sentido + ' de elementos — ' + x.Title, size: 'wide',
+        body: h('div', { class: 'stack' },
+          h('div', { class: 'row gap wrap' }, AP.pill(x.Sentido.toUpperCase(), x.Sentido === 'Ingreso' ? 'ok' : 'warn'), AP.estadoPill(x.Estado)),
+          h('div', { class: 'kv' }, h('span', null, 'Previsto'), h('strong', null, U.fDateTime(x.FechaPrevista))),
+          h('div', { class: 'kv' }, h('span', null, 'Autoriza'), h('strong', null, x.AutorizadoPor || '—')),
+          EL.tabla(EL.items(x)),
+          fotos.length ? EL.galeria(fotos) : null,
+          x.Observaciones ? h('p', { class: 'small' }, h('strong', null, 'Indicaciones: '), x.Observaciones) : null,
+          x.Estado === 'Pendiente' ? h('p', { class: 'note' }, 'Se verifica al leer el QR de ' + x.Title + ' cuando ' + (x.Sentido === 'Salida' ? 'salga' : 'ingrese') + ' con los elementos.') : null)
+      });
+    }
+    function tarjeta(x) {
+      var it = EL.items(x), nf = EL.fotos(x).length, esIn = x.Sentido === 'Ingreso';
+      var res = x.Estado === 'Confirmado' ? h('small', { class: 'txt-ok' }, 'Verificado por ' + (x.Vigilante || '—') + (x.FechaConfirmacion ? ' a las ' + U.fTime(x.FechaConfirmacion) : ''))
+        : x.Estado === 'Rechazado' ? h('small', { class: 'txt-deny' }, 'No coincidió' + (x.NotaPorteria ? ': ' + x.NotaPorteria : '') + (x.Vigilante ? ' (' + x.Vigilante + ')' : '')) : null;
+      return h('button', { class: 'elem-sol ' + (esIn ? 'in' : 'out') + (x.Estado !== 'Pendiente' ? ' hecho' : ''), type: 'button', style: { textAlign: 'left', font: 'inherit', color: 'inherit', cursor: 'pointer' }, onclick: function () { detalle(x); } },
+        h('div', { class: 'elem-head' }, AP.pill(x.Sentido.toUpperCase(), esIn ? 'ok' : 'warn'),
+          h('strong', null, x.Title), h('span', { class: 'small muted' }, [x.PersonaDoc, x.PersonaTipo, x.PersonaEmpresa].filter(Boolean).join(' · '))),
+        h('div', { class: 'small' }, it.slice(0, 3).map(function (i) { return h('div', null, (i.cant > 1 ? i.cant + ' × ' : '') + i.desc + (i.serial ? ' (' + i.serial + ')' : '')); }),
+          it.length > 3 ? h('div', { class: 'muted' }, 'y ' + (it.length - 3) + ' elemento(s) más') : null),
+        h('div', { class: 'elem-head small' }, h('span', null, 'Previsto: ', h('strong', null, U.fTime(x.FechaPrevista))), h('span', null, 'Autoriza: ', h('strong', null, x.AutorizadoPor || '—')),
+          nf ? h('span', null, AP.icon('camera', 14), ' ' + nf + ' foto' + (nf > 1 ? 's' : '')) : null),
+        x.Estado === 'Pendiente' ? h('small', { class: 'muted' }, presencia(x.Token)) : res);
+    }
+    function pintar() {
+      var g = AP.elementosDelDia();
+      var sec = function (titulo, l) { return l.length ? h('section', { class: 'card stack sm' }, h('h3', null, titulo + ' (' + l.length + ')'), l.map(tarjeta)) : null; };
+      var vacio = !g.pendSalida.length && !g.pendIngreso.length && !g.verificados.length;
+      box.replaceChildren(
+        h('p', { class: 'note' }, 'Solo consulta. Los elementos se verifican al leer el QR de la persona: allí se confirma si coinciden o se registra la novedad.'),
+        vacio ? AP.empty('package', 'No hay elementos programados para hoy', 'Aquí aparecen las herramientas, equipos y materiales que el Director autorizó para ingresar o salir hoy.') : null,
+        sec('Pendientes por SALIR', g.pendSalida), sec('Pendientes por INGRESAR', g.pendIngreso), sec('Ya verificados hoy', g.verificados),
+        h('p', { class: 'muted small' }, 'Datos del celular: ' + (AP.Sync.state.lastPull ? 'actualizados ' + U.rel(AP.Sync.state.lastPull) : 'sin descargar') + '.'));
+    }
+    pintar();
+    AP.onLeave(AP.Sync.on(U.debounce(pintar, 250)));
+    AP.Sync.run();
   });
 
   // =================== MI TURNO ===================

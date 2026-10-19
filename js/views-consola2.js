@@ -33,16 +33,38 @@
     var content = h('div', { class: 'stack' });
     AP.consolaShell('/consola/visitas', 'Visitas', content,
       h('button', { class: 'btn primary', type: 'button', onclick: function () { editar(null); } }, AP.icon('plus', 18), 'Nueva visita'));
-    var visitas = [];
-    async function consultar() { return AP.B.listRange('AP_Visitas', 'FechaFin', U.addDays(new Date(), tab === 'historial' ? -60 : -1), null, { exclude: ['Foto'] }); }
+    var visitas = [];   // visitas recientes (desde ayer): por aprobar, hoy y próximas
+    var rango = [];     // visitas del rango de fechas (pestaña "Todas")
+    var desdeV = AP.input('desde', U.ymd(U.addDays(new Date(), -60)), { type: 'date' });
+    var hastaV = AP.input('hasta', U.ymd(), { type: 'date' });
+    var fEstado = AP.select('estado', [['', 'Todos los estados']].concat(AP.CAT.estadosVisita), '');
+    var fOrigen = AP.select('origen', [['', 'Todos los orígenes'], ['Consola', 'Prerregistro'], ['Portería', 'No anunciado (portería)']], '');
+    [fEstado, fOrigen].forEach(function (s0) { s0.addEventListener('change', function () { pintarTabla(); }); });
+    async function consultar() { return AP.B.listRange('AP_Visitas', 'FechaFin', U.addDays(new Date(), -1), null, { exclude: ['Foto'] }); }
+    function rangoValido(dIn, hIn) {
+      var a0 = U.fromLocal(dIn.value, '00:00'), b0 = U.fromLocal(hIn.value, '23:59');
+      if (!a0 || !b0 || isNaN(a0) || isNaN(b0) || b0 < a0) { AP.toast('Revise el rango de fechas.', 'warn'); return null; }
+      if ((b0 - a0) / 86400000 > 400) { AP.toast('Consulte máximo 400 días por vez.', 'warn'); return null; }
+      return [a0, new Date(b0.getTime() + 59999)];
+    }
+    // Visitas programadas en el rango (por la fecha de la visita)
+    async function consultarRango() {
+      var r = rangoValido(desdeV, hastaV);
+      if (!r) return null;
+      var l = await AP.B.listRange('AP_Visitas', 'FechaFin', r[0], U.addDays(new Date(), 400), { exclude: ['Foto'] });
+      return l.filter(function (v) { return new Date(v.FechaInicio).getTime() <= r[1].getTime(); });
+    }
     async function cargar() {
       content.replaceChildren(AP.spinner('Consultando…'));
-      try { visitas = await consultar(); pintar(); }
-      catch (e) { content.replaceChildren(errBox(e)); }
+      try {
+        visitas = await consultar();
+        if (tab === 'historial') rango = (await consultarRango()) || [];
+        pintar();
+      } catch (e) { content.replaceChildren(errBox(e)); }
     }
     // Las solicitudes nuevas de portería aparecen solas (cada 30 s, sin interrumpir si hay una ventana abierta)
     var t = setInterval(async function () {
-      if (document.querySelector('.modal-wrap')) return;
+      if (tab === 'historial' || tab === 'registro' || document.querySelector('.modal-wrap')) return;
       try {
         var n = await consultar();
         var firma = function (l) { return l.map(function (v) { return v.id + v.Estado + v._etag; }).sort().join('|'); };
@@ -51,7 +73,7 @@
     }, 30000);
     AP.onLeave(function () { clearInterval(t); });
     // Al registrarse un ingreso o una salida, la lista se actualiza (estado "Dentro" / "Salió")
-    AP.onLeave(AP.Sync.on(U.debounce(function () { if (visitas.length && !document.querySelector('.modal-wrap') && location.hash.indexOf('#/consola/visitas') === 0) pintarTabla(); }, 800)));
+    AP.onLeave(AP.Sync.on(U.debounce(function () { if (tab !== 'registro' && visitas.length && !document.querySelector('.modal-wrap') && location.hash.indexOf('#/consola/visitas') === 0) pintarTabla(); }, 800)));
 
     function dePorteria(v) { return v.Origen === 'Portería'; }
     // Búsqueda y descarga (se conservan al cambiar de pestaña o al actualizarse la lista)
@@ -69,38 +91,167 @@
       ['Fecha de decisión', function (v) { return v.FechaAprobacion ? U.toDate(v.FechaAprobacion) : ''; }, 17], ['Justificación', function (v) { return v.JustificacionDecision; }, 34],
       ['QR enviado', function (v) { return v.QREnviado ? U.toDate(v.QREnviado) : ''; }, 17], ['Observaciones', function (v) { return v.Observaciones; }, 34]
     ];
-    var NOMBRES_TAB = { pendientes: 'Por aprobar', hoy: 'Hoy', proximas: 'Próximas', historial: 'Últimos 60 días' };
+    var TABS = [['pendientes', 'Por aprobar'], ['hoy', 'Hoy'], ['proximas', 'Próximas'], ['historial', 'Todas (por fechas)'], ['registro', 'Registro de ingresos y salidas']];
+    function nombreTab() { return tab === 'historial' ? 'Todas (' + desdeV.value + ' a ' + hastaV.value + ')' : (TABS.find(function (x) { return x[0] === tab; }) || ['', 'Visitas'])[1]; }
     function filtradas() {
-      return listaActual.filter(function (v) { return AP.coincide(v, qv.value, ['Title', 'NumDoc', 'Empresa', 'Anfitrion', 'Area', 'Motivo', 'Placa', 'Telefono', 'Estado']); });
+      return listaActual.filter(function (v) {
+        if (fEstado.value && v.Estado !== fEstado.value) return false;
+        if (fOrigen.value === 'Portería' && !dePorteria(v)) return false;
+        if (fOrigen.value === 'Consola' && dePorteria(v)) return false;
+        return AP.coincide(v, qv.value, ['Title', 'NumDoc', 'Empresa', 'Anfitrion', 'Area', 'Motivo', 'Placa', 'Telefono', 'Estado']);
+      });
     }
-    function pintar() {
+    function grupos() {
       var hoy = U.ymd(), ahora = new Date();
-      var grupos = {
+      return {
         pendientes: visitas.filter(function (v) { return v.Estado === 'Pendiente' && new Date(v.FechaFin) >= ahora; }),
         hoy: visitas.filter(function (v) { return U.ymd(v.FechaInicio) <= hoy && U.ymd(v.FechaFin) >= hoy && v.Estado !== 'Cancelada'; }),
         proximas: visitas.filter(function (v) { return U.ymd(v.FechaInicio) > hoy && v.Estado !== 'Cancelada'; }),
-        historial: visitas.slice()
+        historial: rango.slice()
       };
-      var lista = (grupos[tab] || []).sort(function (a, b) {
+    }
+    function tabsEl(g) {
+      return h('div', { class: 'tabs' }, TABS.map(function (x) {
+        return h('a', { class: x[0] === tab ? 'on' : '', href: '#/consola/visitas?t=' + x[0] }, x[1] + (['pendientes', 'hoy', 'proximas'].indexOf(x[0]) >= 0 ? ' (' + g[x[0]].length + ')' : ''));
+      }));
+    }
+    function pintar() {
+      if (tab === 'registro') return pintarRegistro();
+      var g = grupos();
+      var lista = (g[tab] || []).sort(function (a, b) {
         var ka = dePorteria(a) ? (a.FechaSolicitud || a.FechaInicio) : a.FechaInicio, kb = dePorteria(b) ? (b.FechaSolicitud || b.FechaInicio) : b.FechaInicio;
         return ka < kb ? (tab === 'historial' ? 1 : -1) : (tab === 'historial' ? -1 : 1);
       });
-      var tabs = h('div', { class: 'tabs' }, [['pendientes', 'Por aprobar'], ['hoy', 'Hoy'], ['proximas', 'Próximas'], ['historial', 'Últimos 60 días']].map(function (t) {
-        return h('a', { class: t[0] === tab ? 'on' : '', href: '#/consola/visitas?t=' + t[0] }, t[1] + (t[0] !== 'historial' ? ' (' + grupos[t[0]].length + ')' : ''));
-      }));
-      var avisoPort = tab === 'pendientes' && grupos.pendientes.some(dePorteria)
+      var avisoPort = tab === 'pendientes' && g.pendientes.some(dePorteria)
         ? h('p', { class: 'banner warn' }, AP.icon('alert', 18), h('span', null, 'Hay visitantes no anunciados esperando en portería. Apruebe o rechace con justificación; al aprobar, envíele el código QR por WhatsApp.'))
         : null;
       listaActual = lista;
-      content.replaceChildren(tabs, avisoPort,
-        h('div', { class: 'filters' }, qv, AP.btnExcel(function () {
+      content.replaceChildren(tabsEl(g), avisoPort,
+        tab === 'historial' ? h('div', { class: 'filters' }, AP.field('Desde', desdeV), AP.field('Hasta', hastaV),
+          h('button', { class: 'btn primary', type: 'button', onclick: recargarRango }, AP.icon('search', 18), 'Consultar'),
+          h('small', { class: 'muted' }, 'Visitas programadas en el rango, en cualquier estado.')) : null,
+        h('div', { class: 'filters' }, fEstado, fOrigen, qv, AP.btnExcel(function () {
           var rows = filtradas();
           if (!rows.length) return AP.toast('No hay visitas para descargar con el filtro actual.', 'warn');
-          AP.exportar('Visitas_' + NOMBRES_TAB[tab].replace(/\s+/g, '_'), COLS_VIS, rows, 'xlsx', [['Vista', NOMBRES_TAB[tab]], ['Filtro', qv.value || 'ninguno'],
+          AP.exportar('Visitas_' + (tab === 'historial' ? 'todas' : nombreTab().replace(/\s+/g, '_')), COLS_VIS, rows, 'xlsx', [['Vista', nombreTab()],
+            ['Filtros', [fEstado.value, fOrigen.value === 'Consola' ? 'Prerregistro' : fOrigen.value === 'Portería' ? 'No anunciado' : '', qv.value].filter(Boolean).join(' · ') || 'ninguno'],
             ['Generado por', AP.Session.user.nombre + ' (' + AP.Session.user.upn + ')'], ['Fecha', U.fDateTime(new Date())]]);
         })),
         tablaBox);
       pintarTabla();
+    }
+    async function recargarRango() {
+      tablaBox.replaceChildren(AP.spinner('Consultando…'));
+      try { var r = await consultarRango(); if (r) { rango = r; pintar(); } else pintarTabla(); }
+      catch (e) { tablaBox.replaceChildren(errBox(e)); }
+    }
+
+    // ---------- Registro de ingresos y salidas de visitantes y autoridades ----------
+    // Cada fila une el ingreso con su salida (por el registro de entrada o por la misma persona) y calcula la permanencia.
+    var desdeR = AP.input('desdeR', U.ymd(U.addDays(new Date(), -30)), { type: 'date' });
+    var hastaR = AP.input('hastaR', U.ymd(), { type: 'date' });
+    var fTipoR = AP.select('tipoR', [['', 'Visitantes y autoridades'], ['vis', 'Solo visitantes'], ['aut', 'Solo autoridades']], '');
+    var fEstR = AP.select('estR', [['', 'Todos los registros'], ['Dentro', 'Siguen dentro'], ['Salió', 'Ya salieron'], ['Sin salida registrada', 'Sin salida registrada'], ['Ingreso negado', 'Ingresos negados']], '');
+    var qr = AP.buscador('Buscar visitante, documento, empresa, anfitrión, placa o vigilante', function () { pintarTablaR(); });
+    [fTipoR, fEstR].forEach(function (s0) { s0.addEventListener('change', function () { pintarTablaR(); }); });
+    var regBox = h('div');
+    var registro = null;
+    function esVisitaMov(m) { return m.RefLista === 'AP_Visitas' || m.Categoria === 'Visitante' || m.Categoria === 'Visitante no anunciado' || m.Categoria === 'Autoridad'; }
+    function emparejar(movs) {
+      var asc = movs.slice().sort(function (a, b) { return a.FechaHora < b.FechaHora ? -1 : 1; });
+      var filas = [], abiertos = new Map(), porId = new Map();
+      asc.forEach(function (m) {
+        if (m.Resultado === 'Negado') { filas.push({ ing: m, sal: null, negado: true }); return; }
+        var k = AP.Access.keyOf(m);
+        if (m.Sentido === 'Ingreso') { var f = { ing: m, sal: null }; filas.push(f); abiertos.set(k, f); porId.set(m.IdLocal, f); return; }
+        var f2 = (m.EntradaId && porId.get(m.EntradaId)) || abiertos.get(k);
+        if (f2 && !f2.sal) { f2.sal = m; abiertos.delete(AP.Access.keyOf(f2.ing)); }
+        else filas.push({ ing: null, sal: m });
+      });
+      var maxSin = (AP.Horario ? AP.Horario.cfg().horasMaxSinSalida : 14) * 3600000;
+      filas.forEach(function (f) {
+        f.d = f.ing || f.sal;
+        f.estado = f.negado ? 'Ingreso negado' : f.ing && f.sal ? 'Salió' : !f.ing ? 'Salida (ingreso anterior al rango)'
+          : Date.now() - new Date(f.ing.FechaHora).getTime() > maxSin ? 'Sin salida registrada' : 'Dentro';
+      });
+      return filas.sort(function (a, b) { return a.d.FechaHora < b.d.FechaHora ? 1 : -1; });
+    }
+    async function consultarRegistro() {
+      var r = rangoValido(desdeR, hastaR);
+      if (!r) return;
+      regBox.replaceChildren(AP.spinner('Consultando ingresos y salidas…'));
+      try {
+        var movs = await AP.B.listRange('AP_Movimientos', 'FechaHora', r[0], r[1]);
+        registro = emparejar(movs.filter(esVisitaMov));
+        pintarTablaR();
+      } catch (e) { regBox.replaceChildren(errBox(e)); }
+    }
+    function filtradosR() {
+      return (registro || []).filter(function (f) {
+        if (fTipoR.value === 'aut' && f.d.Categoria !== 'Autoridad') return false;
+        if (fTipoR.value === 'vis' && f.d.Categoria === 'Autoridad') return false;
+        if (fEstR.value && f.estado !== fEstR.value) return false;
+        return AP.coincide(f.d, qr.value, ['Title', 'NumDoc', 'Empresa', 'Anfitrion', 'Area', 'Motivo', 'Placa', 'Categoria',
+          function () { return [f.ing && f.ing.Vigilante, f.sal && f.sal.Vigilante].filter(Boolean).join(' '); }]);
+      });
+    }
+    function horaMov(m) { return m ? U.fDateTime(m.FechaHora) : '—'; }
+    function permanencia(f) { return f.ing && !f.negado ? U.duracion(f.ing.FechaHora, f.sal ? f.sal.FechaHora : new Date()) : ''; }
+    var KIND_R = { 'Dentro': 'ok', 'Salió': 'muted', 'Ingreso negado': 'deny', 'Sin salida registrada': 'warn', 'Salida (ingreso anterior al rango)': 'muted' };
+    var COLS_REG = [
+      ['Ingreso', function (f) { return f.ing ? U.toDate(f.ing.FechaHora) : ''; }, 17], ['Salida', function (f) { return f.sal ? U.toDate(f.sal.FechaHora) : ''; }, 17],
+      ['Permanencia', permanencia, 14], ['Estado', function (f) { return f.estado; }, 18], ['Categoría', function (f) { return f.d.Categoria; }, 20],
+      ['Nombres y apellidos', function (f) { return f.d.Title; }, 30], ['Tipo doc.', function (f) { return f.d.TipoDoc; }, 8], ['N.° documento', function (f) { return f.d.NumDoc; }, 15],
+      ['Celular', function (f) { return f.d.Telefono; }, 14], ['Empresa / entidad', function (f) { return f.d.Empresa; }, 26],
+      ['Anfitrión', function (f) { return f.d.Anfitrion; }, 26], ['Doc. anfitrión', function (f) { return f.d.AnfitrionDoc; }, 14], ['Área', function (f) { return f.d.Area; }, 18],
+      ['Motivo', function (f) { return f.d.Motivo; }, 34], ['Vehículo', function (f) { return f.d.VehiculoTipo; }, 12], ['Placa', function (f) { return f.d.Placa || (f.sal && f.sal.Placa); }, 10],
+      ['Lectura del ingreso', function (f) { return f.ing ? f.ing.Origen : ''; }, 14],
+      ['Autorización de datos confirmada', function (f) { return f.ing ? U.yesNo(f.ing.AutorizacionConfirmada) : ''; }, 12],
+      ['Inducción confirmada', function (f) { return f.ing ? U.yesNo(f.ing.InduccionConfirmada) : ''; }, 12],
+      ['Carné entregado', function (f) { return f.ing ? f.ing.CarneEntregado : ''; }, 10], ['Documento en custodia', function (f) { return f.ing ? U.yesNo(f.ing.DocumentoCustodia) : ''; }, 11],
+      ['Carné devuelto', function (f) { return f.sal ? U.yesNo(f.sal.CarneDevuelto) : ''; }, 10],
+      ['Registró el ingreso', function (f) { return f.ing ? f.ing.Vigilante : ''; }, 22], ['Registró la salida', function (f) { return f.sal ? f.sal.Vigilante : ''; }, 22],
+      ['Novedad', function (f) { return [f.ing && f.ing.Novedad, f.sal && f.sal.Novedad].filter(Boolean).join(' | '); }, 30],
+      ['Motivo de la negación', function (f) { return f.negado ? f.ing.MotivoNegacion : ''; }, 30],
+      ['Observaciones', function (f) { return [f.ing && f.ing.Observaciones, f.sal && f.sal.Observaciones].filter(Boolean).join(' | '); }, 30],
+      ['Id. ingreso', function (f) { return f.ing ? f.ing.IdLocal : ''; }, 38], ['Id. salida', function (f) { return f.sal ? f.sal.IdLocal : ''; }, 38]
+    ];
+    function pintarTablaR() {
+      if (!registro) return;
+      var l = filtradosR();
+      var n = function (e) { return l.filter(function (f) { return f.estado === e; }).length; };
+      var lim = l.slice(0, 300);
+      regBox.replaceChildren(h('div', { class: 'stack sm' },
+        h('div', { class: 'row gap wrap' }, AP.pill(l.length + ' registros', 'brand'), n('Dentro') ? AP.pill(n('Dentro') + ' dentro', 'ok') : null,
+          AP.pill(n('Salió') + ' salieron', 'muted'), n('Sin salida registrada') ? AP.pill(n('Sin salida registrada') + ' sin salida registrada', 'warn') : null,
+          n('Ingreso negado') ? AP.pill(n('Ingreso negado') + ' negados', 'deny') : null),
+        simpleTable([
+          ['Ingreso', function (f) { return f.negado ? h('div', null, horaMov(f.ing), h('small', { class: 'block txt-deny' }, 'Negado')) : horaMov(f.ing); }],
+          ['Salida', function (f) { return f.negado ? '' : f.sal ? (f.ing && U.ymd(f.sal.FechaHora) === U.ymd(f.ing.FechaHora) ? U.fTime(f.sal.FechaHora) : horaMov(f.sal)) : '—'; }],
+          ['Permanencia', permanencia],
+          ['Visitante', function (f) { return h('div', null, h('strong', null, f.d.Title), h('small', { class: 'block muted' }, [(f.d.TipoDoc || '') + ' ' + (f.d.NumDoc || ''), f.d.Categoria].filter(function (z) { return String(z || '').trim(); }).join(' · '))); }],
+          ['Empresa / anfitrión', function (f) { return h('div', null, f.d.Empresa || '', h('small', { class: 'block muted' }, [f.d.Anfitrion, f.d.Area].filter(Boolean).join(' · '))); }],
+          ['Motivo', function (f) { return f.d.Motivo; }],
+          ['Placa', function (f) { return f.d.Placa || (f.sal && f.sal.Placa) || ''; }],
+          ['Registró', function (f) { return h('div', null, f.ing ? h('small', { class: 'block' }, 'Ingreso: ' + (f.ing.Vigilante || '—')) : null, f.sal ? h('small', { class: 'block' }, 'Salida: ' + (f.sal.Vigilante || '—')) : null); }],
+          ['Estado', function (f) { return h('div', null, AP.pill(f.estado, KIND_R[f.estado] || 'muted'), (f.ing && f.ing.Novedad) || (f.sal && f.sal.Novedad) ? h('small', { class: 'block txt-warn' }, [f.ing && f.ing.Novedad, f.sal && f.sal.Novedad].filter(Boolean).join(' | ')) : null); }]
+        ], lim),
+        l.length > 300 ? h('p', { class: 'muted small' }, 'Se muestran 300 de ' + l.length + '. La descarga en Excel incluye todos.') : null));
+    }
+    function pintarRegistro() {
+      content.replaceChildren(tabsEl(grupos()),
+        h('div', { class: 'banner info' }, AP.icon('history', 18), h('span', null, 'Cada ingreso y salida de visitantes (con QR o por registro manual) y de autoridades, con la hora de entrada, la de salida y el tiempo de permanencia. Es el libro de visitas de portería.')),
+        h('div', { class: 'filters' }, AP.field('Desde', desdeR), AP.field('Hasta', hastaR),
+          h('button', { class: 'btn primary', type: 'button', onclick: consultarRegistro }, AP.icon('search', 18), 'Consultar')),
+        h('div', { class: 'filters' }, fTipoR, fEstR, qr, AP.btnExcel(function () {
+          var l = filtradosR();
+          if (!l.length) return AP.toast('No hay registros para descargar con el filtro actual.', 'warn');
+          AP.exportar('Registro_de_visitas', COLS_REG, l, 'xlsx', [['Documento', 'Registro de ingresos y salidas de visitantes — ' + AP.CFG.porteria],
+            ['Periodo', desdeR.value + ' a ' + hastaR.value], ['Filtros', [fTipoR.options[fTipoR.selectedIndex].text, fEstR.value, qr.value].filter(Boolean).join(' · ')],
+            ['Generado por', AP.Session.user.nombre + ' (' + AP.Session.user.upn + ')'], ['Fecha', U.fDateTime(new Date())], ['Fuente', 'Base de datos Firebase — colección AP_Movimientos']]);
+        })),
+        regBox);
+      if (registro) pintarTablaR(); else consultarRegistro();
     }
     function pintarTabla() {
       tablaBox.replaceChildren(simpleTable([
@@ -793,41 +944,71 @@
       ['Registrado por', function (x) { return x._createdBy || x.CreadoPor; }, 18], ['Fecha de registro', function (x) { return U.toDate(x.FechaCreacion); }, 17]
     ];
 
+    // Registro completo: todos los registros (pendientes, verificados, con novedad y cancelados) por fecha prevista
+    var desdeE = AP.input('desdeE', U.ymd(U.addDays(new Date(), -90)), { type: 'date' });
+    var hastaE = AP.input('hastaE', U.ymd(U.addDays(new Date(), 30)), { type: 'date' });
+    var fEstE = AP.select('estE', [['', 'Todos los estados']].concat(AP.CAT.estadosElemento), '');
+    var fSentE = AP.select('sentE', [['', 'Ingreso y salida']].concat(AP.CAT.sentidosElemento), '');
+    [fEstE, fSentE].forEach(function (s0) { s0.addEventListener('change', function () { pintarTabla(); }); });
+    var rangoE = [];
+    async function consultarRangoE() {
+      var a0 = U.fromLocal(desdeE.value, '00:00'), b0 = U.fromLocal(hastaE.value, '23:59');
+      if (!a0 || !b0 || isNaN(a0) || isNaN(b0) || b0 < a0) { AP.toast('Revise el rango de fechas.', 'warn'); return null; }
+      if ((b0 - a0) / 86400000 > 400) { AP.toast('Consulte máximo 400 días por vez.', 'warn'); return null; }
+      return AP.B.listRange('AP_Elementos', 'FechaPrevista', a0, new Date(b0.getTime() + 59999), {});
+    }
     async function cargar() {
       content.replaceChildren(AP.spinner('Consultando…'));
       try {
         registros = await AP.B.listRange('AP_Elementos', 'FechaCreacion', U.addDays(new Date(), -60), null, {});
+        if (tab === 'registro') rangoE = (await consultarRangoE()) || [];
         pintar();
       } catch (e) { content.replaceChildren(errBox(e)); }
+    }
+    async function recargarE() {
+      tablaE.replaceChildren(AP.spinner('Consultando…'));
+      try { var r = await consultarRangoE(); if (r) { rangoE = r; pintar(); } else pintarTabla(); }
+      catch (e) { tablaE.replaceChildren(errBox(e)); }
     }
 
     function vencida(x) { return x.Estado === 'Pendiente' && U.ymd(x.FechaPrevista) < U.ymd(); }
     var qe = AP.buscador('Buscar persona, documento, elemento, serial o quien autoriza', function () { pintarTabla(); });
     var listaE = [], tablaE = h('div');
     function filtradosE() {
-      return listaE.filter(function (x) { return AP.coincide(x, qe.value, ['Title', 'PersonaDoc', 'PersonaEmpresa', 'PersonaTipo', 'AutorizadoPor', 'Estado', 'Sentido', function (r) { return E.resumen(E.items(r)); }]); });
+      return listaE.filter(function (x) {
+        if (fEstE.value && x.Estado !== fEstE.value) return false;
+        if (fSentE.value && x.Sentido !== fSentE.value) return false;
+        return AP.coincide(x, qe.value, ['Title', 'PersonaDoc', 'PersonaEmpresa', 'PersonaTipo', 'AutorizadoPor', 'Estado', 'Sentido', 'Vigilante', 'NotaPorteria', function (r) { return E.resumen(E.items(r)); }]);
+      });
     }
+    var NOMBRES_E = { pendientes: 'Pendientes', hoy: 'Hoy', historial: 'Últimos 60 días', registro: 'Registro completo' };
 
     function pintar() {
       var hoy = U.ymd();
       var grupos = {
         pendientes: registros.filter(function (x) { return x.Estado === 'Pendiente'; }),
         hoy: registros.filter(function (x) { return U.ymd(x.FechaPrevista) === hoy && x.Estado !== 'Cancelado'; }),
-        historial: registros.slice()
+        historial: registros.slice(),
+        registro: rangoE.slice()
       };
       var lista = (grupos[tab] || []).slice().sort(function (a, b) {
-        return tab === 'historial' ? (a.FechaPrevista < b.FechaPrevista ? 1 : -1) : (a.FechaPrevista < b.FechaPrevista ? -1 : 1);
+        return tab === 'historial' || tab === 'registro' ? (a.FechaPrevista < b.FechaPrevista ? 1 : -1) : (a.FechaPrevista < b.FechaPrevista ? -1 : 1);
       });
-      var tabs = h('div', { class: 'tabs' }, [['pendientes', 'Pendientes'], ['hoy', 'Hoy'], ['historial', 'Últimos 60 días']].map(function (t) {
-        return h('a', { class: t[0] === tab ? 'on' : '', href: '#/consola/elementos?t=' + t[0] }, t[1] + ' (' + grupos[t[0]].length + ')');
+      var tabs = h('div', { class: 'tabs' }, [['pendientes', 'Pendientes'], ['hoy', 'Hoy'], ['historial', 'Últimos 60 días'], ['registro', 'Registro completo (por fechas)']].map(function (t) {
+        return h('a', { class: t[0] === tab ? 'on' : '', href: '#/consola/elementos?t=' + t[0] }, t[1] + (t[0] !== 'registro' ? ' (' + grupos[t[0]].length + ')' : ''));
       }));
       listaE = lista;
+      var cuenta = {}; lista.forEach(function (x) { cuenta[x.Estado] = (cuenta[x.Estado] || 0) + 1; });
       var barra = h('div', { class: 'stack sm' },
-        h('p', { class: 'muted small' }, 'Los registros pendientes aparecen al vigilante en la pantalla de verificación cuando lee el QR de la persona (únicamente el día previsto).'),
-        h('div', { class: 'filters' }, qe, AP.btnExcel(function () {
+        h('p', { class: 'muted small' }, 'Los registros pendientes aparecen al vigilante en "Elementos" (portería) y en la pantalla de verificación cuando lee el QR de la persona (el día previsto). Ningún registro se borra: los cancelados y los verificados quedan en el registro completo.'),
+        tab === 'registro' ? h('div', { class: 'filters' }, AP.field('Fecha prevista desde', desdeE), AP.field('Hasta', hastaE),
+          h('button', { class: 'btn primary', type: 'button', onclick: recargarE }, AP.icon('search', 18), 'Consultar'),
+          h('div', { class: 'row gap wrap' }, AP.CAT.estadosElemento.map(function (e) { return cuenta[e] ? AP.pill(e + ': ' + cuenta[e], { Pendiente: 'warn', Confirmado: 'ok', Rechazado: 'deny', Cancelado: 'muted' }[e]) : null; }))) : null,
+        h('div', { class: 'filters' }, fSentE, fEstE, qe, AP.btnExcel(function () {
           var l = filtradosE();
           if (!l.length) return AP.toast('No hay registros con el filtro actual.', 'warn');
-          AP.exportar('Control_elementos', COLS, l, 'xlsx', [['Vista', { pendientes: 'Pendientes', hoy: 'Hoy', historial: 'Últimos 60 días' }[tab]], ['Filtro', qe.value || 'ninguno'], ['Generado por', AP.Session.user.nombre], ['Fecha', U.fDateTime(new Date())]]);
+          AP.exportar('Control_elementos', COLS, l, 'xlsx', [['Vista', NOMBRES_E[tab] + (tab === 'registro' ? ' (' + desdeE.value + ' a ' + hastaE.value + ')' : '')],
+            ['Filtros', [fSentE.value, fEstE.value, qe.value].filter(Boolean).join(' · ') || 'ninguno'], ['Generado por', AP.Session.user.nombre], ['Fecha', U.fDateTime(new Date())]]);
         })));
       content.replaceChildren(tabs, barra, tablaE);
       pintarTabla();

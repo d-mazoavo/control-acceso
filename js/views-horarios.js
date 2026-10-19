@@ -46,13 +46,16 @@
             ' minutos antes de la hora de entrada (antes de eso se alerta MUY TEMPRANO y queda PENDIENTE); a tiempo hasta la hora de entrada; ' + AP.Horario.cfg().minutosPendiente +
             ' minutos o más después, el ingreso queda DENEGADO hasta que usted verifique; entre 1 y ' + (AP.Horario.cfg().minutosPendiente - 1) + ' minutos queda PENDIENTE. ' +
             'La salida antes de la hora de fin exige un permiso suyo; sin él se muestra como NO AUTORIZADA (sin retención física). Las personas sin horario registrado no tienen estas reglas.')),
+          h('div', { class: 'banner info' }, AP.icon('truck', 18), h('span', null,
+            'Acceso libre (conductores, contratistas): en los días y horas habilitados la persona entra y sale las veces que necesite, sin control de llegada tarde ni de salida antes de la hora. ' +
+            'La llegada sí se controla fuera de ese horario: antes de la hora queda PENDIENTE de su verificación; después del cierre, o en un día no habilitado si es contratista, el ingreso requiere su aprobación.')),
           sin.length ? h('div', { class: 'banner warn' }, AP.icon('alert', 18), h('span', null, sin.length + ' persona(s) habilitada(s) sin horario registrado (' + sin.slice(0, 4).map(function (p) { return p.Title; }).join(', ') + (sin.length > 4 ? '…' : '') + '). Las reglas de puntualidad y salida no se les aplican.')) : null,
           h('div', { class: 'filters' }, q, AP.btnExcel(function () {
             var rows = filtrados();
             if (!rows.length) return AP.toast('No hay horarios con el filtro actual.', 'warn');
             AP.exportar('Horarios', [
               ['Persona', function (x) { return x.Title; }, 30], ['Documento', function (x) { return x.NumDoc; }, 15], ['Área', function (x) { return x.Area; }, 18],
-              ['Turno', function (x) { return x.Turno; }, 18], ['Días', function (x) { return AP.Horario.nombreDias(x.Dias); }, 26],
+              ['Turno', function (x) { return x.Turno; }, 18], ['Modalidad', function (x) { return modalidadTxt(x); }, 22], ['Días', function (x) { return AP.Horario.nombreDias(x.Dias); }, 26],
               ['Entrada', function (x) { return x.HoraEntrada; }, 9], ['Salida', function (x) { return x.HoraSalida; }, 9],
               ['Vigente desde', function (x) { return x.VigenteDesde; }, 13], ['Vigente hasta', function (x) { return x.VigenteHasta; }, 13],
               ['Estado', function (x) { return x.Activo === false ? 'Inactivo' : 'Activo'; }, 10], ['Observaciones', function (x) { return x.Observaciones; }, 30]
@@ -61,8 +64,9 @@
         pintar();
       } catch (e) { content.replaceChildren(errBox(e)); }
     }
+    function modalidadTxt(x) { return AP.Horario.esLibre(x) ? 'Acceso libre dentro del horario' : 'Turno con control de puntualidad'; }
     function filtrados() {
-      return datos.hor.filter(function (x) { return AP.coincide(x, q.value, ['Title', 'NumDoc', 'Area', 'Turno', 'HoraEntrada']); })
+      return datos.hor.filter(function (x) { return AP.coincide(x, q.value, ['Title', 'NumDoc', 'Area', 'Turno', 'HoraEntrada', modalidadTxt]); })
         .sort(function (a, b) { return (a.Activo === false) - (b.Activo === false) || (U.fold(a.Title) < U.fold(b.Title) ? -1 : 1); });
     }
     function pintar() {
@@ -70,8 +74,9 @@
       box.replaceChildren(tabla([
         ['Persona', function (x) { return h('div', null, h('strong', null, x.Title), h('small', { class: 'muted block' }, (x.NumDoc || '') + (x.Area ? ' · ' + x.Area : ''))); }],
         ['Turno', function (x) { return x.Turno || '—'; }],
+        ['Modalidad', function (x) { return AP.Horario.esLibre(x) ? AP.pill('Acceso libre', 'brand') : AP.pill('Turno', 'muted'); }],
         ['Días', function (x) { return AP.Horario.nombreDias(x.Dias); }],
-        ['Horario', function (x) { var a = AP.Horario.toMin(x.HoraEntrada), b = AP.Horario.toMin(x.HoraSalida); return x.HoraEntrada + ' – ' + x.HoraSalida + (b <= a ? ' (+1 día)' : ''); }],
+        ['Horario', function (x) { var a = AP.Horario.toMin(x.HoraEntrada), b = AP.Horario.toMin(x.HoraSalida); return x.HoraEntrada === '00:00' && x.HoraSalida === '23:59' ? 'Todo el día' : x.HoraEntrada + ' – ' + x.HoraSalida + (b <= a ? ' (+1 día)' : ''); }],
         ['Vigencia', function (x) { return (x.VigenteDesde || 'sin inicio') + ' → ' + (x.VigenteHasta || 'indefinida'); }],
         ['Estado', function (x) { return AP.pill(x.Activo === false ? 'Inactivo' : 'Activo', x.Activo === false ? 'muted' : 'ok'); }],
         ['', function (x) {
@@ -92,7 +97,8 @@
     }
 
     function editar(x) {
-      var nuevo = !x, d0 = x || { Dias: '1,2,3,4,5', HoraEntrada: '08:00', HoraSalida: '17:00', Activo: true };
+      if (!AP.SCHEMA.AP_Horarios.cols.some(function (c) { return c[0] === 'Modalidad'; })) return AP.toast('Recargue la página (Ctrl+F5) para aplicar la actualización de la aplicación y vuelva a intentarlo.', 'warn', 9000);
+      var nuevo = !x, d0 = x || { Dias: '1,2,3,4,5', HoraEntrada: '08:00', HoraSalida: '17:00', Activo: true, Modalidad: 'Turno' };
       AP.modal({
         title: nuevo ? 'Programar horario' : 'Horario de ' + x.Title, size: 'wide',
         body: function (close) {
@@ -127,8 +133,21 @@
             VigenteHasta: AP.input('VigenteHasta', d0.VigenteHasta, { type: 'date' }),
             Observaciones: AP.textarea('Observaciones', d0.Observaciones, { rows: 2 })
           };
+          var ayudaMod = h('p', { class: 'help' });
+          var modalidad = AP.segmented('Modalidad', [
+            { value: 'Turno', label: 'Turno (puntualidad)', icon: 'clock' },
+            { value: 'Libre', label: 'Acceso libre (entra y sale)', icon: 'truck' }
+          ], AP.Horario.esLibre(d0) ? 'Libre' : 'Turno', function () { pintarMod(); });
+          function pintarMod() {
+            ayudaMod.textContent = modalidad.dataset.value === 'Libre'
+              ? 'Para conductores y contratistas que entran y salen varias veces en el día. Dentro de los días y horas habilitados no se mide llegada tarde ni salida antes de la hora. Fuera de ese horario la llegada sí se controla.'
+              : 'Control de puntualidad: llegada tardía (pendiente o con aprobación del Director) y salida antes de la hora de fin sin permiso (no autorizada). Para personal con jornada fija.';
+          }
+          pintarMod();
+          var todoDia = h('button', { class: 'btn small', type: 'button', onclick: function () { f.HoraEntrada.value = '00:00'; f.HoraSalida.value = '23:59'; } }, 'Todo el día (00:00 a 23:59)');
           var guardar = h('button', { class: 'btn primary', type: 'button', onclick: async function () {
             var v = {}; Object.keys(f).forEach(function (k) { v[k] = f[k].value.trim(); });
+            v.Modalidad = modalidad.dataset.value === 'Libre' ? 'Libre' : 'Turno';
             if (!elegidos.size) return AP.toast('Seleccione al menos una persona.', 'warn');
             if (AP.Horario.toMin(v.HoraEntrada) == null || AP.Horario.toMin(v.HoraSalida) == null) return AP.toast('Indique hora de entrada y de salida.', 'warn');
             if (v.HoraEntrada === v.HoraSalida) return AP.toast('La hora de entrada y la de salida no pueden ser iguales.', 'warn');
@@ -145,19 +164,21 @@
                   var rec = await AP.B.create('AP_Horarios', Object.assign({ Title: p.Title, Token: p.Token, NumDoc: p.NumDoc, Area: p.Area || '', Dias: diasTxt, Activo: true }, v));
                   datos.hor.push(rec); n++;
                 }
-                await AP.Audit.log('Programación de horario', n + ' persona(s)', (v.Turno || '') + ' ' + v.HoraEntrada + '-' + v.HoraSalida + ' días ' + diasTxt);
+                await AP.Audit.log('Programación de horario', n + ' persona(s)', (v.Turno || '') + ' ' + v.HoraEntrada + '-' + v.HoraSalida + ' días ' + diasTxt + ' · ' + modalidadTxt(v));
               } else {
                 var upd = Object.assign({ Dias: diasTxt }, v);
                 await AP.B.update('AP_Horarios', x.id, upd); Object.assign(x, upd); n = 1;
-                await AP.Audit.log('Modificación de horario', x.Title, (v.Turno || '') + ' ' + v.HoraEntrada + '-' + v.HoraSalida + ' días ' + diasTxt);
+                await AP.Audit.log('Modificación de horario', x.Title, (v.Turno || '') + ' ' + v.HoraEntrada + '-' + v.HoraSalida + ' días ' + diasTxt + ' · ' + modalidadTxt(v));
               }
               close(); AP.toast(n + ' horario(s) guardado(s). Los celulares de portería lo reciben en su próxima actualización.'); pintar(); AP.Sync.run();
             } catch (e) { AP.toast(e.message, 'error'); } finally { guardar.disabled = false; }
           } }, AP.icon('check', 18), 'Guardar');
           return h('div', { class: 'stack' },
             nuevo ? h('div', { class: 'stack sm' }, h('strong', null, 'Personas a las que se aplica este horario'), filtroP, lista, cuenta) : h('p', null, h('strong', null, x.Title), ' — ' + (x.NumDoc || '')),
+            h('div', { class: 'stack sm' }, h('strong', null, 'Modalidad'), modalidad, ayudaMod),
             h('div', { class: 'form-grid' },
               AP.field('Turno o nombre del horario', f.Turno),
+              h('div', { class: 'field' }, h('label', null, 'Atajo'), todoDia),
               AP.field('Hora de entrada *', f.HoraEntrada), AP.field('Hora de salida *', f.HoraSalida, 'Si es menor que la de entrada, el turno cruza la medianoche (p. ej., 22:00 a 06:00).'),
               AP.field('Vigente desde', f.VigenteDesde, 'Opcional.'), AP.field('Vigente hasta', f.VigenteHasta, 'Opcional. Útil para turnos rotativos: programe cada semana.'),
               AP.field('Observaciones', f.Observaciones, null, 'span2')),
@@ -228,46 +249,86 @@
 
   AP.route('/consola/permisos', function (qs) {
     if (!guard()) return;
-    var tab = qs.t || 'vigentes';
-    var content = h('div', { class: 'stack' }, AP.spinner('Cargando…'));
+    // Vigentes y programados, o el registro completo de los permisos otorgados en un rango de fechas
+    var tab = qs.t === 'historial' || qs.t === 'registro' ? 'registro' : 'vigentes';
+    var content = h('div', { class: 'stack' });
     AP.consolaShell('/consola/permisos', 'Permisos', content,
       h('button', { class: 'btn primary', type: 'button', onclick: async function () { if (await crearPermiso()) AP.render(); } }, AP.icon('plus', 18), 'Registrar permiso'));
-    (async function () {
-      try {
-        var todos = await AP.B.listRange('AP_Permisos', 'Hasta', U.addDays(new Date(), tab === 'historial' ? -90 : -1), null);
-        var ahora = Date.now();
-        var vig = todos.filter(function (p) { return p.Estado !== 'Anulado' && new Date(p.Hasta).getTime() >= ahora; });
-        var base = (tab === 'vigentes' ? vig : todos.filter(function (p) { return vig.indexOf(p) < 0; })).sort(function (a, b) { return a.Desde < b.Desde ? 1 : -1; });
-        var chips = h('div', { class: 'chips' }, [['vigentes', 'Vigentes y futuros'], ['historial', 'Historial (90 días)']].map(function (t) {
-          return h('a', { class: 'chip ' + (t[0] === tab ? 'on' : ''), href: '#/consola/permisos?t=' + t[0] }, t[1]);
-        }));
-        var estadoDe = function (p) { return p.Estado === 'Anulado' ? 'Anulado' : new Date(p.Hasta).getTime() < ahora ? 'Vencido' : new Date(p.Desde).getTime() > ahora ? 'Programado' : 'Vigente'; };
-        var tbox = h('div');
-        var qp = AP.buscador('Buscar persona, documento, tipo, quien autoriza o detalle', pintarP);
-        var filtrados = function () { return base.filter(function (p) { return AP.coincide(p, qp.value, ['Title', 'NumDoc', 'Tipo', 'AutorizadoPor', 'AutorizadoPorDoc', 'Detalle', estadoDe]); }); };
-        content.replaceChildren(chips, h('div', { class: 'filters' }, qp, AP.btnExcel(function () {
-          var l = filtrados();
-          if (!l.length) return AP.toast('No hay permisos con el filtro actual.', 'warn');
-          AP.exportar('Permisos', [
-            ['Persona', function (p) { return p.Title; }, 30], ['Documento', function (p) { return p.NumDoc; }, 15], ['Tipo', function (p) { return p.Tipo; }, 30],
-            ['Desde', function (p) { return U.toDate(p.Desde); }, 17], ['Hasta', function (p) { return U.toDate(p.Hasta); }, 17], ['Estado', estadoDe, 12],
-            ['Autorizado por', function (p) { return p.AutorizadoPor; }, 30], ['Doc. de quien autoriza', function (p) { return p.AutorizadoPorDoc; }, 16],
-            ['Detalle', function (p) { return p.Detalle; }, 40], ['Anulado por', function (p) { return p.AnuladoPor; }, 16], ['Motivo de anulación', function (p) { return p.MotivoAnulacion; }, 30],
-            ['Registrado por', function (p) { return p._createdBy; }, 16]
-          ], l, 'xlsx', [['Vista', tab === 'vigentes' ? 'Vigentes y futuros' : 'Historial (90 días)'], ['Filtro', qp.value || 'ninguno'], ['Generado por', AP.Session.user.nombre], ['Fecha', U.fDateTime(new Date())]]);
-        })), tbox);
-        pintarP();
-        function pintarP() { tbox.replaceChildren(tabla([
+    var ahora = Date.now();
+    var estadoDe = function (p) { return p.Estado === 'Anulado' ? 'Anulado' : new Date(p.Hasta).getTime() < ahora ? 'Vencido' : new Date(p.Desde).getTime() > ahora ? 'Programado' : 'Vigente'; };
+    var KIND = { Anulado: 'deny', Vencido: 'muted', Programado: 'warn', Vigente: 'ok' };
+    var desde = AP.input('desde', U.ymd(U.addDays(new Date(), -90)), { type: 'date' });
+    var hasta = AP.input('hasta', U.ymd(), { type: 'date' });
+    var fTipo = AP.select('tipo', [['', 'Todos los tipos']].concat(AP.CAT.tiposPermiso), '');
+    var fEst = AP.select('estado', [['', 'Todos los estados'], 'Vigente', 'Programado', 'Vencido', 'Anulado'], '');
+    var qp = AP.buscador('Buscar persona, documento, quien autoriza o detalle', pintarP);
+    [fTipo, fEst].forEach(function (s0) { s0.addEventListener('change', pintarP); });
+    var tbox = h('div');
+    var base = [];
+    var tabs = h('div', { class: 'tabs' }, [['vigentes', 'Vigentes y programados'], ['registro', 'Registro de permisos otorgados']].map(function (t) {
+      return h('a', { class: t[0] === tab ? 'on' : '', href: '#/consola/permisos?t=' + t[0] }, t[1]);
+    }));
+    var filaFechas = tab === 'registro' ? h('div', { class: 'filters' }, AP.field('Desde', desde), AP.field('Hasta', hasta),
+      h('button', { class: 'btn primary', type: 'button', onclick: consultar }, AP.icon('search', 18), 'Consultar'),
+      h('small', { class: 'muted' }, 'Permisos cuya vigencia toca el rango: incluye los vigentes, los vencidos y los anulados.')) : null;
+    var COLS = [
+      ['Persona', function (p) { return p.Title; }, 30], ['Documento', function (p) { return p.NumDoc; }, 15], ['Tipo', function (p) { return p.Tipo; }, 30],
+      ['Desde', function (p) { return U.toDate(p.Desde); }, 17], ['Hasta', function (p) { return U.toDate(p.Hasta); }, 17], ['Estado', estadoDe, 12],
+      ['Autorizado por', function (p) { return p.AutorizadoPor; }, 30], ['Doc. de quien autoriza', function (p) { return p.AutorizadoPorDoc; }, 16],
+      ['Detalle', function (p) { return p.Detalle; }, 40], ['Solicitud de portería', function (p) { return p.SolicitudId ? 'Sí' : ''; }, 12],
+      ['Anulado por', function (p) { return p.AnuladoPor; }, 16], ['Motivo de anulación', function (p) { return p.MotivoAnulacion; }, 30],
+      ['Registrado por', function (p) { return p._createdBy; }, 16], ['Fecha de registro', function (p) { return p._created ? U.toDate(p._created) : ''; }, 17]
+    ];
+    function filtrados() {
+      return base.filter(function (p) {
+        if (fTipo.value && p.Tipo !== fTipo.value) return false;
+        if (fEst.value && estadoDe(p) !== fEst.value) return false;
+        return AP.coincide(p, qp.value, ['Title', 'NumDoc', 'Tipo', 'AutorizadoPor', 'AutorizadoPorDoc', 'Detalle', estadoDe]);
+      });
+    }
+    function pintarP() {
+      var l = filtrados();
+      var cuenta = {}; l.forEach(function (p) { var e = estadoDe(p); cuenta[e] = (cuenta[e] || 0) + 1; });
+      tbox.replaceChildren(
+        h('div', { class: 'row gap wrap' }, AP.pill(l.length + ' permisos', 'brand'), ['Vigente', 'Programado', 'Vencido', 'Anulado'].map(function (e) { return cuenta[e] ? AP.pill(cuenta[e] + ' ' + e.toLowerCase() + (cuenta[e] > 1 ? 's' : ''), KIND[e]) : null; })),
+        tabla([
           ['Persona', function (p) { return h('div', null, h('strong', null, p.Title), h('small', { class: 'muted block' }, p.NumDoc || '')); }],
           ['Tipo', function (p) { return p.Tipo; }],
           ['Vigencia', function (p) { return U.fDateTime(p.Desde) + ' → ' + U.fDateTime(p.Hasta); }],
           ['Autoriza', function (p) { return p.AutorizadoPor || ''; }],
           ['Detalle', function (p) { return p.Detalle || ''; }],
-          ['Estado', function (p) { return p.Estado === 'Anulado' ? AP.pill('Anulado', 'deny') : new Date(p.Hasta).getTime() < ahora ? AP.pill('Vencido', 'muted') : new Date(p.Desde).getTime() > ahora ? AP.pill('Programado', 'warn') : AP.pill('Vigente', 'ok'); }],
-          ['', function (p) { return p.Estado !== 'Anulado' && new Date(p.Hasta).getTime() >= ahora ? h('button', { class: 'btn small danger-outline', type: 'button', onclick: function () { anular(p); } }, 'Anular') : null; }]
-        ], filtrados())); }
-      } catch (e) { content.replaceChildren(errBox(e)); }
-    })();
+          ['Registro', function (p) { return h('small', { class: 'muted' }, (p._created ? U.fDateTime(p._created) : '') + (p._createdBy ? ' · ' + p._createdBy : '')); }],
+          ['Estado', function (p) { var e = estadoDe(p); return h('div', null, AP.pill(e, KIND[e]), e === 'Anulado' && p.MotivoAnulacion ? h('small', { class: 'block muted' }, p.MotivoAnulacion) : null); }],
+          ['', function (p) { return p.Estado !== 'Anulado' && new Date(p.Hasta).getTime() >= Date.now() ? h('button', { class: 'btn small danger-outline', type: 'button', onclick: function () { anular(p); } }, 'Anular') : null; }]
+        ], l));
+    }
+    async function consultar() {
+      ahora = Date.now();
+      tbox.replaceChildren(AP.spinner('Consultando…'));
+      try {
+        if (tab === 'vigentes') {
+          var todos = await AP.B.listRange('AP_Permisos', 'Hasta', U.addDays(new Date(), -1), null);
+          base = todos.filter(function (p) { return p.Estado !== 'Anulado' && new Date(p.Hasta).getTime() >= ahora; });
+        } else {
+          var a = U.fromLocal(desde.value, '00:00'), b = U.fromLocal(hasta.value, '23:59');
+          if (!a || !b || b < a) { tbox.replaceChildren(); return AP.toast('Revise el rango de fechas.', 'warn'); }
+          if ((b - a) / 86400000 > 400) { tbox.replaceChildren(); return AP.toast('Consulte máximo 400 días por vez.', 'warn'); }
+          // Permisos cuya vigencia toca el rango: terminan después del inicio y empiezan antes del fin
+          var l = await AP.B.listRange('AP_Permisos', 'Hasta', a, U.addDays(new Date(), 400));
+          base = l.filter(function (p) { return new Date(p.Desde).getTime() <= b.getTime() + 59999; });
+        }
+        base.sort(function (x, y) { return x.Desde < y.Desde ? 1 : -1; });
+        pintarP();
+      } catch (e) { tbox.replaceChildren(errBox(e)); }
+    }
+    content.replaceChildren(tabs, filaFechas,
+      h('div', { class: 'filters' }, fTipo, fEst, qp, AP.btnExcel(function () {
+        var l = filtrados();
+        if (!l.length) return AP.toast('No hay permisos con el filtro actual.', 'warn');
+        AP.exportar('Permisos', COLS, l, 'xlsx', [['Vista', tab === 'vigentes' ? 'Vigentes y programados' : 'Registro de permisos otorgados (' + desde.value + ' a ' + hasta.value + ')'],
+          ['Filtros', [fTipo.value, fEst.value, qp.value].filter(Boolean).join(' · ') || 'ninguno'], ['Generado por', AP.Session.user.nombre], ['Fecha', U.fDateTime(new Date())]]);
+      })), tbox);
+    consultar();
     function anular(p) {
       AP.modal({ title: 'Anular permiso', body: function (close) {
         var m = AP.input('m', '', { placeholder: 'Motivo de la anulación' });
