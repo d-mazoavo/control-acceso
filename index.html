@@ -1,54 +1,64 @@
 <!doctype html>
 <html lang="es-CO">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#587e50">
-  <meta name="robots" content="noindex, nofollow">
-  <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://apis.google.com https://cdn.emailjs.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://*.googleapis.com https://apis.google.com https://api.emailjs.com; frame-src https://*.firebaseapp.com https://*.web.app; worker-src 'self' blob:; base-uri 'self'; form-action 'self'">
-  <title>Control de Acceso · Avo Pak</title>
-  <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" type="image/png" href="img/favicon.png">
-  <link rel="apple-touch-icon" href="img/apple-touch-icon.png">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Acceso Avo Pak">
-  <link rel="stylesheet" href="css/app.css?v=2.5.0">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="app-version" content="1.2.0">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://*.googleapis.com; frame-src https://*.firebaseapp.com https://*.web.app; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta name="theme-color" content="#4C6E45">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Estudios DSI">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="favicon.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="stylesheet" href="app.css?v=1.2.0">
+<title>Estudios de seguridad de personal</title>
 </head>
 <body>
-  <div id="app" class="app" aria-live="polite"></div>
-  <noscript>Esta aplicación requiere JavaScript.</noscript>
-  <script src="config.js?v=2.5.0"></script>
-  <script src="textos.js?v=2.5.0"></script>
-  <script src="js/vendor/firebase-app-compat.js?v=2.5.0"></script>
-  <script src="js/vendor/firebase-auth-compat.js?v=2.5.0"></script>
-  <script src="js/vendor/firebase-firestore-compat.js?v=2.5.0"></script>
-  <script src="js/vendor/jsQR.js?v=2.5.0"></script>
-  <script src="js/vendor/qrcode.js?v=2.5.0"></script>
-  <script src="js/vendor/read-excel-file.min.js?v=2.5.0"></script>
-  <script src="js/vendor/write-excel-file.min.js?v=2.5.0"></script>
-  <script src="js/util.js?v=2.5.0"></script>
-  <script src="js/store.js?v=2.5.0"></script>
-  <script src="js/schema.js?v=2.5.0"></script>
-  <script src="js/backend-firebase.js?v=2.5.0"></script>
-  <script src="js/sync.js?v=2.5.0"></script>
-  <script src="js/pin.js?v=2.5.0"></script>
-  <script src="js/horarios.js?v=2.5.0"></script>
-  <script src="js/ui.js?v=2.5.0"></script>
-  <script src="js/scanner.js?v=2.5.0"></script>
-  <script src="js/app.js?v=2.5.0"></script>
-  <script src="js/views-porteria.js?v=2.5.0"></script>
-  <script src="js/views-carga.js?v=2.5.0"></script>
-  <script src="js/views-consola.js?v=2.5.0"></script>
-  <script src="js/views-consola2.js?v=2.5.0"></script>
-  <script src="js/views-turno.js?v=2.5.0"></script>
-  <script src="js/views-vigilantes.js?v=2.5.0"></script>
-  <script src="js/views-horarios.js?v=2.5.0"></script>
-  <script src="js/docx.js?v=1.0.0"></script>
-  <script src="js/views-rondas.js?v=1.0.0"></script>
-  <script src="js/views-programacion.js?v=1.0.0"></script>
-  <script src="https://cdn.emailjs.com/dist/email.min.js"></script>
-  <script src="js/notificaciones.js?v=2.5.0"></script>
+<div id="avisover" class="avisover" hidden></div>
+<div id="lock"><div class="lock-card"><p><strong>Cargando la aplicación…</strong></p><p>Si este mensaje no cambia en unos segundos, la actualización quedó incompleta: en GitHub vuelva a subir todos los archivos de la carpeta (versión 1.2.0) y recargue con Ctrl + F5.</p></div></div>
+
+<div id="app" hidden>
+  <aside class="side">
+    <div class="brand"><a class="brand-logo" href="#/tablero" aria-label="Tablero"><img src="logo.png?v=1.2.0" alt="Avo Pak, Dirección de Seguridad" width="520" height="460"></a><div class="brand-sub">Dirección de Seguridad Integral<br>Estudios de seguridad de personal</div></div>
+    <nav id="nav" aria-label="Secciones">
+      <a href="#/tablero" data-route="tablero">Tablero</a>
+      <a href="#/personas" data-route="personas">Personas</a>
+      <a href="#/vencimientos" data-route="vencimientos">Vencimientos <span class="navcount" id="navvenc" hidden></span></a>
+      <a href="#/consultas" data-route="consultas">Consultas de antecedentes</a>
+      <a href="#/hallazgos" data-route="hallazgos">Antecedentes</a>
+      <a href="#/estudios" data-route="estudios">Estudios y visitas</a>
+      <a href="#/bitacora" data-route="bitacora">Bitácora</a>
+      <a href="#/config" data-route="config">Configuración</a>
+    </nav>
+    <div class="side-foot"><div class="savestate" id="savestate">Datos cifrados en este equipo</div><div id="backupstate"></div><div class="verapp">Versión 1.2.0</div></div>
+  </aside>
+  <div class="mainwrap">
+    <header class="top">
+      <div class="search">
+        <input id="gsearch" type="search" placeholder="Buscar persona por nombre, documento o código" autocomplete="off" aria-label="Buscar persona">
+        <div id="gresults" class="gresults" hidden></div>
+      </div>
+      <div class="top-actions"><button class="btn" data-act="instalarApp" type="button" hidden>Instalar app</button><div class="operator" id="operator"></div><button class="btn" data-act="lock" type="button">Bloquear</button></div>
+    </header>
+    <main id="main" tabindex="-1"></main>
+  </div>
+</div>
+
+<dialog id="dlg"><form id="dlgform" novalidate></form></dialog>
+<div id="toast" role="status" aria-live="polite"></div>
+<div id="tip" hidden></div>
+<div id="print-root"></div>
+<script src="diag.js?v=1.2.0"></script>
+<script src="config.js?v=1.2.0"></script>
+<script src="firebase-app-compat.js?v=1.2.0"></script>
+<script src="firebase-auth-compat.js?v=1.2.0"></script>
+<script src="firebase-firestore-compat.js?v=1.2.0"></script>
+<script src="nube.js?v=1.2.0"></script>
+<script src="app.js?v=1.2.0"></script>
 </body>
 </html>
