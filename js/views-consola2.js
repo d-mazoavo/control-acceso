@@ -921,8 +921,10 @@
   var PLANTILLA = ['Nombre completo', 'Tipo', 'Tipo de documento', 'Número de documento', 'Teléfono', 'Correo', 'Empresa', 'Cargo', 'Área', 'Estado', 'Vigente hasta', 'Placa', 'Tipo de vehículo', 'Autoriza datos', 'Autoriza foto', 'Observaciones'];
 
   // =================== ELEMENTOS (exclusivo del Director de Seguridad Integral) ===================
-  // El Director programa qué elementos ingresa o retira cada persona registrada; el vigilante los ve y los
-  // verifica en la pantalla de verificación al leer el QR de esa persona (no hay pantalla aparte en portería).
+  // El Director registra qué elementos ingresa o retira cada persona registrada. Si salen y deben volver (préstamo,
+  // reparación), se crea además el registro de REGRESO enlazado a la salida. El vigilante verifica la salida y el ingreso
+  // al leer el QR de la persona, y el regreso también desde "Elementos" en portería. La persona recibe aviso y recordatorios
+  // por WhatsApp o correo.
   AP.route('/consola/elementos', function (qs) {
     if (!guard('admin')) return;
     var E = AP.Elem;
@@ -932,15 +934,22 @@
       h('button', { class: 'btn primary', type: 'button', onclick: function () { editar(null); } }, AP.icon('plus', 18), 'Nuevo registro'));
     var registros = [];
     var MAX_FOTOS = 4;
+    var mapa = {};
 
+    function clase(x) { return x.EsRegreso ? 'Regreso' : x.Sentido; }
+    function estadoTxt(x) { return E.estado(x, mapa).t; }
     var COLS = [
       ['Persona', function (x) { return x.Title; }, 30], ['Documento', function (x) { return x.PersonaDoc; }, 16],
       ['Tipo', function (x) { return x.PersonaTipo; }, 18], ['Empresa', function (x) { return x.PersonaEmpresa; }, 22],
-      ['Sentido', function (x) { return x.Sentido; }, 10], ['Fecha prevista', function (x) { return U.toDate(x.FechaPrevista); }, 17],
+      ['Registro', clase, 10], ['Fecha prevista', function (x) { return U.toDate(x.FechaPrevista); }, 17],
       ['Elementos', function (x) { return E.resumen(E.items(x)); }, 60], ['Fotografías', function (x) { return E.fotos(x).length; }, 11],
-      ['Autorizado por', function (x) { return x.AutorizadoPor; }, 28], ['Doc. de quien autoriza', function (x) { return x.AutorizadoPorDoc; }, 16], ['Estado', function (x) { return x.Estado; }, 12],
+      ['Autorizado por', function (x) { return x.AutorizadoPor; }, 28], ['Doc. de quien autoriza', function (x) { return x.AutorizadoPorDoc; }, 16],
+      ['Estado', estadoTxt, 20], ['Debe regresar', function (x) { return x.EsRegreso ? '' : U.yesNo(!!x.DebeRegresar); }, 11],
+      ['Regreso previsto', function (x) { return x.DebeRegresar && x.FechaRegresoPrevista ? U.toDate(x.FechaRegresoPrevista) : x.EsRegreso ? U.toDate(x.FechaPrevista) : ''; }, 17],
       ['Verificado por', function (x) { return x.Vigilante; }, 24], ['Fecha de verificación', function (x) { return x.FechaConfirmacion ? U.toDate(x.FechaConfirmacion) : ''; }, 17],
       ['Nota de portería', function (x) { return x.NotaPorteria; }, 40], ['Observaciones', function (x) { return x.Observaciones; }, 40],
+      ['Aviso a la persona', function (x) { return x.AvisoPersona ? U.toDate(x.AvisoPersona) : ''; }, 17],
+      ['Recordatorios', function (x) { return x.Recordatorios ? Number(x.Recordatorios) : ''; }, 12], ['Último recordatorio', function (x) { return x.UltimoRecordatorio ? U.toDate(x.UltimoRecordatorio) : ''; }, 17],
       ['Registrado por', function (x) { return x._createdBy || x.CreadoPor; }, 18], ['Fecha de registro', function (x) { return U.toDate(x.FechaCreacion); }, 17]
     ];
 
@@ -948,7 +957,7 @@
     var desdeE = AP.input('desdeE', U.ymd(U.addDays(new Date(), -90)), { type: 'date' });
     var hastaE = AP.input('hastaE', U.ymd(U.addDays(new Date(), 30)), { type: 'date' });
     var fEstE = AP.select('estE', [['', 'Todos los estados']].concat(AP.CAT.estadosElemento), '');
-    var fSentE = AP.select('sentE', [['', 'Ingreso y salida']].concat(AP.CAT.sentidosElemento), '');
+    var fSentE = AP.select('sentE', [['', 'Salida, ingreso y regreso'], 'Salida', 'Ingreso', 'Regreso'], '');
     [fEstE, fSentE].forEach(function (s0) { s0.addEventListener('change', function () { pintarTabla(); }); });
     var rangoE = [];
     async function consultarRangoE() {
@@ -957,85 +966,164 @@
       if ((b0 - a0) / 86400000 > 400) { AP.toast('Consulte máximo 400 días por vez.', 'warn'); return null; }
       return AP.B.listRange('AP_Elementos', 'FechaPrevista', a0, new Date(b0.getTime() + 59999), {});
     }
+    function rehacerMapa() { mapa = E.mapa(registros.concat(rangoE)); }
     async function cargar() {
       content.replaceChildren(AP.spinner('Consultando…'));
       try {
-        registros = await AP.B.listRange('AP_Elementos', 'FechaCreacion', U.addDays(new Date(), -60), null, {});
+        registros = await AP.B.listRange('AP_Elementos', 'FechaCreacion', U.addDays(new Date(), -AP.DIAS_ELEMENTOS), null, {});
         if (tab === 'registro') rangoE = (await consultarRangoE()) || [];
+        rehacerMapa();
         pintar();
       } catch (e) { content.replaceChildren(errBox(e)); }
     }
     async function recargarE() {
       tablaE.replaceChildren(AP.spinner('Consultando…'));
-      try { var r = await consultarRangoE(); if (r) { rangoE = r; pintar(); } else pintarTabla(); }
+      try { var r = await consultarRangoE(); if (r) { rangoE = r; rehacerMapa(); pintar(); } else pintarTabla(); }
       catch (e) { tablaE.replaceChildren(errBox(e)); }
     }
 
-    function vencida(x) { return x.Estado === 'Pendiente' && U.ymd(x.FechaPrevista) < U.ymd(); }
     var qe = AP.buscador('Buscar persona, documento, elemento, serial o quien autoriza', function () { pintarTabla(); });
     var listaE = [], tablaE = h('div');
     function filtradosE() {
       return listaE.filter(function (x) {
         if (fEstE.value && x.Estado !== fEstE.value) return false;
-        if (fSentE.value && x.Sentido !== fSentE.value) return false;
-        return AP.coincide(x, qe.value, ['Title', 'PersonaDoc', 'PersonaEmpresa', 'PersonaTipo', 'AutorizadoPor', 'Estado', 'Sentido', 'Vigilante', 'NotaPorteria', function (r) { return E.resumen(E.items(r)); }]);
+        if (fSentE.value && clase(x) !== fSentE.value) return false;
+        return AP.coincide(x, qe.value, ['Title', 'PersonaDoc', 'PersonaEmpresa', 'PersonaTipo', 'AutorizadoPor', estadoTxt, clase, 'Vigilante', 'NotaPorteria', function (r) { return E.resumen(E.items(r)); }]);
       });
     }
-    var NOMBRES_E = { pendientes: 'Pendientes', hoy: 'Hoy', historial: 'Últimos 60 días', registro: 'Registro completo' };
+    var NOMBRES_E = { pendientes: 'Pendientes', regresar: 'Por regresar', hoy: 'Hoy', historial: 'Últimos 60 días', registro: 'Registro completo' };
+    function porRegresar() {
+      return registros.filter(function (x) { return x.EsRegreso && (E.regresoActivo(x, mapa) || (x.Estado === 'Rechazado' && x.FechaConfirmacion && new Date(x.FechaConfirmacion) >= U.addDays(new Date(), -30))); });
+    }
 
     function pintar() {
-      var hoy = U.ymd();
+      var hoy = U.ymd(), hace60 = U.addDays(new Date(), -60).toISOString();
       var grupos = {
-        pendientes: registros.filter(function (x) { return x.Estado === 'Pendiente'; }),
-        hoy: registros.filter(function (x) { return U.ymd(x.FechaPrevista) === hoy && x.Estado !== 'Cancelado'; }),
-        historial: registros.slice(),
+        pendientes: registros.filter(function (x) { return x.Estado === 'Pendiente' && !x.EsRegreso; }),
+        regresar: porRegresar(),
+        hoy: registros.filter(function (x) { return U.ymd(x.FechaPrevista) === hoy && x.Estado !== 'Cancelado' && (!x.EsRegreso || E.regresoActivo(x, mapa) || x.Estado !== 'Pendiente'); }),
+        historial: registros.filter(function (x) { return (x.FechaCreacion || '') >= hace60; }),
         registro: rangoE.slice()
       };
+      var vencidos = grupos.regresar.filter(function (x) { return E.vencido(x); }).length;
       var lista = (grupos[tab] || []).slice().sort(function (a, b) {
         return tab === 'historial' || tab === 'registro' ? (a.FechaPrevista < b.FechaPrevista ? 1 : -1) : (a.FechaPrevista < b.FechaPrevista ? -1 : 1);
       });
-      var tabs = h('div', { class: 'tabs' }, [['pendientes', 'Pendientes'], ['hoy', 'Hoy'], ['historial', 'Últimos 60 días'], ['registro', 'Registro completo (por fechas)']].map(function (t) {
-        return h('a', { class: t[0] === tab ? 'on' : '', href: '#/consola/elementos?t=' + t[0] }, t[1] + (t[0] !== 'registro' ? ' (' + grupos[t[0]].length + ')' : ''));
+      var tabs = h('div', { class: 'tabs' }, [['pendientes', 'Pendientes'], ['regresar', 'Por regresar'], ['hoy', 'Hoy'], ['historial', 'Últimos 60 días'], ['registro', 'Registro completo (por fechas)']].map(function (t) {
+        return h('a', { class: t[0] === tab ? 'on' : '', href: '#/consola/elementos?t=' + t[0] }, t[1] + (t[0] !== 'registro' ? ' (' + grupos[t[0]].length + ')' : ''),
+          t[0] === 'regresar' && vencidos ? h('b', { class: 'nav-badge', title: 'Regresos vencidos' }, String(vencidos)) : null);
       }));
       listaE = lista;
-      var cuenta = {}; lista.forEach(function (x) { cuenta[x.Estado] = (cuenta[x.Estado] || 0) + 1; });
+      var cuenta = {}; lista.forEach(function (x) { var e = estadoTxt(x); cuenta[e] = (cuenta[e] || 0) + 1; });
       var barra = h('div', { class: 'stack sm' },
-        h('p', { class: 'muted small' }, 'Los registros pendientes aparecen al vigilante en "Elementos" (portería) y en la pantalla de verificación cuando lee el QR de la persona (el día previsto). Ningún registro se borra: los cancelados y los verificados quedan en el registro completo.'),
+        tab === 'regresar'
+          ? h('p', { class: 'banner info' }, AP.icon('package', 18), h('span', null, 'Elementos que salieron y deben regresar. El vigilante los ve en "Elementos" (portería) y marca cuando vuelven. Envíe recordatorios por WhatsApp o correo; quedan anotados con su fecha. También se muestran los regresos con novedad de los últimos 30 días.'))
+          : h('p', { class: 'muted small' }, 'Los registros pendientes aparecen al vigilante en "Elementos" (portería) y en la pantalla de verificación cuando lee el QR de la persona. Ningún registro se borra: los cancelados y los verificados quedan en el registro completo.'),
         tab === 'registro' ? h('div', { class: 'filters' }, AP.field('Fecha prevista desde', desdeE), AP.field('Hasta', hastaE),
           h('button', { class: 'btn primary', type: 'button', onclick: recargarE }, AP.icon('search', 18), 'Consultar'),
-          h('div', { class: 'row gap wrap' }, AP.CAT.estadosElemento.map(function (e) { return cuenta[e] ? AP.pill(e + ': ' + cuenta[e], { Pendiente: 'warn', Confirmado: 'ok', Rechazado: 'deny', Cancelado: 'muted' }[e]) : null; }))) : null,
+          h('div', { class: 'row gap wrap' }, Object.keys(cuenta).sort().map(function (e) { return AP.pill(e + ': ' + cuenta[e], /Regresó con|No coinc|vencido/.test(e) ? 'deny' : /^(Pendiente|Por regresar)/.test(e) ? 'warn' : /^(Salió|Ingresó|Regresó)$/.test(e) ? 'ok' : 'muted'); }))) : null,
         h('div', { class: 'filters' }, fSentE, fEstE, qe, AP.btnExcel(function () {
           var l = filtradosE();
           if (!l.length) return AP.toast('No hay registros con el filtro actual.', 'warn');
-          AP.exportar('Control_elementos', COLS, l, 'xlsx', [['Vista', NOMBRES_E[tab] + (tab === 'registro' ? ' (' + desdeE.value + ' a ' + hastaE.value + ')' : '')],
+          AP.exportar(tab === 'regresar' ? 'Elementos_por_regresar' : 'Control_elementos', COLS, l, 'xlsx', [['Vista', NOMBRES_E[tab] + (tab === 'registro' ? ' (' + desdeE.value + ' a ' + hastaE.value + ')' : '')],
             ['Filtros', [fSentE.value, fEstE.value, qe.value].filter(Boolean).join(' · ') || 'ninguno'], ['Generado por', AP.Session.user.nombre], ['Fecha', U.fDateTime(new Date())]]);
         })));
       content.replaceChildren(tabs, barra, tablaE);
       pintarTabla();
     }
     function pintarTabla() {
-      tablaE.replaceChildren(simpleTable([
+      var cols = tab === 'regresar' ? [
         ['Persona', function (x) { return h('div', null, h('strong', null, x.Title), h('small', { class: 'block muted' }, [x.PersonaDoc, x.PersonaTipo, x.PersonaEmpresa].filter(Boolean).join(' · '))); }],
-        ['Sentido', function (x) { return AP.pill(x.Sentido, x.Sentido === 'Ingreso' ? 'ok' : 'warn'); }],
-        ['Fecha prevista', function (x) { return h('div', null, U.fDateTime(x.FechaPrevista), vencida(x) ? h('small', { class: 'block', style: { color: 'var(--deny)' } }, 'Fecha vencida') : null); }],
-        ['Elementos', function (x) {
-          var it = E.items(x), nf = E.fotos(x).length;
-          return h('div', null, it.slice(0, 2).map(function (i) { return h('div', null, (i.cant > 1 ? i.cant + ' × ' : '') + i.desc); }),
-            it.length > 2 ? h('small', { class: 'muted' }, '+ ' + (it.length - 2) + ' más') : null,
-            nf ? h('small', { class: 'block muted' }, AP.icon('camera', 13), ' ' + nf + ' foto' + (nf > 1 ? 's' : '')) : null);
+        ['Elementos', celdaElementos],
+        ['Salió', function (x) { var s = mapa[x.SalidaId]; return s && s.FechaConfirmacion ? h('div', null, U.fDateTime(s.FechaConfirmacion), h('small', { class: 'block muted' }, s.Vigilante || '')) : '—'; }],
+        ['Debe regresar', function (x) {
+          var dias = Math.floor((Date.now() - new Date(x.FechaPrevista).getTime()) / 86400000);
+          return h('div', null, U.fDateTime(x.FechaPrevista), E.vencido(x) ? h('small', { class: 'block txt-deny' }, 'Vencido' + (dias >= 1 ? ' hace ' + dias + ' día' + (dias > 1 ? 's' : '') : '')) : null);
         }],
+        ['Recordatorios', function (x) { return x.Recordatorios ? h('div', null, String(x.Recordatorios), h('small', { class: 'block muted' }, 'Último: ' + U.fDateTime(x.UltimoRecordatorio))) : h('small', { class: 'muted' }, 'Ninguno'); }],
+        ['Estado', function (x) { return h('div', null, E.pill(x, mapa), x.NotaPorteria ? h('small', { class: 'block muted' }, x.NotaPorteria) : null); }],
+        ['', function (x) {
+          return E.regresoActivo(x, mapa) ? h('div', { class: 'row gap nowrap' },
+            h('button', { class: 'btn small primary', type: 'button', onclick: function (e) { e.stopPropagation(); avisar(x, 'recordatorio'); } }, AP.icon('bell', 16), 'Recordar'),
+            h('button', { class: 'btn small', type: 'button', title: 'Editar fecha de regreso', onclick: function (e) { e.stopPropagation(); editarRegreso(x); } }, AP.icon('edit', 16))) : null;
+        }]
+      ] : [
+        ['Persona', function (x) { return h('div', null, h('strong', null, x.Title), h('small', { class: 'block muted' }, [x.PersonaDoc, x.PersonaTipo, x.PersonaEmpresa].filter(Boolean).join(' · '))); }],
+        ['Registro', function (x) { return h('div', null, AP.pill(x.EsRegreso ? 'Regreso' : x.Sentido, x.Sentido === 'Ingreso' && !x.EsRegreso ? 'ok' : 'warn'), x.DebeRegresar && !x.EsRegreso ? h('small', { class: 'block muted' }, 'Debe regresar: ' + U.fDate(x.FechaRegresoPrevista)) : null); }],
+        ['Fecha prevista', function (x) { return h('div', null, U.fDateTime(x.FechaPrevista), x.Estado === 'Pendiente' && U.ymd(x.FechaPrevista) < U.ymd() ? h('small', { class: 'block txt-deny' }, x.EsRegreso ? 'Regreso vencido' : 'Fecha vencida') : null); }],
+        ['Elementos', celdaElementos],
         ['Autoriza', function (x) { return x.AutorizadoPor; }],
         ['Estado', function (x) {
-          return h('div', null, AP.estadoPill(x.Estado), x.Vigilante ? h('small', { class: 'block muted' }, x.Vigilante + (x.FechaConfirmacion ? ' · ' + U.fDateTime(x.FechaConfirmacion) : '')) : null);
+          var reg = x.RegresoId ? mapa[x.RegresoId] : null;
+          return h('div', null, E.pill(x, mapa), x.Vigilante ? h('small', { class: 'block muted' }, x.Vigilante + (x.FechaConfirmacion ? ' · ' + U.fDateTime(x.FechaConfirmacion) : '')) : null,
+            reg && x.Estado === 'Confirmado' ? h('small', { class: 'block' }, 'Regreso: ', E.pill(reg, mapa)) : null);
         }],
         ['', function (x) {
-          return x.Estado !== 'Pendiente' ? null : h('div', { class: 'row gap nowrap' },
+          return x.Estado !== 'Pendiente' || (x.EsRegreso && !E.regresoActivo(x, mapa)) ? null : h('div', { class: 'row gap nowrap' },
+            x.EsRegreso ? h('button', { class: 'btn small', type: 'button', title: 'Recordar el regreso', onclick: function (e) { e.stopPropagation(); avisar(x, 'recordatorio'); } }, AP.icon('bell', 16))
+              : h('button', { class: 'btn small', type: 'button', title: 'Avisar a la persona', onclick: function (e) { e.stopPropagation(); avisar(x, 'aviso'); } }, AP.icon('whatsapp', 16)),
             h('button', { class: 'btn small', type: 'button', title: 'Editar', onclick: function (e) { e.stopPropagation(); editar(x); } }, AP.icon('edit', 16)),
-            h('button', { class: 'btn small danger-outline', type: 'button', onclick: function (e) { e.stopPropagation(); cancelar(x); } }, 'Cancelar'));
+            x.EsRegreso ? null : h('button', { class: 'btn small danger-outline', type: 'button', onclick: function (e) { e.stopPropagation(); cancelar(x); } }, 'Cancelar'));
         }]
-      ], filtradosE(), detalle));
+      ];
+      tablaE.replaceChildren(simpleTable(cols, filtradosE(), detalle));
+    }
+    function celdaElementos(x) {
+      var it = E.items(x), nf = E.fotos(x).length;
+      return h('div', null, it.slice(0, 2).map(function (i) { return h('div', null, (i.cant > 1 ? i.cant + ' × ' : '') + i.desc); }),
+        it.length > 2 ? h('small', { class: 'muted' }, '+ ' + (it.length - 2) + ' más') : null,
+        nf ? h('small', { class: 'block muted' }, AP.icon('camera', 13), ' ' + nf + ' foto' + (nf > 1 ? 's' : '')) : null);
     }
     cargar();
+
+    // ---------- Aviso y recordatorio a la persona (WhatsApp o correo) ----------
+    var contactos = null;
+    async function contactoDe(x) {
+      if (!contactos) {
+        var ps = [], vs = [];
+        try { ps = await AP.B.listAll('AP_Personas', { exclude: ['Foto'] }); } catch (e) { /* sin datos */ }
+        try { vs = await AP.B.listRange('AP_Visitas', 'FechaFin', U.addDays(new Date(), -AP.DIAS_ELEMENTOS), null, { exclude: ['Foto'] }); } catch (e) { /* sin datos */ }
+        contactos = ps.concat(vs);
+      }
+      var d = U.normDoc(x.PersonaDoc || '');
+      var p = contactos.find(function (c) { return x.Token && c.Token === x.Token; }) || contactos.find(function (c) { return d && U.normDoc(c.NumDoc) === d; });
+      return { nombre: (p && p.Title) || x.Title, tel: (p && p.Telefono) || '', correo: (p && p.Correo) || '' };
+    }
+    async function avisar(x, tipo, contacto) {
+      var c = contacto || await contactoDe(x);
+      var num = AP.waNum(c.tel);
+      var rec = tipo === 'recordatorio';
+      var texto = rec ? E.textoRecordatorio(x, mapa[x.SalidaId], c.nombre) : E.textoAviso(x, c.nombre);
+      var asunto = rec ? 'Recordatorio: elementos pendientes por regresar — ' + AP.CFG.empresa : 'Registro de elementos a su nombre — ' + AP.CFG.empresa;
+      async function marcar(canal) {
+        var ahora = new Date().toISOString();
+        var upd = rec ? { Recordatorios: (Number(x.Recordatorios) || 0) + 1, UltimoRecordatorio: ahora } : { AvisoPersona: ahora };
+        try { await AP.B.update('AP_Elementos', x.id, upd); Object.assign(x, upd); registros.forEach(function (z) { if (z.id === x.id && z !== x) Object.assign(z, upd); }); } catch (e) { /* el envío ya ocurrió; la marca es informativa */ }
+        AP.Audit.log(rec ? 'Recordatorio de regreso de elementos' : 'Aviso de registro de elementos', x.Title + ' (' + (x.PersonaDoc || '') + ')', canal + ' | ' + E.resumen(E.items(x)));
+        if (location.hash.indexOf('#/consola/elementos') === 0) pintarTabla();
+      }
+      AP.modal({
+        title: rec ? 'Recordar el regreso — ' + x.Title : 'Avisar a ' + x.Title,
+        body: function (close) {
+          var correo = AP.input('correo', c.correo, { type: 'email', placeholder: 'correo@ejemplo.com' });
+          return h('div', { class: 'stack' },
+            h('p', { class: 'muted small' }, rec ? 'Mensaje de recordatorio (puede revisarlo antes de enviarlo):' : 'Mensaje para la persona que registró los elementos:'),
+            h('p', { class: 'note', style: { whiteSpace: 'pre-line' } }, texto),
+            num ? h('a', { class: 'btn primary', href: AP.waLink(num, texto), target: '_blank', rel: 'noopener', onclick: function () { marcar('WhatsApp ' + c.tel); setTimeout(close, 300); } }, AP.icon('whatsapp', 18), 'Enviar por WhatsApp a ' + c.tel)
+              : h('p', { class: 'banner warn' }, AP.icon('alert', 18), h('span', null, 'La persona no tiene un celular válido registrado (en Personas o en su visita). Actualícelo para enviarle el mensaje por WhatsApp, o use el correo.')),
+            AP.field('Correo de la persona', correo),
+            h('div', { class: 'row gap wrap end' },
+              h('button', { class: 'btn', type: 'button', onclick: async function () {
+                var to = correo.value.trim();
+                if (!EMAIL_RE.test(to)) return AP.toast('Escriba un correo válido.', 'warn');
+                try { await AP.B.sendMail({ to: [to], subject: asunto, html: AP.esc(texto).replace(/\n/g, '<br>') }); await marcar('Correo ' + to); close(); }
+                catch (e) { AP.toast('No se pudo preparar el correo: ' + e.message, 'error'); }
+              } }, AP.icon('mail', 18), 'Enviar por correo'),
+              navigator.clipboard ? h('button', { class: 'btn', type: 'button', onclick: function () { navigator.clipboard.writeText(texto).then(function () { AP.toast('Mensaje copiado.'); }, function () { AP.toast('No fue posible copiar.', 'warn'); }); } }, AP.icon('file', 18), 'Copiar mensaje') : null,
+              h('button', { class: 'btn ghost', type: 'button', onclick: function () { close(); } }, 'Ahora no')));
+        }
+      });
+    }
 
     // ---------- Formulario ----------
     function filaItem(item) {
@@ -1056,7 +1144,31 @@
       return fila;
     }
 
+    // Regreso: solo se ajusta la fecha prevista y las indicaciones (los elementos son los de la salida)
+    function editarRegreso(x) {
+      AP.modal({ title: 'Regreso de elementos — ' + x.Title, body: function (close) {
+        var f = AP.input('fecha', U.toLocalInput(x.FechaPrevista), { type: 'datetime-local' });
+        var o = AP.textarea('obs', x.Observaciones || '', { rows: 2 });
+        return h('div', { class: 'stack' }, E.tabla(E.items(x)),
+          AP.field('Fecha prevista de regreso *', f), AP.field('Indicaciones para el vigilante', o),
+          h('div', { class: 'row gap wrap end' }, h('button', { class: 'btn', type: 'button', onclick: function () { close(); } }, 'Cancelar'),
+            h('button', { class: 'btn primary', type: 'button', onclick: async function () {
+              var d = U.fromLocalInput(f.value);
+              if (!d || isNaN(d)) return AP.toast('Indique la fecha prevista de regreso.', 'warn');
+              try {
+                var upd = { FechaPrevista: d.toISOString(), Observaciones: o.value.trim() };
+                await AP.B.update('AP_Elementos', x.id, upd); Object.assign(x, upd);
+                var s = mapa[x.SalidaId];
+                if (s) { await AP.B.update('AP_Elementos', s.id, { FechaRegresoPrevista: upd.FechaPrevista }); s.FechaRegresoPrevista = upd.FechaPrevista; }
+                await AP.Audit.log('Modificación de fecha de regreso de elementos', x.Title + ' (' + (x.PersonaDoc || '') + ')', 'Nueva fecha: ' + U.fDateTime(d));
+                close(); AP.toast('Fecha de regreso actualizada.'); pintar();
+              } catch (e) { AP.toast(e.message, 'error'); }
+            } }, AP.icon('check', 18), 'Guardar')));
+      } });
+    }
+
     function editar(x) {
+      if (x && x.EsRegreso) { if (E.regresoActivo(x, mapa) || x.Estado === 'Pendiente') editarRegreso(x); else detalle(x); return; }
       if (x && x.Estado !== 'Pendiente') { detalle(x); return; }
       var nuevo = !x;
       var carpeta = x ? x.id : U.uuid().slice(0, 12);
@@ -1116,11 +1228,28 @@
           }
           pintarPersona();
 
-          // --- Datos de la solicitud ---
+          // --- Datos del registro ---
           var sentidoSel = AP.select('Sentido', AP.CAT.sentidosElemento, x ? x.Sentido : 'Salida');
           var fechaIn = AP.input('FechaPrevista', U.toLocalInput(x ? x.FechaPrevista : new Date()), { type: 'datetime-local' });
           var autoriza = AP.autorizaPicker({ fuente: function () { return AP.B.listAll('AP_Personas', { exclude: ['Foto'] }); }, valor: x || {} });
           var obsIn = AP.textarea('Observaciones', x ? x.Observaciones : '', { placeholder: 'Instrucciones para el vigilante (opcional)', rows: 2 });
+          // --- Regreso (solo para salidas) ---
+          var debeReg = AP.check('DebeRegresar', 'Los elementos deben regresar (préstamo, reparación, trabajo fuera de la sede)', !!(x && x.DebeRegresar));
+          var fechaReg = AP.input('FechaRegresoPrevista', x && x.FechaRegresoPrevista ? U.toLocalInput(x.FechaRegresoPrevista) : '', { type: 'datetime-local' });
+          var regBox = h('div', { class: 'stack sm span2' }, debeReg, h('div', { class: 'reg-fecha' }, AP.field('Fecha prevista de regreso *', fechaReg, 'El vigilante verá los elementos como pendientes por regresar desde que salgan; después de esta fecha aparecen vencidos.')));
+          function pintarReg() {
+            var esSal = sentidoSel.value === 'Salida';
+            regBox.style.display = esSal ? '' : 'none';
+            regBox.querySelector('.reg-fecha').style.display = esSal && debeReg.querySelector('input').checked ? '' : 'none';
+          }
+          sentidoSel.addEventListener('change', pintarReg);
+          debeReg.querySelector('input').addEventListener('change', function () {
+            if (debeReg.querySelector('input').checked && !fechaReg.value) {
+              var base = U.fromLocalInput(fechaIn.value) || new Date();
+              fechaReg.value = U.toLocalInput(U.fromLocal(U.ymd(U.addDays(base, 1)), '17:00'));
+            }
+            pintarReg();
+          });
 
           // --- Elementos ---
           var listaItems = h('div', { class: 'stack sm' });
@@ -1161,13 +1290,17 @@
           async function guardar() {
             var elems = Array.prototype.map.call(listaItems.querySelectorAll('.elem-fila'), function (f) { return f._leer(); }).filter(Boolean);
             var fecha = U.fromLocalInput(fechaIn.value);
+            var conRegreso = sentidoSel.value === 'Salida' && debeReg.querySelector('input').checked;
+            var fReg = conRegreso ? U.fromLocalInput(fechaReg.value) : null;
             if (!sel) return AP.toast('Seleccione la persona registrada.', 'warn');
             if (!fecha || isNaN(fecha)) return AP.toast('Indique la fecha y hora prevista.', 'warn');
             if (!autoriza.elegido()) return AP.toast('Seleccione de la lista de personas quién autoriza.', 'warn');
             if (!elems.length) return AP.toast('Agregue al menos un elemento con su descripción.', 'warn');
+            if (conRegreso && (!fReg || isNaN(fReg))) return AP.toast('Indique la fecha prevista de regreso.', 'warn');
+            if (conRegreso && fReg <= fecha) return AP.toast('La fecha de regreso debe ser posterior a la de salida.', 'warn');
             guardarBtn.disabled = true; guardarBtn.lastChild.textContent = 'Guardando…';
             try {
-              // Las fotografías se suben primero; su huella SHA-256 queda en la solicitud
+              // Las fotografías se suben primero; su huella SHA-256 queda en el registro
               var p = U.partsCO(fecha);
               var fotos = fotosPrevias.slice();
               for (var i = 0; i < fotosNuevas.length; i++) {
@@ -1179,21 +1312,28 @@
               var data = Object.assign({
                 Title: r0.Title, Token: r0.Token || '', PersonaTipo: sel.tipo || '', PersonaDoc: r0.NumDoc || '', PersonaEmpresa: r0.Empresa || '',
                 Sentido: sentidoSel.value, FechaPrevista: fecha.toISOString(),
-                Items: JSON.stringify(elems), Fotos: fotos.length ? JSON.stringify(fotos) : '', Observaciones: obsIn.value.trim()
+                Items: JSON.stringify(elems), Fotos: fotos.length ? JSON.stringify(fotos) : '', Observaciones: obsIn.value.trim(),
+                DebeRegresar: conRegreso, FechaRegresoPrevista: conRegreso ? fReg.toISOString() : ''
               }, autoriza.valor());
               var ref = data.Title + ' (' + data.PersonaDoc + ') — ' + data.Sentido + ' ' + U.fDateTime(fecha);
+              var rec;
               if (nuevo) {
                 Object.assign(data, { Estado: 'Pendiente', CreadoPor: AP.Session.user.nombre || AP.Session.user.usuario, FechaCreacion: new Date().toISOString() });
-                await AP.B.create('AP_Elementos', data);
-                await AP.Audit.log('Registro de elementos', ref, E.resumen(elems) + ' | Autoriza: ' + data.AutorizadoPor);
-                AP.toast('Registro creado. El vigilante lo verá al leer el QR de ' + data.Title + ' el día previsto.', 'info', 5000);
+                rec = await AP.B.create('AP_Elementos', data);
+                await AP.Audit.log('Registro de elementos', ref, E.resumen(elems) + ' | Autoriza: ' + data.AutorizadoPor + (conRegreso ? ' | Debe regresar: ' + U.fDateTime(fReg) : ''));
               } else {
                 await AP.B.update('AP_Elementos', x.id, data);
-                await AP.Audit.log('Modificación de registro de elementos', ref, E.resumen(elems));
-                AP.toast('Solicitud actualizada.');
+                rec = Object.assign(x, data);
+                await AP.Audit.log('Modificación de registro de elementos', ref, E.resumen(elems) + (conRegreso ? ' | Debe regresar: ' + U.fDateTime(fReg) : ''));
               }
+              await sincronizarRegreso(rec, conRegreso);
               fotosNuevas.forEach(function (f) { URL.revokeObjectURL(f.url); });
-              close(); cargar();
+              close();
+              await cargar();
+              if (nuevo) {
+                AP.toast('Registro creado. El vigilante lo verá en portería y al leer el QR de ' + data.Title + '.', 'info', 5000);
+                avisar(rec, 'aviso', { nombre: r0.Title, tel: r0.Telefono || '', correo: r0.Correo || '' });
+              } else AP.toast('Registro actualizado.');
             } catch (e) {
               AP.toast('No se pudo guardar: ' + e.message, 'error', 8000);
               guardarBtn.disabled = false; guardarBtn.lastChild.textContent = nuevo ? 'Crear registro' : 'Guardar cambios';
@@ -1205,7 +1345,8 @@
             h('h3', null, '2. Registro'),
             h('div', { class: 'form-grid' },
               AP.field('Sentido *', sentidoSel),
-              AP.field('Fecha y hora prevista *', fechaIn, 'El vigilante la ve únicamente en ese día.'),
+              AP.field('Fecha y hora prevista *', fechaIn, 'Desde ese día el vigilante lo ve como pendiente hasta que la persona pase.'),
+              regBox,
               AP.field('Autorizado por *', autoriza, 'Búsquelo en la lista de personas registradas (por ejemplo, el jefe del área).', 'span2'),
               AP.field('Observaciones para el vigilante', obsIn, null, 'span2')),
             h('h3', null, '3. Elementos'), listaItems, h('div', null, addBtn),
@@ -1213,42 +1354,77 @@
             h('p', { class: 'muted small' }, 'Le permiten al vigilante cotejar visualmente los elementos. Se guardan reducidas y con huella SHA-256.'),
             galeria, h('div', null, fotoBtn),
             h('div', { class: 'row gap wrap' }, guardarBtn,
-              h('button', { class: 'btn', type: 'button', onclick: function () { fotosNuevas.forEach(function (f) { URL.revokeObjectURL(f.url); }); close(); } }, 'Cerrar sin guardar')));
+              h('button', { class: 'btn', type: 'button', onclick: function () { fotosNuevas.forEach(function (f) { URL.revokeObjectURL(f.url); }); close(); } }, 'Cerrar sin guardar')),
+            (function () { pintarReg(); return null; })());
         }
       });
     }
 
+    // Crea, actualiza o cancela el registro de regreso enlazado a una salida
+    async function sincronizarRegreso(s, conRegreso) {
+      var reg = s.RegresoId ? (mapa[s.RegresoId] || (await AP.B.findBy('AP_Elementos', 'SalidaId', s.id))[0]) : null;
+      if (conRegreso) {
+        var datos = {
+          Title: s.Title, Token: s.Token, PersonaTipo: s.PersonaTipo, PersonaDoc: s.PersonaDoc, PersonaEmpresa: s.PersonaEmpresa,
+          Sentido: 'Ingreso', EsRegreso: true, SalidaId: s.id, FechaPrevista: s.FechaRegresoPrevista, Items: s.Items, Fotos: s.Fotos,
+          AutorizadoPor: s.AutorizadoPor, AutorizadoPorId: s.AutorizadoPorId, AutorizadoPorDoc: s.AutorizadoPorDoc, AutorizadoPorCargo: s.AutorizadoPorCargo,
+          Observaciones: 'Regreso de los elementos de la salida prevista el ' + U.fDateTime(s.FechaPrevista) + '.'
+        };
+        if (reg && reg.Estado === 'Pendiente') { await AP.B.update('AP_Elementos', reg.id, datos); return; }
+        if (reg && reg.Estado !== 'Cancelado') return;
+        var nuevo = await AP.B.create('AP_Elementos', Object.assign(datos, { Estado: 'Pendiente', CreadoPor: AP.Session.user.nombre || AP.Session.user.usuario, FechaCreacion: new Date().toISOString() }));
+        await AP.B.update('AP_Elementos', s.id, { RegresoId: nuevo.id });
+        s.RegresoId = nuevo.id;
+      } else if (reg && reg.Estado === 'Pendiente') {
+        await AP.B.update('AP_Elementos', reg.id, { Estado: 'Cancelado' });
+      }
+    }
+
     async function cancelar(x) {
-      if (!(await AP.confirm('Cancelar registro', '¿Cancelar el registro de ' + x.Sentido.toLowerCase() + ' de elementos de ' + x.Title + '? El vigilante dejará de verlo.', 'Sí, cancelar', 'danger'))) return;
+      if (!(await AP.confirm('Cancelar registro', '¿Cancelar el registro de ' + x.Sentido.toLowerCase() + ' de elementos de ' + x.Title + '? El vigilante dejará de verlo.' + (x.RegresoId ? ' También se cancela el regreso programado.' : ''), 'Sí, cancelar', 'danger'))) return;
       try {
         await AP.B.update('AP_Elementos', x.id, { Estado: 'Cancelado' });
+        if (x.RegresoId) { var reg = mapa[x.RegresoId]; if (!reg || reg.Estado === 'Pendiente') await AP.B.update('AP_Elementos', x.RegresoId, { Estado: 'Cancelado' }); }
         await AP.Audit.log('Cancelación de registro de elementos', x.Title + ' (' + (x.PersonaDoc || '') + ') — ' + x.Sentido + ' ' + U.fDateTime(x.FechaPrevista), E.resumen(E.items(x)));
-        AP.toast('Solicitud cancelada.');
+        AP.toast('Registro cancelado.');
         cargar();
       } catch (e) { AP.toast(e.message, 'error'); }
     }
 
     function detalle(x) {
       var elems = E.items(x), fotos = E.fotos(x);
+      var sal = x.EsRegreso ? mapa[x.SalidaId] : null, reg = x.RegresoId ? mapa[x.RegresoId] : null;
       var kv = function (k, v) { return v ? h('div', { class: 'kv' }, h('span', null, k), h('strong', null, v)) : null; };
       AP.modal({
-        title: x.Sentido + ' de elementos — ' + x.Title,
+        title: (x.EsRegreso ? 'Regreso' : x.Sentido) + ' de elementos — ' + x.Title,
         size: 'wide',
         body: function (close) {
           return h('div', { class: 'stack' },
-            h('div', { class: 'row gap wrap' }, AP.pill(x.Sentido, x.Sentido === 'Ingreso' ? 'ok' : 'warn'), AP.estadoPill(x.Estado), vencida(x) ? AP.pill('Fecha vencida', 'deny') : null),
+            h('div', { class: 'row gap wrap' }, AP.pill(x.EsRegreso ? 'Regreso' : x.Sentido, x.Sentido === 'Ingreso' && !x.EsRegreso ? 'ok' : 'warn'), E.pill(x, mapa)),
             h('div', { class: 'kv-grid' },
               kv('Persona', x.Title), kv('Documento', x.PersonaDoc), kv('Tipo', x.PersonaTipo), kv('Empresa', x.PersonaEmpresa),
-              kv('Fecha prevista', U.fDateTime(x.FechaPrevista)), kv('Autorizado por', x.AutorizadoPor ? x.AutorizadoPor + (x.AutorizadoPorDoc ? ' (doc. ' + x.AutorizadoPorDoc + ')' : '') : ''),
+              kv(x.EsRegreso ? 'Debe regresar' : 'Fecha prevista', U.fDateTime(x.FechaPrevista)),
+              !x.EsRegreso && x.DebeRegresar ? kv('Debe regresar', U.fDateTime(x.FechaRegresoPrevista) + (reg ? ' · ' + E.estado(reg, mapa).t : '')) : null,
+              sal ? kv('Salió', sal.FechaConfirmacion ? U.fDateTime(sal.FechaConfirmacion) + (sal.Vigilante ? ' · verificó ' + sal.Vigilante : '') : E.estado(sal, mapa).t) : null,
+              kv('Autorizado por', x.AutorizadoPor ? x.AutorizadoPor + (x.AutorizadoPorDoc ? ' (doc. ' + x.AutorizadoPorDoc + ')' : '') : ''),
               kv('Registrado por', (x._createdBy || x.CreadoPor || '') + (x.FechaCreacion ? ' · ' + U.fDateTime(x.FechaCreacion) : '')),
               kv('Verificado por', x.Vigilante ? x.Vigilante + (x.VigilanteUsuario ? ' (' + x.VigilanteUsuario + ')' : '') + (x.FechaConfirmacion ? ' · ' + U.fDateTime(x.FechaConfirmacion) : '') : ''),
-              kv('Nota de portería', x.NotaPorteria), kv('Observaciones', x.Observaciones)),
+              kv('Nota de portería', x.NotaPorteria), kv('Observaciones', x.Observaciones),
+              kv('Aviso a la persona', x.AvisoPersona ? U.fDateTime(x.AvisoPersona) : ''),
+              kv('Recordatorios', x.Recordatorios ? x.Recordatorios + ' (último: ' + U.fDateTime(x.UltimoRecordatorio) + ')' : '')),
             h('h3', null, 'Elementos (' + elems.length + ')'), E.tabla(elems),
             fotos.length ? h('h3', null, 'Fotografías') : null,
             fotos.length ? E.galeria(fotos) : null,
             h('div', { class: 'row gap wrap' },
+              x.Estado === 'Pendiente' && !x.EsRegreso ? h('button', { class: 'btn', type: 'button', onclick: function () { close(); avisar(x, 'aviso'); } }, AP.icon('whatsapp', 18), 'Avisar a la persona') : null,
+              E.regresoActivo(x, mapa) ? h('button', { class: 'btn primary', type: 'button', onclick: function () { close(); avisar(x, 'recordatorio'); } }, AP.icon('bell', 18), 'Recordar el regreso') : null,
+              E.regresoActivo(x, mapa) ? h('button', { class: 'btn', type: 'button', onclick: async function () {
+                if (!(await AP.confirm('Registrar regreso', 'Use esta opción solo si los elementos le fueron devueltos a usted directamente y los revisó contra la lista. Si llegan por portería, los marca el vigilante.', 'Registrar regreso'))) return;
+                try { Object.assign(x, await E.verificar(x, 'Confirmado', 'Regreso registrado por el Director de Seguridad Integral desde la consola')); close(); AP.toast('Regreso registrado.'); pintar(); }
+                catch (e) { AP.toast(e.message, 'error'); }
+              } }, AP.icon('check', 18), 'Registrar regreso') : null,
               x.Estado === 'Pendiente' ? h('button', { class: 'btn', type: 'button', onclick: function () { close(); editar(x); } }, AP.icon('edit', 18), 'Editar') : null,
-              x.Estado === 'Pendiente' ? h('button', { class: 'btn danger-outline', type: 'button', onclick: function () { close(); cancelar(x); } }, 'Cancelar solicitud') : null,
+              x.Estado === 'Pendiente' && !x.EsRegreso ? h('button', { class: 'btn danger-outline', type: 'button', onclick: function () { close(); cancelar(x); } }, 'Cancelar registro') : null,
               h('button', { class: 'btn', type: 'button', onclick: function () { close(); } }, 'Cerrar')));
         }
       });

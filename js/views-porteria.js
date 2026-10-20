@@ -39,7 +39,11 @@
     };
     function porLlegarTxt() { var n = AP.Access.visitasPorLlegar().length; return n ? n + ' por llegar' : 'Ninguna por llegar'; }
     function permisosTxt() { var n = AP.permisosDelTurno().vigentes.length; return n ? n + (n === 1 ? ' vigente ahora' : ' vigentes ahora') : 'Ninguno vigente ahora'; }
-    function elementosTxt() { var n = AP.elementosDelDia().pendSalida.length; return n ? n + ' por salir' : 'Nada pendiente por salir'; }
+    function elementosTxt() {
+      var g = AP.elementosDelDia(), a = g.pendSalida.length, b = g.porRegresar.length;
+      return a || b ? [a ? a + ' por salir' : '', b ? b + ' por regresar' : ''].filter(Boolean).join(' · ') : 'Nada pendiente';
+    }
+    function elementosHay() { var g = AP.elementosDelDia(); return g.pendSalida.length + g.porRegresar.length > 0; }
     // Visitantes no anunciados registrados hoy en portería y la decisión del Director sobre cada uno
     var solicitudes = h('div');
     function pintarSolicitudes() {
@@ -82,7 +86,7 @@
         tile('edit', 'Registro manual', 'No anunciado / sin QR / salidas', '/manual'),
         tile('user', 'Visitas de hoy', porLlegarTxt(), '/visitas-hoy', AP.Access.visitasPorLlegar().length ? 'accent' : ''),
         tile('key', 'Permisos', permisosTxt(), '/permisos-hoy', AP.permisosDelTurno().vigentes.length ? 'accent' : ''),
-        tile('package', 'Elementos', elementosTxt(), '/elementos-hoy', AP.elementosDelDia().pendSalida.length ? 'accent' : ''),
+        tile('package', 'Elementos', elementosTxt(), '/elementos-hoy', elementosHay() ? 'accent' : ''),
         tile('users', 'Personas dentro', String(dentro.length) + (AP.Session.can('admin') ? '' : ' · solo consulta'), '/dentro', dentro.length ? 'accent' : ''),
         tile('badge', 'Autoridad', 'Visita de autoridad', '/manual?cat=Autoridad'),
         tile('truck', 'Vehículo de carga', 'Inspección y precintos', '/carga'),
@@ -112,7 +116,7 @@
       var tp = document.querySelector('a.tile[href="#/permisos-hoy"]');
       if (tp) { tp.querySelector('small').textContent = permisosTxt(); tp.classList.toggle('accent', AP.permisosDelTurno().vigentes.length > 0); }
       var te = document.querySelector('a.tile[href="#/elementos-hoy"]');
-      if (te) { te.querySelector('small').textContent = elementosTxt(); te.classList.toggle('accent', AP.elementosDelDia().pendSalida.length > 0); }
+      if (te) { te.querySelector('small').textContent = elementosTxt(); te.classList.toggle('accent', elementosHay()); }
       pintarSolicitudes();
       pintarSolIng();
     }, 200)));
@@ -268,11 +272,11 @@
         AP.icon(sentido === 'Salida' ? 'logout' : 'door', 22), h('strong', null, sentido === 'Salida' ? 'SALIDA' : 'INGRESO'),
         h('small', null, 'Determinado por el sistema según el último registro'));
 
-    // --- Elementos programados por la Dirección de Seguridad Integral para esta persona ---
-    // Se muestran los registros de elementos pendientes del día. El vigilante coteja
-    // cada elemento y deja constancia; el resultado también queda anotado en el registro del movimiento.
+    // --- Elementos registrados por la Dirección de Seguridad Integral para esta persona ---
+    // Pendientes por salir o ingresar (hoy o de días anteriores que quedaron pendientes) y elementos que salieron y deben
+    // regresar. El vigilante coteja y deja constancia; el resultado también queda anotado en el registro del movimiento.
     var EL = AP.Elem;
-    var elem = { el: h('div', { class: 'elem-wrap' }), lista: [], resueltos: {}, cargado: false };
+    var elem = { el: h('div', { class: 'elem-wrap' }), lista: [], mapa: {}, resueltos: {}, cargado: false };
     function sentidoActual() { return sentidoCtl.dataset.value || sentido; }
     function elemDe(x) {
       if (r.token && x.Token && x.Token === r.token) return true;
@@ -282,15 +286,19 @@
     async function cargarElementos() {
       if (r.invalido || !(r.token || rec.NumDoc)) return;
       try {
-        var desde = U.startOfDayCO(new Date());
-        var hasta = U.addDays(desde, 1);
-        var todos = await AP.B.listRange('AP_Elementos', 'FechaPrevista', desde, hasta, {});
-        elem.lista = todos.filter(function (x) { return x.Estado === 'Pendiente' && elemDe(x); })
-          .sort(function (a, b) { return a.FechaPrevista < b.FechaPrevista ? -1 : 1; });
+        var todos = await AP.B.listRange('AP_Elementos', 'FechaCreacion', U.addDays(new Date(), -AP.DIAS_ELEMENTOS), null, {});
+        AP.Sync.elementos = todos;
+        elem.mapa = EL.mapa(todos);
+        var finHoy = U.addDays(U.startOfDayCO(new Date()), 1).toISOString();
+        elem.lista = todos.filter(function (x) {
+          if (!elemDe(x)) return false;
+          if (x.EsRegreso) return EL.regresoActivo(x, elem.mapa);
+          return x.Estado === 'Pendiente' && x.FechaPrevista < finHoy;
+        }).sort(function (a, b) { return a.FechaPrevista < b.FechaPrevista ? -1 : 1; });
         elem.cargado = true;
         pintarElementos();
       } catch (e) {
-        elem.el.replaceChildren(h('p', { class: 'note' }, AP.icon('alert', 16), ' No fue posible consultar los elementos programados para esta persona (' + e.message + '). Si porta herramientas o equipos, comuníquese con la Dirección de Seguridad Integral antes de permitir su paso.'));
+        elem.el.replaceChildren(h('p', { class: 'note' }, AP.icon('alert', 16), ' No fue posible consultar los elementos registrados para esta persona (' + e.message + '). Si porta herramientas o equipos, comuníquese con la Dirección de Seguridad Integral antes de permitir su paso.'));
       }
     }
     function pintarElementos() {
@@ -299,55 +307,79 @@
       var orden = elem.lista.slice().sort(function (a, b) { return (a.Sentido === s0 ? 0 : 1) - (b.Sentido === s0 ? 0 : 1); });
       var pend = elem.lista.filter(function (x) { return !elem.resueltos[x.id]; }).length;
       elem.el.replaceChildren(h('section', { class: 'card stack elem-box' },
-        h('h3', { class: 'row gap' }, AP.icon('package', 22), h('span', null, 'Registros de elementos (' + elem.lista.length + ')')),
-        pend ? h('p', { class: 'note' }, 'Revise físicamente cada elemento (descripción, cantidad y serial) contra esta lista antes de verificar.') : null,
+        h('h3', { class: 'row gap' }, AP.icon('package', 22), h('span', null, 'Elementos de esta persona (' + elem.lista.length + ')')),
+        pend ? h('p', { class: 'note' }, 'Revise físicamente cada elemento (descripción, cantidad y serial) contra esta lista antes de marcar.') : null,
         orden.map(tarjetaElemento)));
     }
     function tarjetaElemento(x) {
       var elems = EL.items(x), fotos = EL.fotos(x), res = elem.resueltos[x.id];
-      var esIn = x.Sentido === 'Ingreso', coincide = x.Sentido === sentidoActual();
-      var verbo = esIn ? 'ingresa' : 'sale';
+      var esReg = !!x.EsRegreso, esIn = x.Sentido === 'Ingreso', coincide = x.Sentido === sentidoActual();
+      var sal = esReg ? elem.mapa[x.SalidaId] : null;
       var cab = h('div', { class: 'elem-head' },
-        AP.pill(x.Sentido.toUpperCase(), esIn ? 'ok' : 'warn'),
-        h('span', { class: 'small' }, 'Previsto: ', h('strong', null, U.fDateTime(x.FechaPrevista))),
-        h('span', { class: 'small' }, 'Autoriza: ', h('strong', null, x.AutorizadoPor || '—')));
+        AP.pill(esReg ? 'POR REGRESAR' : x.Sentido.toUpperCase(), esReg ? (EL.vencido(x) ? 'deny' : 'warn') : esIn ? 'ok' : 'warn'),
+        esReg ? h('span', { class: 'small' }, 'Salió: ', h('strong', null, sal && sal.FechaConfirmacion ? U.fDateTime(sal.FechaConfirmacion) : '—'))
+          : h('span', { class: 'small' }, 'Previsto: ', h('strong', null, U.fDateTime(x.FechaPrevista))),
+        esReg ? h('span', { class: 'small' + (EL.vencido(x) ? ' txt-deny' : '') }, 'Debe regresar: ', h('strong', null, U.fDateTime(x.FechaPrevista) + (EL.vencido(x) ? ' (vencido)' : ''))) : null,
+        h('span', { class: 'small' }, 'Autoriza: ', h('strong', null, x.AutorizadoPor || '—')),
+        !esReg && x.DebeRegresar ? h('span', { class: 'small' }, 'Debe regresar: ', h('strong', null, U.fDateTime(x.FechaRegresoPrevista))) : null);
       var cuerpo = [cab, EL.tabla(elems)];
       if (fotos.length) cuerpo.push(EL.galeria(fotos));
       if (x.Observaciones) cuerpo.push(h('p', { class: 'small' }, h('strong', null, 'Indicaciones: '), x.Observaciones));
       if (res) {
-        cuerpo.push(h('div', { class: 'elem-res ' + (res.estado === 'Confirmado' ? 'ok' : 'deny') },
-          AP.icon(res.estado === 'Confirmado' ? 'check' : 'x', 20),
-          h('span', null, res.estado === 'Confirmado' ? 'Verificado: los elementos ' + (esIn ? 'ingresaron' : 'salieron') + ' conforme a la lista.' : 'Registrado: no coincide. ' + res.nota)));
+        var txt = {
+          Confirmado: esReg ? 'Verificado: los elementos regresaron conforme a la lista.' : 'Verificado: los elementos ' + (esIn ? 'ingresaron' : 'salieron') + ' conforme a la lista.' + (x.DebeRegresar ? ' Quedan pendientes por regresar.' : ''),
+          Rechazado: res.noSale ? 'Registrado: no los sacó' + (res.nota && res.nota.length > EL.NO_SALE.length + 2 ? ' (' + res.nota.slice(EL.NO_SALE.length + 2) + ').' : '.')
+            : 'Registrado: no coincide' + (res.nota ? '. ' + res.nota : '.'),
+          Luego: esReg ? 'Siguen pendientes por regresar.' : 'Queda pendiente: ' + (esIn ? 'los ingresa' : 'los saca') + ' después.'
+        }[res.estado];
+        cuerpo.push(h('div', { class: 'elem-res ' + (res.estado === 'Confirmado' ? 'ok' : res.estado === 'Luego' || res.noSale ? 'warn' : 'deny') },
+          AP.icon(res.estado === 'Confirmado' ? 'check' : res.estado === 'Luego' ? 'clock' : 'x', 20), h('span', null, txt)));
       } else {
-        if (!coincide) cuerpo.push(h('p', { class: 'note' }, 'Programado para la ' + x.Sentido.toUpperCase() + '. Verifíquelo solo cuando la persona efectivamente ' + verbo + ' con los elementos.'));
-        var bOk = h('button', { class: 'btn ' + (esIn ? 'go-in' : 'go-out'), type: 'button' }, AP.icon('check', 20), 'Verificado: sí ' + verbo);
-        var bNo = h('button', { class: 'btn danger-outline', type: 'button' }, AP.icon('x', 18), 'No coincide / no los presenta');
-        bOk.onclick = function () { resolverElemento(x, 'Confirmado', '', [bOk, bNo]); };
+        if (!coincide && !esReg) cuerpo.push(h('p', { class: 'note' }, 'Programado para la ' + x.Sentido.toUpperCase() + '. Márquelo solo cuando la persona efectivamente ' + (esIn ? 'ingrese' : 'salga') + ' con los elementos.'));
+        var botones = [];
+        var bOk = h('button', { class: 'btn ' + (esIn ? 'go-in' : 'go-out'), type: 'button' }, AP.icon('check', 20), esReg ? 'Ya regresaron' : esIn ? 'Sí ingresan' : 'Sí salen con los elementos');
+        var bLuego = h('button', { class: 'btn', type: 'button' }, AP.icon('clock', 18), esReg ? 'Siguen pendientes' : esIn ? 'Los ingresa después' : 'Los saca después');
+        var bNoSale = !esReg && !esIn ? h('button', { class: 'btn', type: 'button' }, AP.icon('x', 18), 'No los va a sacar') : null;
+        var bNo = h('button', { class: 'btn danger-outline', type: 'button' }, AP.icon('alert', 18), esReg ? 'Regresan incompletos / no coinciden' : 'No coinciden');
+        botones = [bOk, bLuego, bNoSale, bNo].filter(Boolean);
+        bOk.onclick = function () { resolverElemento(x, 'Confirmado', '', botones); };
+        bLuego.onclick = function () {
+          elem.resueltos[x.id] = { estado: 'Luego', sentido: x.Sentido, regreso: esReg, resumen: EL.resumen(elems) };
+          AP.toast(esReg ? 'Siguen pendientes por regresar.' : 'Queda pendiente: aparecerá de nuevo cuando la persona vuelva a pasar.', 'info', 4000);
+          pintarElementos();
+        };
+        if (bNoSale) bNoSale.onclick = function () {
+          AP.modal({ title: 'No va a sacar los elementos', body: function (close) {
+            var t = AP.textarea('nota', '', { placeholder: 'Opcional: motivo (los deja en la empresa, ya no los necesita, etc.)', rows: 2 });
+            return h('div', { class: 'stack' }, h('p', { class: 'muted small' }, x.Title + ' — la salida de estos elementos quedará cerrada como no realizada. Si después sí los necesita sacar, el Director debe registrarlos de nuevo.'), t,
+              h('button', { class: 'btn primary block', type: 'button', onclick: function () {
+                close(); resolverElemento(x, 'Rechazado', EL.NO_SALE + (t.value.trim() ? ': ' + t.value.trim() : ''), botones, true);
+              } }, 'Registrar que no los sacó'));
+          } });
+        };
         bNo.onclick = function () {
-          AP.modal({ title: 'Elementos que no coinciden', body: function (close) {
-            var t = AP.textarea('nota', '', { placeholder: 'Describa qué no coincide (elemento, cantidad o serial distinto, no los presenta, elementos adicionales, etc.)', rows: 3 });
-            return h('div', { class: 'stack' }, h('p', { class: 'muted small' }, x.Title + ' — ' + x.Sentido + ' de elementos'), t,
+          AP.modal({ title: esReg ? 'Regreso con novedad' : 'Elementos que no coinciden', body: function (close) {
+            var t = AP.textarea('nota', '', { placeholder: esReg ? 'Qué regresó y qué falta, o qué no coincide (cantidad, serial, estado del elemento)' : 'Describa qué no coincide (elemento, cantidad o serial distinto, no los presenta, elementos adicionales, etc.)', rows: 3 });
+            return h('div', { class: 'stack' }, h('p', { class: 'muted small' }, x.Title + ' — ' + (esReg ? 'regreso' : x.Sentido.toLowerCase()) + ' de elementos'), t,
               h('button', { class: 'btn danger block', type: 'button', onclick: function () {
-                if (t.value.trim().length < 6) return AP.toast('Describa brevemente qué no coincide.', 'warn');
-                close(); resolverElemento(x, 'Rechazado', t.value.trim(), [bOk, bNo]);
+                if (t.value.trim().length < 6) return AP.toast('Describa brevemente la novedad.', 'warn');
+                close(); resolverElemento(x, 'Rechazado', t.value.trim(), botones);
               } }, 'Registrar novedad'));
           } });
         };
-        cuerpo.push(h('div', { class: 'row gap wrap' }, bOk, bNo));
+        cuerpo.push(h('div', { class: 'row gap wrap' }, botones));
       }
       return h('div', { class: 'elem-sol ' + (esIn ? 'in' : 'out') + (res ? ' hecho' : '') }, cuerpo);
     }
-    async function resolverElemento(x, estado, nota, btns) {
+    async function resolverElemento(x, estado, nota, btns, noSale) {
       btns.forEach(function (b) { b.disabled = true; });
-      var u = AP.Session.operador();
-      var cambios = { Estado: estado, Vigilante: u.nombre, VigilanteUsuario: u.usuario, FechaConfirmacion: new Date().toISOString() };
-      if (nota) cambios.NotaPorteria = nota;
       try {
-        await AP.B.update('AP_Elementos', x.id, cambios);
-        elem.resueltos[x.id] = { estado: estado, nota: nota, sentido: x.Sentido, resumen: EL.resumen(EL.items(x)) };
-        AP.Sync.elementos = (AP.Sync.elementos || []).map(function (z) { return z.id === x.id ? Object.assign({}, z, cambios) : z; });
-        U.beep(estado === 'Confirmado' ? 'ok' : 'deny');
-        AP.toast(estado === 'Confirmado' ? 'Elementos verificados.' : 'Novedad de elementos registrada. Informe a la Dirección de Seguridad Integral.', estado === 'Confirmado' ? 'info' : 'warn', 5000);
+        var cambios = await AP.Elem.verificar(x, estado, nota);
+        elem.resueltos[x.id] = { estado: estado, nota: nota, noSale: !!noSale, sentido: x.Sentido, regreso: !!x.EsRegreso, resumen: EL.resumen(EL.items(x)) };
+        Object.assign(x, cambios);
+        U.beep(estado === 'Confirmado' || noSale ? 'ok' : 'deny');
+        AP.toast(estado === 'Confirmado' ? (x.EsRegreso ? 'Regreso de elementos verificado.' : 'Elementos verificados.' + (x.DebeRegresar ? ' Quedan pendientes por regresar.' : ''))
+          : noSale ? 'Registrado: no sacó los elementos.' : 'Novedad de elementos registrada. Informe a la Dirección de Seguridad Integral.', estado === 'Confirmado' || noSale ? 'info' : 'warn', 5000);
         pintarElementos();
       } catch (e) {
         btns.forEach(function (b) { b.disabled = false; });
@@ -358,9 +390,10 @@
     function notaElementos(sent) {
       var out = [];
       elem.lista.forEach(function (x) {
-        var z = elem.resueltos[x.id];
-        if (z) out.push((z.estado === 'Confirmado' ? 'Elementos verificados (' : 'Elementos NO coinciden (') + z.sentido.toLowerCase() + '): ' + z.resumen + (z.nota ? ' — ' + z.nota : ''));
-        else if (x.Sentido === sent) out.push('Elementos programados SIN verificar (' + x.Sentido.toLowerCase() + '): ' + EL.resumen(EL.items(x)));
+        var z = elem.resueltos[x.id], que = x.EsRegreso ? 'regreso' : x.Sentido.toLowerCase();
+        if (z && z.estado === 'Luego') out.push((x.EsRegreso ? 'Elementos por regresar, siguen pendientes: ' : 'Elementos de ' + que + ' programados, quedan pendientes (después): ') + z.resumen);
+        else if (z) out.push((z.estado === 'Confirmado' ? 'Elementos verificados (' + que + '): ' : z.noSale ? 'No sacó los elementos programados: ' : 'Elementos NO coinciden (' + que + '): ') + z.resumen + (z.nota && !z.noSale ? ' — ' + z.nota : ''));
+        else if (x.Sentido === sent) out.push((x.EsRegreso ? 'Elementos por regresar SIN verificar: ' : 'Elementos programados SIN verificar (' + que + '): ') + EL.resumen(EL.items(x)));
       });
       return out.join(' | ');
     }
@@ -504,8 +537,8 @@
       }
       var sinVerificar = resultado === 'Permitido' ? elem.lista.filter(function (x) { return x.Sentido === sent && !elem.resueltos[x.id]; }) : [];
       if (sinVerificar.length) {
-        var seguir = await AP.confirm('Elementos sin verificar',
-          'Esta persona tiene ' + (sinVerificar.length === 1 ? 'un registro' : sinVerificar.length + ' registros') + ' de ' + sent.toLowerCase() + ' de elementos sin verificar. Verifíquelo(s) en la parte superior antes de registrar. Si registra de todas formas, quedará constancia de que los elementos no se verificaron.',
+        var seguir = await AP.confirm('Elementos sin marcar',
+          'Esta persona tiene ' + (sinVerificar.length === 1 ? 'un registro' : sinVerificar.length + ' registros') + ' de elementos ' + (sent === 'Salida' ? 'por salir' : 'por ingresar o regresar') + ' sin marcar. Márquelos en la parte superior (sí pasan, después, no los saca o no coinciden) antes de registrar. Si registra de todas formas, quedará constancia de que los elementos no se verificaron.',
           'Registrar de todas formas', 'danger');
         if (!seguir) { try { elem.el.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { /* */ } return; }
       }
@@ -650,7 +683,8 @@
     var anf = null, correo = null, autorizaSol = null;
     if (noAnunciado) {
       delete f.Anfitrion; delete f.AutorizadoPor;
-      anf = AP.anfitrionPicker({ fuente: function () { return Promise.resolve(AP.Sync.personas); }, libre: true, placeholder: 'Buscar colaborador (nombre, cargo o área)' });
+      // El anfitrión es obligatorio y solo puede elegirse de la lista del personal propio habilitado (no se acepta texto libre)
+      anf = AP.anfitrionPicker({ fuente: function () { return Promise.resolve(AP.Sync.personas); }, libre: false, placeholder: 'Buscar colaborador (nombre, cargo o área)' });
       correo = I('Correo', '', { type: 'email', inputmode: 'email', placeholder: 'Opcional' });
       autorizaSol = AP.check('AutorizaDatos', AP.TX.confirmacionSolicitudVisita ||
         ((AP.TX.confirmacionVisitante || '¿Autoriza el tratamiento de sus datos personales para el control de acceso?') +
@@ -711,7 +745,7 @@
         !esAut ? AP.field('Empresa / dependencia', f.Empresa) : null,
         !esAut ? AP.field(noAnunciado ? 'Celular con WhatsApp *' : 'Teléfono', f.Telefono, noAnunciado ? 'A este número el Director le enviará el código QR si aprueba la visita.' : null) : null,
         noAnunciado ? AP.field('Correo electrónico', correo) : null,
-        noAnunciado ? AP.field('Colaborador que visita (anfitrión) *', anf, 'Busque en el personal propio. Si no aparece, escriba el nombre o el área.') : AP.field(esAut ? 'Área visitada / acompañante' : 'Anfitrión o área solicitante', f.Anfitrion),
+        noAnunciado ? AP.field('Colaborador que visita (anfitrión) *', anf, 'Obligatorio: búsquelo por nombre, cargo o área y tóquelo en la lista del personal propio. No se acepta texto escrito a mano.') : AP.field(esAut ? 'Área visitada / acompañante' : 'Anfitrión o área solicitante', f.Anfitrion),
         AP.field('Motivo' + (noAnunciado ? ' *' : ''), f.Motivo),
         h('div', { class: 'grid2' }, AP.field(esAut ? 'Vehículo(s) / placa(s)' : 'Placa', f.Placa), AP.field('Tipo de vehículo', f.VehiculoTipo)),
         requiereJust ? AP.field('Autorizado por *', f.AutorizadoPor) : null,
@@ -739,7 +773,7 @@
       if (U.normDoc(d.NumDoc).length < 4) return AP.toast('Escriba el número de documento.', 'warn');
       if (!AP.waNum(d.Telefono)) return AP.toast('Escriba el celular del visitante (10 dígitos, ej.: 3001234567). Allí recibirá el código QR por WhatsApp.', 'warn', 7000);
       if (mail && !EMAIL_RE.test(mail)) return AP.toast('El correo no es válido. Corríjalo o déjelo vacío.', 'warn');
-      if (!a.Anfitrion || a.Anfitrion.length < 3) return AP.toast('Indique el colaborador o el área que visita.', 'warn');
+      if (!anf.vinculado() || !a.AnfitrionId) { AP.toast('Seleccione de la lista el colaborador que visita: búsquelo por nombre, cargo o área y tóquelo. No se acepta texto escrito a mano.', 'warn', 7000); try { anf.querySelector('input.anf-buscar').focus(); } catch (e) { /* */ } return; }
       if (d.Motivo.length < 4) return AP.toast('Escriba el motivo de la visita.', 'warn');
       if (!autorizaSol.querySelector('input').checked) return AP.toast('Sin la autorización del visitante para el tratamiento de sus datos no es posible registrar la solicitud.', 'warn', 7000);
       var previa = visitaVigente(U.normDoc(d.NumDoc));
@@ -1063,10 +1097,11 @@
       vis.length ? h('div', { class: 'list' }, vis.map(function (m) {
         var largo = Date.now() - new Date(m.FechaHora).getTime() > max;
         var p = m.Token ? (AP.Sync.byToken.get(m.Token) || {}).rec : null;
-        var porSalir = AP.elementosDe(m, 'Salida');
+        var porSalir = AP.elementosDe(m, 'Salida'), porRegresar = AP.elementosDe(m, 'Regreso');
         var cuerpo = [AP.photoEl(p || { Title: m.Title }, 'sm'),
           h('div', null, h('strong', null, m.Title), h('small', null, (m.Categoria || '') + ' · desde ' + U.fTime(m.FechaHora) + (U.ymd(m.FechaHora) !== U.ymd() ? ' del ' + U.fDate(m.FechaHora) : '') + ' (' + U.duracion(m.FechaHora) + ')' + (m.Placa ? ' · ' + m.Placa : '')),
-            porSalir.length ? h('small', null, AP.pill('Elementos por salir: ' + AP.Elem.resumen(AP.Elem.items(porSalir[0])) + (porSalir.length > 1 ? ' y ' + (porSalir.length - 1) + ' registro(s) más' : ''), 'warn')) : null),
+            porSalir.length ? h('small', null, AP.pill('Elementos por salir: ' + AP.Elem.resumen(AP.Elem.items(porSalir[0])) + (porSalir.length > 1 ? ' y ' + (porSalir.length - 1) + ' registro(s) más' : ''), 'warn')) : null,
+            porRegresar.length ? h('small', null, AP.pill('Tiene elementos por regresar: ' + AP.Elem.resumen(AP.Elem.items(porRegresar[0])) + (porRegresar.length > 1 ? ' y ' + (porRegresar.length - 1) + ' registro(s) más' : ''), 'deny')) : null),
           m._pendiente ? AP.icon('sync', 16) : null,
           editar ? h('span', { class: 'btn small' }, 'Salida') : null];
         return editar
@@ -1161,64 +1196,119 @@
     AP.Sync.run();
   });
 
-  // =================== ELEMENTOS DEL DÍA (solo consulta) ===================
-  // Lo que el Director programó para hoy: primero lo que está pendiente por SALIR. La verificación se hace al leer el QR.
+  // =================== ELEMENTOS: PENDIENTES POR SALIR, POR INGRESAR Y POR REGRESAR ===================
+  // Lo que registró el Director: primero lo que está pendiente por SALIR y lo que debe REGRESAR. La salida y el ingreso se
+  // verifican al leer el QR de la persona; el regreso también puede marcarse desde esta lista (a veces lo trae otra persona).
+  // Marca hecha por el vigilante (las reglas del servidor solo le permiten pasar de Pendiente a Confirmado o Rechazado)
+  AP.Elem.verificar = async function (x, estado, nota) {
+    var u = AP.Session.operador();
+    var cambios = { Estado: estado, Vigilante: u.nombre, VigilanteUsuario: u.usuario, FechaConfirmacion: new Date().toISOString() };
+    if (nota) cambios.NotaPorteria = nota;
+    await AP.B.update('AP_Elementos', x.id, cambios);
+    AP.Sync.elementos = (AP.Sync.elementos || []).map(function (z) { return z.id === x.id ? Object.assign({}, z, cambios) : z; });
+    AP.Audit.log(x.EsRegreso ? 'Verificación de regreso de elementos' : 'Verificación de elementos', x.Title + ' (' + (x.PersonaDoc || '') + ') — ' + (x.EsRegreso ? 'regreso' : x.Sentido),
+      (estado === 'Confirmado' ? 'Conforme' : AP.Elem.noSale({ Estado: estado, NotaPorteria: nota }) ? 'No los sacó' : 'Novedad') + (nota ? ': ' + nota : '') + ' | ' + AP.Elem.resumen(AP.Elem.items(x)));
+    AP.Sync.emit();
+    return cambios;
+  };
   AP.elementosDelDia = function (now) {
-    var hoy = U.ymd(now || new Date());
-    var l = (AP.Sync.elementos || []).filter(function (x) { return x.Estado !== 'Cancelado' && U.ymd(x.FechaPrevista) === hoy; })
-      .sort(function (a, b) { return a.FechaPrevista < b.FechaPrevista ? -1 : 1; });
+    now = now || new Date();
+    var EL = AP.Elem, todos = AP.Sync.elementos || [], mapa = EL.mapa(todos);
+    var finHoy = U.addDays(U.startOfDayCO(now), 1).toISOString(), hoy = U.ymd(now);
+    var porFecha = function (a, b) { return a.FechaPrevista < b.FechaPrevista ? -1 : 1; };
+    var pend = todos.filter(function (x) { return !x.EsRegreso && x.Estado === 'Pendiente' && x.FechaPrevista < finHoy; }).sort(porFecha);
     return {
-      pendSalida: l.filter(function (x) { return x.Estado === 'Pendiente' && x.Sentido === 'Salida'; }),
-      pendIngreso: l.filter(function (x) { return x.Estado === 'Pendiente' && x.Sentido === 'Ingreso'; }),
-      verificados: l.filter(function (x) { return x.Estado !== 'Pendiente'; }).sort(function (a, b) { return (a.FechaConfirmacion || '') < (b.FechaConfirmacion || '') ? 1 : -1; })
+      mapa: mapa,
+      pendSalida: pend.filter(function (x) { return x.Sentido === 'Salida'; }),
+      pendIngreso: pend.filter(function (x) { return x.Sentido === 'Ingreso'; }),
+      porRegresar: todos.filter(function (x) { return EL.regresoActivo(x, mapa); }).sort(porFecha),
+      verificados: todos.filter(function (x) { return x.Estado !== 'Pendiente' && x.Estado !== 'Cancelado' && x.FechaConfirmacion && U.ymd(x.FechaConfirmacion) === hoy; })
+        .sort(function (a, b) { return a.FechaConfirmacion < b.FechaConfirmacion ? 1 : -1; })
     };
   };
-  // Registros pendientes de hoy de una persona (por su QR o por su documento)
+  // Registros pendientes de una persona (por su QR o por su documento): 'Salida', 'Ingreso' o 'Regreso'
   AP.elementosDe = function (m, sentido) {
     var d = U.normDoc(m.NumDoc || ''), g = AP.elementosDelDia();
-    return (sentido === 'Ingreso' ? g.pendIngreso : sentido === 'Salida' ? g.pendSalida : g.pendSalida.concat(g.pendIngreso)).filter(function (x) {
-      return (m.Token && x.Token && x.Token === m.Token) || (d && x.PersonaDoc && U.normDoc(x.PersonaDoc) === d);
-    });
+    var l = sentido === 'Ingreso' ? g.pendIngreso : sentido === 'Salida' ? g.pendSalida : sentido === 'Regreso' ? g.porRegresar : g.pendSalida.concat(g.pendIngreso, g.porRegresar);
+    return l.filter(function (x) { return (m.Token && x.Token && x.Token === m.Token) || (d && x.PersonaDoc && U.normDoc(x.PersonaDoc) === d); });
   };
   AP.route('/elementos-hoy', function () {
     var EL = AP.Elem;
     var box = h('div', { class: 'stack' });
-    AP.porteriaShell('Elementos de hoy', box, { back: '/porteria', sub: 'Solo consulta' });
-    function detalle(x) {
-      var fotos = EL.fotos(x);
+    AP.porteriaShell('Elementos', box, { back: '/porteria', sub: 'Pendientes por salir, ingresar y regresar' });
+    function detalle(x, mapa) {
+      var fotos = EL.fotos(x), sal = x.EsRegreso ? mapa[x.SalidaId] : null;
       AP.modal({
-        title: x.Sentido + ' de elementos — ' + x.Title, size: 'wide',
+        title: (x.EsRegreso ? 'Regreso' : x.Sentido) + ' de elementos — ' + x.Title, size: 'wide',
         body: h('div', { class: 'stack' },
-          h('div', { class: 'row gap wrap' }, AP.pill(x.Sentido.toUpperCase(), x.Sentido === 'Ingreso' ? 'ok' : 'warn'), AP.estadoPill(x.Estado)),
-          h('div', { class: 'kv' }, h('span', null, 'Previsto'), h('strong', null, U.fDateTime(x.FechaPrevista))),
+          h('div', { class: 'row gap wrap' }, AP.pill(x.EsRegreso ? 'REGRESO' : x.Sentido.toUpperCase(), x.Sentido === 'Ingreso' && !x.EsRegreso ? 'ok' : 'warn'), EL.pill(x, mapa)),
+          sal ? h('div', { class: 'kv' }, h('span', null, 'Salió'), h('strong', null, (sal.FechaConfirmacion ? U.fDateTime(sal.FechaConfirmacion) : '—') + (sal.Vigilante ? ' · verificó ' + sal.Vigilante : ''))) : null,
+          h('div', { class: 'kv' }, h('span', null, x.EsRegreso ? 'Debe regresar' : 'Previsto'), h('strong', null, U.fDateTime(x.FechaPrevista))),
+          !x.EsRegreso && x.DebeRegresar ? h('div', { class: 'kv' }, h('span', null, 'Debe regresar'), h('strong', null, U.fDateTime(x.FechaRegresoPrevista))) : null,
           h('div', { class: 'kv' }, h('span', null, 'Autoriza'), h('strong', null, x.AutorizadoPor || '—')),
           EL.tabla(EL.items(x)),
           fotos.length ? EL.galeria(fotos) : null,
           x.Observaciones ? h('p', { class: 'small' }, h('strong', null, 'Indicaciones: '), x.Observaciones) : null,
-          x.Estado === 'Pendiente' ? h('p', { class: 'note' }, 'Se verifica al leer el QR de ' + x.Title + ' cuando ' + (x.Sentido === 'Salida' ? 'salga' : 'ingrese') + ' con los elementos.') : null)
+          x.NotaPorteria ? h('p', { class: 'small' }, h('strong', null, 'Nota de portería: '), x.NotaPorteria) : null,
+          x.Estado === 'Pendiente' && !x.EsRegreso ? h('p', { class: 'note' }, 'Se verifica al leer el QR de ' + x.Title + ' cuando ' + (x.Sentido === 'Salida' ? 'salga' : 'ingrese') + ' con los elementos.') : null)
       });
     }
-    function tarjeta(x) {
-      var it = EL.items(x), nf = EL.fotos(x).length, esIn = x.Sentido === 'Ingreso';
-      var res = x.Estado === 'Confirmado' ? h('small', { class: 'txt-ok' }, 'Verificado por ' + (x.Vigilante || '—') + (x.FechaConfirmacion ? ' a las ' + U.fTime(x.FechaConfirmacion) : ''))
-        : x.Estado === 'Rechazado' ? h('small', { class: 'txt-deny' }, 'No coincidió' + (x.NotaPorteria ? ': ' + x.NotaPorteria : '') + (x.Vigilante ? ' (' + x.Vigilante + ')' : '')) : null;
-      return h('button', { class: 'elem-sol ' + (esIn ? 'in' : 'out') + (x.Estado !== 'Pendiente' ? ' hecho' : ''), type: 'button', style: { textAlign: 'left', font: 'inherit', color: 'inherit', cursor: 'pointer' }, onclick: function () { detalle(x); } },
-        h('div', { class: 'elem-head' }, AP.pill(x.Sentido.toUpperCase(), esIn ? 'ok' : 'warn'),
-          h('strong', null, x.Title), h('span', { class: 'small muted' }, [x.PersonaDoc, x.PersonaTipo, x.PersonaEmpresa].filter(Boolean).join(' · '))),
-        h('div', { class: 'small' }, it.slice(0, 3).map(function (i) { return h('div', null, (i.cant > 1 ? i.cant + ' × ' : '') + i.desc + (i.serial ? ' (' + i.serial + ')' : '')); }),
-          it.length > 3 ? h('div', { class: 'muted' }, 'y ' + (it.length - 3) + ' elemento(s) más') : null),
-        h('div', { class: 'elem-head small' }, h('span', null, 'Previsto: ', h('strong', null, U.fTime(x.FechaPrevista))), h('span', null, 'Autoriza: ', h('strong', null, x.AutorizadoPor || '—')),
-          nf ? h('span', null, AP.icon('camera', 14), ' ' + nf + ' foto' + (nf > 1 ? 's' : '')) : null),
-        x.Estado === 'Pendiente' ? h('small', { class: 'muted' }, presencia(x.Token)) : res);
+    // Regreso: puede marcarse desde aquí (los elementos pueden llegar con otra persona)
+    function marcarRegreso(x, ok) {
+      AP.modal({ title: ok ? 'Confirmar regreso de elementos' : 'Regreso con novedad', body: function (close) {
+        var t = AP.textarea('nota', '', { rows: 3, placeholder: ok ? 'Opcional: quién los trajo, si no fue el titular' : 'Qué regresó y qué falta, o qué no coincide (cantidad, serial, estado del elemento)' });
+        return h('div', { class: 'stack' },
+          h('p', null, h('strong', null, x.Title), ' — revise físicamente cada elemento contra la lista antes de confirmar.'),
+          EL.tabla(EL.items(x)), AP.field(ok ? 'Observación' : 'Novedad *', t),
+          h('button', { class: 'btn block ' + (ok ? 'go-in' : 'danger'), type: 'button', onclick: async function (e) {
+            var btn = e.currentTarget;
+            if (!ok && t.value.trim().length < 6) return AP.toast('Describa brevemente la novedad.', 'warn');
+            btn.disabled = true;
+            try {
+              await EL.verificar(x, ok ? 'Confirmado' : 'Rechazado', t.value.trim() ? (ok ? 'Regreso: ' : '') + t.value.trim() : '');
+              close(); U.beep(ok ? 'ok' : 'deny');
+              AP.toast(ok ? 'Regreso verificado.' : 'Novedad registrada. Informe a la Dirección de Seguridad Integral.', ok ? 'info' : 'warn', 5000);
+              pintar();
+            } catch (er) { btn.disabled = false; AP.toast('No se pudo guardar: ' + er.message + (er.offline ? ' Intente de nuevo cuando haya señal.' : ''), 'error', 8000); }
+          } }, AP.icon(ok ? 'check' : 'alert', 20), ok ? 'Sí, ya regresaron' : 'Registrar novedad'));
+      } });
+    }
+    function tarjeta(x, mapa, conAcciones) {
+      var it = EL.items(x), nf = EL.fotos(x).length, esReg = !!x.EsRegreso, esIn = x.Sentido === 'Ingreso' && !esReg, venc = EL.vencido(x);
+      var sal = esReg ? mapa[x.SalidaId] : null;
+      var est = EL.estado(x, mapa);
+      var linea = esReg
+        ? h('div', { class: 'elem-head small' }, h('span', null, 'Salió: ', h('strong', null, sal && sal.FechaConfirmacion ? U.fDateTime(sal.FechaConfirmacion) : '—')),
+          h('span', { class: venc ? 'txt-deny' : '' }, 'Debe regresar: ', h('strong', null, U.fDateTime(x.FechaPrevista) + (venc ? ' (vencido)' : ''))))
+        : h('div', { class: 'elem-head small' }, h('span', null, 'Previsto: ', h('strong', null, U.ymd(x.FechaPrevista) === U.ymd() ? U.fTime(x.FechaPrevista) : U.fDateTime(x.FechaPrevista))),
+          x.DebeRegresar ? h('span', null, 'Debe regresar: ', h('strong', null, U.fDateTime(x.FechaRegresoPrevista))) : null);
+      var card = h('div', { class: 'elem-sol ' + (esIn || esReg ? 'in' : 'out') + (x.Estado !== 'Pendiente' ? ' hecho' : '') },
+        h('button', { class: 'linkish', type: 'button', style: { textAlign: 'left', display: 'grid', gap: '6px', color: 'inherit' }, onclick: function () { detalle(x, mapa); } },
+          h('div', { class: 'elem-head' }, AP.pill(esReg ? 'POR REGRESAR' : x.Sentido.toUpperCase(), esReg ? (venc ? 'deny' : 'warn') : esIn ? 'ok' : 'warn'),
+            h('strong', null, x.Title), h('span', { class: 'small muted' }, [x.PersonaDoc, x.PersonaTipo, x.PersonaEmpresa].filter(Boolean).join(' · '))),
+          h('div', { class: 'small' }, it.slice(0, 3).map(function (i) { return h('div', null, (i.cant > 1 ? i.cant + ' × ' : '') + i.desc + (i.serial ? ' (' + i.serial + ')' : '')); }),
+            it.length > 3 ? h('div', { class: 'muted' }, 'y ' + (it.length - 3) + ' elemento(s) más') : null),
+          linea,
+          h('div', { class: 'elem-head small' }, h('span', null, 'Autoriza: ', h('strong', null, x.AutorizadoPor || '—')), nf ? h('span', null, AP.icon('camera', 14), ' ' + nf + ' foto' + (nf > 1 ? 's' : '')) : null),
+          x.Estado === 'Pendiente' ? h('small', { class: 'muted' }, (function (pr) { return 'Ubicación de la persona: ' + pr.charAt(0).toLowerCase() + pr.slice(1); })(presencia(x.Token)))
+            : h('small', { class: est.k === 'ok' ? 'txt-ok' : est.k === 'deny' ? 'txt-deny' : 'muted' }, est.t + (x.Vigilante ? ' · ' + x.Vigilante : '') + (x.FechaConfirmacion ? ' a las ' + U.fTime(x.FechaConfirmacion) : '') + (x.NotaPorteria && !EL.noSale(x) ? ' — ' + x.NotaPorteria : ''))));
+      if (conAcciones) card.appendChild(h('div', { class: 'row gap wrap' },
+        h('button', { class: 'btn go-in', type: 'button', onclick: function () { marcarRegreso(x, true); } }, AP.icon('check', 18), 'Ya regresaron'),
+        h('button', { class: 'btn danger-outline', type: 'button', onclick: function () { marcarRegreso(x, false); } }, AP.icon('alert', 18), 'Incompletos / no coinciden')));
+      return card;
     }
     function pintar() {
+      if (document.querySelector('.modal-wrap')) return;
       var g = AP.elementosDelDia();
-      var sec = function (titulo, l) { return l.length ? h('section', { class: 'card stack sm' }, h('h3', null, titulo + ' (' + l.length + ')'), l.map(tarjeta)) : null; };
-      var vacio = !g.pendSalida.length && !g.pendIngreso.length && !g.verificados.length;
+      var sec = function (titulo, l, acciones, nota) { return l.length ? h('section', { class: 'card stack sm' }, h('h3', null, titulo + ' (' + l.length + ')'), nota ? h('p', { class: 'muted small' }, nota) : null, l.map(function (x) { return tarjeta(x, g.mapa, acciones); })) : null; };
+      var vacio = !g.pendSalida.length && !g.pendIngreso.length && !g.porRegresar.length && !g.verificados.length;
       box.replaceChildren(
-        h('p', { class: 'note' }, 'Solo consulta. Los elementos se verifican al leer el QR de la persona: allí se confirma si coinciden o se registra la novedad.'),
-        vacio ? AP.empty('package', 'No hay elementos programados para hoy', 'Aquí aparecen las herramientas, equipos y materiales que el Director autorizó para ingresar o salir hoy.') : null,
-        sec('Pendientes por SALIR', g.pendSalida), sec('Pendientes por INGRESAR', g.pendIngreso), sec('Ya verificados hoy', g.verificados),
+        h('p', { class: 'note' }, 'La salida y el ingreso de elementos se verifican al leer el QR de la persona (allí se marca si salen, si los saca después o si no los va a sacar). El regreso también puede marcarse aquí.'),
+        vacio ? AP.empty('package', 'No hay elementos pendientes', 'Aquí aparecen las herramientas, equipos y materiales que el Director autorizó para salir, ingresar o regresar.') : null,
+        sec('Pendientes por SALIR', g.pendSalida),
+        sec('Pendientes por REGRESAR', g.porRegresar, true, 'Salieron y deben volver. Cuando los traigan, revíselos contra la lista y marque.'),
+        sec('Pendientes por INGRESAR', g.pendIngreso),
+        sec('Ya verificados hoy', g.verificados),
         h('p', { class: 'muted small' }, 'Datos del celular: ' + (AP.Sync.state.lastPull ? 'actualizados ' + U.rel(AP.Sync.state.lastPull) : 'sin descargar') + '.'));
     }
     pintar();

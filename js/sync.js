@@ -305,10 +305,10 @@
         await S.set('c:horarios', hr); await S.set('c:permisos', pm);
       } catch (e) { if (e.offline || e.authRequired) throw e; errs.horarios = e.message; }
 
-      // Elementos programados por el Director desde hoy: el vigilante ve lo pendiente por salir o ingresar
-      // (si falla, no se detiene la sincronización de lo demás)
+      // Elementos registrados por el Director en los últimos meses: el vigilante ve lo pendiente por salir, por ingresar
+      // y por regresar, aunque la fecha prevista ya haya pasado (si falla, no se detiene la sincronización de lo demás)
       try {
-        var el = await B.listRange('AP_Elementos', 'FechaPrevista', U.startOfDayCO(new Date()), null);
+        var el = await B.listRange('AP_Elementos', 'FechaCreacion', U.addDays(new Date(), -AP.DIAS_ELEMENTOS), null);
         Sync.elementos = el;
         await S.set('c:elementos', el);
       } catch (e) { if (e.offline || e.authRequired) throw e; console.warn('[AP] Elementos:', e.message); }

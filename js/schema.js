@@ -158,7 +158,11 @@
         ['Items', 'note'], ['Fotos', 'note'],
         ['Vigilante', 'text'], ['VigilanteUsuario', 'text'], ['FechaConfirmacion', 'datetime'], ['NotaPorteria', 'note'],
         ['Observaciones', 'note'], ['CreadoPor', 'text'], ['FechaCreacion', 'datetime', IDX],
-        ['AutorizadoPorId', 'text'], ['AutorizadoPorDoc', 'text'], ['AutorizadoPorCargo', 'text']
+        ['AutorizadoPorId', 'text'], ['AutorizadoPorDoc', 'text'], ['AutorizadoPorCargo', 'text'],
+        // Elementos que salen y deben regresar: la salida queda enlazada a un registro de regreso (EsRegreso) que el
+        // vigilante verifica cuando los elementos vuelven. Avisos y recordatorios a la persona por WhatsApp o correo.
+        ['DebeRegresar', 'bool'], ['FechaRegresoPrevista', 'datetime'], ['EsRegreso', 'bool'], ['SalidaId', 'text'], ['RegresoId', 'text'],
+        ['AvisoPersona', 'datetime'], ['Recordatorios', 'number'], ['UltimoRecordatorio', 'datetime']
       ]
     }
   };
@@ -206,6 +210,9 @@
     turnosProg: [['D', 'Día'], ['N', 'Noche'], ['X', 'Descanso']],
     rolesProgramables: ['Vigilante', 'Supervisor', 'Rondero']
   };
+
+  // Días hacia atrás (por fecha de registro) de los elementos que conserva el celular: cubre préstamos largos por regresar
+  AP.DIAS_ELEMENTOS = 115;
 
   AP.ROLES = {
     Administrador: { consola: true, porteria: true, admin: true },
