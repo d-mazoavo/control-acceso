@@ -396,19 +396,7 @@
     AP.toast(r.msg, 'warn', 9000);
     if (r.salir) {
       saliendo = true;
-      try {
-        // Cierre ordenado por el Director: se intenta enviar antes de salir el registro del cierre y lo pendiente
-        if (r.enviar && navigator.onLine !== false) {
-          try {
-            // Si hay una sincronización en curso, empezó antes del cierre: se espera y se envía de nuevo
-            await Promise.race([(async function () {
-              if (AP.Sync._running) { try { await AP.Sync._running; } catch (e) { /* */ } }
-              await AP.Sync.run({ skipPull: true });
-            })(), U.sleep(10000)]);
-          } catch (e) { /* queda guardado en el celular y se envía al volver a ingresar */ }
-        }
-        await AP.Sync.limpiarLocal(); await AP.B.logout();
-      } finally { saliendo = false; }
+      try { await AP.Sync.limpiarLocal(); await AP.B.logout(); } finally { saliendo = false; }
       return;
     }
     render();

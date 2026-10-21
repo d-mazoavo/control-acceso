@@ -21,11 +21,6 @@
     return AP.CAT.dias.filter(function (d) { return set.indexOf(d[0]) >= 0; }).map(function (d) { return d[1]; }).join(', ');
   };
 
-  // Horario de acceso libre: la persona entra y sale las veces que necesite dentro de los días y horas habilitados
-  // (conductores, contratistas). No se mide llegada tarde ni salida antes de la hora; fuera del horario sí se controla la llegada.
-  function esLibre(rec) { return !!(rec && rec.Modalidad === 'Libre'); }
-  H.esLibre = esLibre;
-
   // Horarios activos de una persona
   H.deTokenOf = function (token) {
     return AP.Sync.horarios.filter(function (x) { return x.Token === token && x.Activo !== false; });
@@ -83,10 +78,7 @@
   var TIPOS_SALIDA = ['Salida anticipada', 'Salida temporal (cita o diligencia)', 'Ingreso y salida fuera de horario'];
 
   function hm(d) { return U.fTime(d); }
-  function descJornada(j) {
-    var t = (j.rec.Turno ? j.rec.Turno + ' · ' : '') + j.rec.HoraEntrada + ' a ' + j.rec.HoraSalida;
-    return esLibre(j.rec) ? t + ' (acceso libre)' : t;
-  }
+  function descJornada(j) { return j.rec.Turno ? j.rec.Turno + ' · ' + j.rec.HoraEntrada + ' a ' + j.rec.HoraSalida : j.rec.HoraEntrada + ' a ' + j.rec.HoraSalida; }
 
   // Evalúa el INGRESO de una persona con horario. Devuelve null si no hay horarios registrados (sin regla adicional).
   // ult = último movimiento permitido de la persona.
@@ -108,21 +100,6 @@
       }
       return { nivel: 'warn', registrable: true, novedad: 'Ingreso en día no programado', etiqueta: 'DÍA NO PROGRAMADO — INGRESO PENDIENTE',
         detalle: 'No tiene turno programado para hoy. Puede registrarse el ingreso, que queda pendiente de verificación por el Director de Seguridad Integral.', horarioInfo: '' };
-    }
-    // Acceso libre: dentro del horario habilitado entra cuantas veces necesite, sin medir llegada tarde.
-    // Fuera de ese horario la llegada sí se controla: antes de la hora queda pendiente; después del cierre decide el Director.
-    if (esLibre(j.rec)) {
-      var antL = c.minutosAntelacionTurno * 60000, tL = now.getTime();
-      if (tL >= j.start.getTime() - antL && tL <= j.end.getTime()) {
-        return { nivel: 'ok', etiqueta: 'HABILITADO — ACCESO LIBRE EN SU HORARIO', detalle: 'Puede entrar y salir las veces que necesite hasta las ' + hm(j.end) + ' (' + info + ').', horarioInfo: info };
-      }
-      if (now > j.end) {
-        return { nivel: 'deny', sinExcepcion: true, aprobacionDirector: true, tipoSolicitud: 'Fuera de turno', novedad: 'Ingreso fuera del horario de acceso', etiqueta: 'FUERA DE SU HORARIO DE ACCESO — REQUIERE APROBACIÓN DEL DIRECTOR',
-          detalle: 'Su horario de acceso era ' + info + ' y ya terminó. Envíe la solicitud al Director de Seguridad Integral, que aprueba o rechaza el ingreso.', horarioInfo: info };
-      }
-      var faltan = Math.floor(j.start.getTime() / 60000) - Math.floor(tL / 60000);
-      return { nivel: 'warn', registrable: true, novedad: 'Ingreso antes del horario de acceso (' + faltan + ' min antes)', etiqueta: 'ANTES DE SU HORARIO — FALTAN ' + faltan + ' MIN',
-        detalle: 'Su horario de acceso inicia a las ' + j.rec.HoraEntrada + ' y el ingreso se habilita desde las ' + hm(new Date(j.start.getTime() - antL)) + '. Si lo deja ingresar, queda como novedad pendiente de verificación por el Director de Seguridad Integral.', horarioInfo: info };
     }
     // Reingreso dentro de la misma jornada (salió y regresa): no se mide como llegada tardía
     if (ult && ult.Sentido === 'Salida' && new Date(ult.FechaHora).getTime() >= j.start.getTime() - c.minutosAntelacionTurno * 60000 && now <= j.end) {
@@ -160,14 +137,9 @@
   // Evalúa la SALIDA. Sin horarios: salida normal.
   H.evaluarSalida = function (p, now) {
     var token = p.Token, c = cfg();
-    var hs = H.deTokenOf(token);
-    if (!hs.length) return null;
+    if (!H.deTokenOf(token).length) return null;
     var j = H.jornada(token, now, { salida: true });
     var info = j ? descJornada(j) : '';
-    // Acceso libre: la salida nunca se marca como no autorizada (sale y vuelve las veces que necesite)
-    if ((j && esLibre(j.rec)) || hs.every(esLibre)) {
-      return { nivel: 'ok', etiqueta: 'SALIDA — ACCESO LIBRE', detalle: 'Puede salir y volver a ingresar dentro de su horario de acceso' + (info ? ' (' + info + ')' : '') + '.', horarioInfo: info };
-    }
     if (j && now.getTime() >= j.end.getTime() - c.minutosSalidaAntesDeFin * 60000) {
       return { nivel: 'ok', etiqueta: 'SALIDA AUTORIZADA', detalle: 'Finalizó su jornada (' + info + ').', horarioInfo: info };
     }

@@ -1,53 +1,59 @@
-AVO PAK S.A.S. — DIRECCIÓN DE SEGURIDAD INTEGRAL
-Estudios de seguridad de personal — versión en la nube (Firebase) — v1.2.0
-==========================================================================
+AVO PAK S.A.S. — Control de Acceso de Personas y Vehículos (versión 2.3.0)
+Dirección de Seguridad Integral
 
-QUÉ CAMBIA EN LA VERSIÓN 1.2.0
-- Catálogo de fuentes de consulta agrupado: Registraduría y registro civil; seguridad social (ADRES, SISBÉN, RUAF);
-  extranjeros (Migración Colombia); propiedades; permisos y licencias (RUNT, Aeronáutica Civil, Supervigilancia);
-  antecedentes (Policía, Procuraduría, Contraloría, Código Nacional de Policía, disciplinarios de abogados y jueces,
-  INPEC, SIMIT, servicio militar, INTERPOL); Estados Unidos y listas internacionales (FBI, DEA, ATF, ICE, detenidos,
-  Lista Clinton OFAC, sanciones); procesos judiciales (SPOA de la Fiscalía, Rama Judicial, TYBA).
-- En las fuentes de verificación el resultado es «Sin novedad», «Con novedad» o «No concluyente».
+Contenido de esta carpeta
+  index.html, js/, css/, img/, sw.js, manifest.webmanifest  -> la aplicación (no modificar)
+  config.js   -> ÚNICO archivo a editar: bloque de conexión con Firebase, teléfonos, duración
+                 máxima del turno, vigencia del PIN temporal y datos del responsable del tratamiento.
+  textos.js   -> aviso de privacidad y textos legales (revisar con el responsable de
+                 protección de datos antes de operar).
 
-INCLUIDO DESDE LA VERSIÓN 1.1.1
-- Todos los archivos van en una sola carpeta, sin subcarpetas: se suben de un solo arrastre.
-- La versión se ve en la pantalla de acceso y abajo en el menú; si falta un archivo, la aplicación lo avisa en rojo.
-- Logotipo de la Dirección de Seguridad en la aplicación, en el ícono del celular y en los documentos.
-- Personas organizadas por razón social y, dentro de cada una, en Vinculados y Aspirantes.
-- Consultas: código de verificación del certificado junto a la ubicación del soporte; se pueden editar y eliminar.
-- Antecedentes por tipo (penal, judicial, administrativo, infracciones de tránsito) con artículo, norma,
-  autoridad, proceso o comparendo y descripción. Fuente SIMIT agregada.
-- Editar y eliminar consultas, antecedentes, autorizaciones, estudios y personas.
-  La bitácora no se puede borrar: conserva la constancia de cada eliminación, sin datos personales.
-- Perfil de la persona descargable en PDF o en Word, con logotipo y huella SHA-256 registrada en la bitácora.
-  Bitácora > «Verificar un documento» comprueba que un archivo descargado no fue alterado.
-- Botón para instalar la aplicación en el celular, la tableta o el computador.
+Funcionamiento (versión 2.3.0)
+  - Base de datos e inicio de sesión: Firebase (Google), plan gratuito. Ya no se usa Microsoft 365.
+  - Todos, incluido el administrador, ingresan SOLO con usuario y contraseña o PIN. Nadie usa correo.
+  - El administrador crea, edita, restablece y da de baja usuarios en Consola > Usuarios.
+    Roles: Administrador, Analista, Supervisor y Vigilante.
+  - Cada vigilante o supervisor ingresa desde su propio celular; al ingresar se abre su turno y al
+    cerrar el turno se cierra la sesión. El primer ingreso se hace con un PIN temporal (vence en 72 h)
+    y la aplicación obliga a definir un PIN personal que nadie más conoce.
+  - Visitante no anunciado (v2.2.0): el vigilante registra sus datos en Registro manual y los envía
+    a aprobación. El Director decide en Consola > Visitas > Por aprobar, con justificación; al aprobar
+    fija la vigencia del QR y lo envía por WhatsApp al celular registrado. El visitante ingresa y sale
+    leyendo ese QR. El servidor impide que el vigilante apruebe o amplíe una visita.
+  - Visitante conocido (v2.3.0): al escribir la cédula en una visita nueva (consola o portería) se llenan
+    los datos de su última visita; se corrigen si cambiaron. El Director ve sus antecedentes al decidir.
+  - Visitas de hoy (v2.3.0): el vigilante consulta, sin poder registrar, las visitas aprobadas que llegan
+    durante el día; cada una sale de la lista al ingresar.
+  - Anfitrión: en Visitas se busca en el personal propio habilitado y la visita queda vinculada al
+    colaborador (Personas > ficha > Visitas recibidas).
+  - Registros manuales sin QR (autoridades, personas sin carné): su salida se registra desde
+    Registro manual > Salida de registros manuales.
+  - Control de elementos (solo Administrador): Consola > Elementos. El Director asigna a una persona
+    registrada los elementos que ingresa o retira; el vigilante los ve y los verifica al leer el QR.
+  - Los registros se guardan en el celular si no hay internet y se envían solos al volver la señal.
+  - Las reglas de seguridad del servidor (archivo firestore.rules, que NO va en GitHub) impiden
+    modificar o borrar registros, falsificar la hora o el autor, y que un vigilante vea usuarios,
+    bitácora o cree personas. Dar de baja o restablecer el PIN corta de inmediato la sesión anterior.
 
-ARCHIVOS
-- config.js ya trae los datos del proyecto Firebase avopak-estudios. No se edita.
-- Las reglas de Firestore NO cambian en esta versión y NO van en GitHub.
+Pasos de instalación (resumen)
+  1. Crear una cuenta de Google con el correo corporativo del Director de Seguridad Integral.
+  2. En console.firebase.google.com: crear el proyecto; activar Authentication > Correo
+     electrónico/contraseña; agregar el dominio d-mazoavo.github.io en dominios autorizados.
+  3. Crear Firestore Database (ubicación en Estados Unidos, modo producción) y publicar en la
+     pestaña Reglas el contenido de firestore.rules.
+  4. Registrar una app web en Configuración del proyecto y copiar el bloque firebaseConfig
+     en config.js (reemplazando el bloque marcado).
+  5. Subir esta carpeta a GitHub Pages.
+  6. Abrir la dirección publicada: aparece "Instalación inicial". Escribir el código de
+     instalación (está en firestore.rules) y crear el usuario administrador.
+  7. Consola > Usuarios: crear vigilantes, supervisores y analistas (el PIN temporal se muestra
+     una sola vez).
+  8. Piloto de 4 semanas en paralelo con la planilla AP-SG-FT-001.
 
-CÓMO SUBIR ESTA VERSIÓN A GITHUB (reemplaza los archivos anteriores)
-1. Descomprima el ZIP: clic derecho sobre el archivo > «Extraer todo» > «Extraer». Se abre una carpeta con 22 archivos y ninguna subcarpeta.
-2. Abra github.com/d-mazoavo/estudios-seguridad.
-3. Encima de la lista de archivos, a la derecha: botón gris «Add file» > «Upload files».
-4. En la carpeta extraída presione Ctrl + A (se seleccionan los 22 archivos) y arrástrelos al recuadro «Drag files here».
-5. Espere a que aparezcan los 22 nombres en la lista. Abajo, botón verde «Commit changes».
-6. Espere 3 minutos. Abra d-mazoavo.github.io/estudios-seguridad/ y presione Ctrl + F5.
-7. Comprobación: la pantalla de acceso debe decir «Versión 1.2.0» y mostrar el logotipo. Si aparece una franja roja,
-   ahí dice qué archivos faltan: súbalos de nuevo con «Add file» > «Upload files».
-Las carpetas css, js e img que quedaron de la versión anterior ya no se usan; pueden quedarse.
+Cuota gratuita de Firebase (plan Spark; verificar valores vigentes en firebase.google.com/pricing)
+  La aplicación descarga solo lo que cambió: una sincronización sin cambios consume 2 lecturas.
+  Las fotografías de inspección se guardan reducidas (máximo ~600 KB cada una) con su huella SHA-256.
 
-INSTALAR EN EL CELULAR O LA TABLETA
-- Android (Chrome): abra la dirección de la aplicación > menú ⋮ > «Instalar aplicación».
-- iPhone o iPad (Safari): abra la dirección > botón Compartir > «Agregar a pantalla de inicio» > «Agregar».
-- La aplicación también muestra el botón «Instalar app» cuando el navegador lo permite.
-
-DOS SECRETOS DISTINTOS
-- Contraseña de acceso: entra a la cuenta. Si la olvida: «Olvidé la contraseña de acceso» (llega un enlace al correo).
-- Clave de cifrado: abre los datos. Si la olvida: «Olvidé la clave de cifrado» y el código de recuperación.
-- Si pierde la clave de cifrado Y el código de recuperación, la información no se puede recuperar.
-
-RESPALDO
-Configuración > «Descargar respaldo cifrado», al menos una vez al mes; guárdelo en OneDrive corporativo.
+Librerías de terceros incluidas (js/vendor): Firebase JS SDK 12.19.0 (Google, Apache-2.0),
+jsQR 1.4.0 (Apache-2.0), qrcode-generator 2.0.4 (MIT), read-excel-file 9.3.10 (MIT),
+write-excel-file 4.1.1 (MIT).

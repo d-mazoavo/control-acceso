@@ -21,8 +21,7 @@
 
   var EVENTO_KIND = {
     'Inicio de turno': 'ok', 'Fin de turno': 'brand', 'Cierre automático de turno': 'warn', 'Cierre por baja de la credencial': 'warn',
-    'Cierre por restablecimiento del PIN': 'warn', 'Cierre de turno por cambio de usuario': 'warn',
-    'Cierre de turno por el administrador': 'deny', 'Cierre de sesión ordenado por el administrador': 'warn'
+    'Cierre por restablecimiento del PIN': 'warn', 'Cierre de turno por cambio de usuario': 'warn'
   };
   var DESCRIPCION_ROL = {
     Administrador: 'Consola completa: usuarios, horarios, permisos, novedades, bitácora y portería.',
@@ -43,7 +42,6 @@
     var chips = h('div', { class: 'chips' });
     var tablaBox = h('div', { class: 'stack' });
     var eventosBox = h('div', { class: 'stack' });
-    var abiertosBox = h('div', { class: 'stack' });
     var content = h('div', { class: 'stack' }, AP.spinner('Cargando…'));
     AP.consolaShell('/consola/vigilantes', 'Usuarios', content, [
       h('button', { class: 'btn', type: 'button', onclick: exportar }, AP.icon('download', 18), 'Excel'),
@@ -61,7 +59,6 @@
           h('div', { class: 'banner info' }, AP.icon('shield', 18), h('span', null,
             'Todos ingresan solo con usuario y PIN o contraseña; nadie usa correo. Al crear un usuario o restablecer su clave se genera un PIN temporal que se muestra una sola vez; ' +
             'en su primer ingreso la persona define su propia clave, que nadie más conoce. Las altas y bajas del personal del contratista se tramitan a solicitud escrita del supervisor designado por el contratista.')),
-          abiertosBox,
           h('div', { class: 'kv-grid roles' }, Object.keys(DESCRIPCION_ROL).map(function (r) { return h('div', { class: 'kv' }, h('span', null, r), h('strong', null, DESCRIPCION_ROL[r])); })),
           h('div', { class: 'filters' }, chips, q), tablaBox,
           h('div', { class: 'row between wrap gap' }, h('h3', null, 'Eventos de turno (últimos 60 días)')),
@@ -88,11 +85,6 @@
       return AP.pill('Personal desde ' + U.fDate(v.PinPersonalDesde || v.PinFecha), 'ok');
     }
     function turnosDe(v) { return datos.turnos.filter(function (t) { return String(t.VigilanteId) === String(v.id); }); }
-    // Turno abierto: el último evento de inicio o cierre del usuario es un inicio
-    function turnoAbierto(v) {
-      var ev = turnosDe(v).filter(function (t) { return t.Evento === 'Inicio de turno' || /^(Fin|Cierre)/.test(t.Evento || ''); })[0];
-      return ev && ev.Evento === 'Inicio de turno' ? ev : null;
-    }
     function ultimoTurno(v) {
       var ev = turnosDe(v).filter(function (t) { return t.Evento === 'Inicio de turno' || /^(Fin|Cierre)/.test(t.Evento || ''); })[0];
       if (!ev) return '';
@@ -114,29 +106,7 @@
         ['Detalle', function (e) { return e.Detalle; }]
       ], eventosFiltrados().slice(0, 200)));
     }
-    // Turnos abiertos: el Director puede cerrar la sesión de quien se fue sin cerrar su turno
-    function pintarAbiertos() {
-      var maxH = AP.CFG.horasMaxTurno || 13;
-      var l = datos.vig.filter(function (v) { return AP.ROLES_TURNO.indexOf(v.Rol) >= 0; })
-        .map(function (v) { return { v: v, ev: turnoAbierto(v) }; }).filter(function (x) { return x.ev; })
-        .sort(function (a, b) { return a.ev.FechaHora < b.ev.FechaHora ? -1 : 1; });
-      if (!l.length) { abiertosBox.replaceChildren(h('p', { class: 'muted small' }, 'No hay turnos abiertos en este momento.')); return; }
-      abiertosBox.replaceChildren(h('section', { class: 'card stack sm' },
-        h('div', { class: 'row between wrap gap' }, h('h3', null, 'Turnos abiertos ahora (' + l.length + ')'),
-          h('small', { class: 'muted' }, 'Si alguien se fue sin cerrar su turno, ciérrelo aquí con «Cerrar turno y sesión»: su celular cierra la sesión al conectarse.')),
-        tabla([
-          ['Nombre', function (x) { return h('div', null, h('strong', null, x.v.Title), h('small', { class: 'block muted' }, x.v.Usuario + ' · ' + x.v.Rol)); }],
-          ['Inició', function (x) { return U.fDateTime(x.ev.FechaHora); }],
-          ['Tiempo abierto', function (x) {
-            var largo = Date.now() - new Date(x.ev.FechaHora).getTime() > maxH * 3600000;
-            return h('span', { class: largo ? 'txt-deny' : '' }, U.duracion(x.ev.FechaHora) + (largo ? ' (supera ' + maxH + ' h)' : ''));
-          }],
-          ['Dispositivo', function (x) { return x.ev.Dispositivo || ''; }],
-          ['', function (x) { return h('button', { class: 'btn small danger-outline', type: 'button', onclick: function (e) { e.stopPropagation(); cerrarSesion(x.v, x.ev); } }, AP.icon('logout', 16), 'Cerrar turno y sesión'); }]
-        ], l)));
-    }
     function pintar() {
-      pintarAbiertos();
       var act = datos.vig.filter(function (v) { return v.Activo !== false; }), baja = datos.vig.filter(function (v) { return v.Activo === false; });
       chips.replaceChildren.apply(chips, [['Activos', act.length], ['De baja', baja.length], ['Todos', datos.vig.length]].map(function (c) {
         return h('a', { class: 'chip ' + (c[0] === filtro ? 'on' : ''), href: '#/consola/vigilantes?f=' + encodeURIComponent(c[0]) }, c[0] + ' (' + c[1] + ')');
@@ -170,9 +140,7 @@
               !activo ? kv('Motivo de la baja', (v.MotivoBaja || '') + (v.BajaPor ? ' · ' + v.BajaPor : '')) : null,
               v.Observaciones ? kv('Observaciones', v.Observaciones) : null),
             esYo(v) ? h('p', { class: 'note small' }, 'Este es su propio usuario: no puede darlo de baja ni quitarle el rol de Administrador. Su contraseña la cambia en "Cambiar mi contraseña" (menú lateral).') : null,
-            turnoAbierto(v) ? h('p', { class: 'banner warn' }, AP.icon('clock', 18), h('span', null, 'Turno abierto desde el ' + U.fDateTime(turnoAbierto(v).FechaHora) + ' (' + U.duracion(turnoAbierto(v).FechaHora) + ').')) : null,
             h('div', { class: 'row gap wrap' },
-              turnoAbierto(v) ? h('button', { class: 'btn danger-outline', type: 'button', onclick: function () { close(); cerrarSesion(v, turnoAbierto(v)); } }, AP.icon('logout', 18), 'Cerrar turno y sesión') : null,
               h('button', { class: 'btn', type: 'button', onclick: function () { close(); editar(v); } }, AP.icon('edit', 18), 'Editar datos'),
               activo && !esYo(v) ? h('button', { class: 'btn', type: 'button', onclick: function () { close(); restablecer(v); } }, AP.icon('key', 18), 'Restablecer PIN') : null,
               esYo(v) ? null : activo
@@ -343,56 +311,6 @@
               } }, boton)));
           }
         });
-      });
-    }
-
-    // ---------- Cierre de la sesión de un vigilante que se fue sin cerrar su turno ----------
-    // Queda el evento en el registro de turnos y, en la ficha del usuario, la orden de cierre de ESE turno.
-    // El celular del vigilante cierra el turno y la sesión en cuanto se conecta; lo que tenga sin enviar se conserva.
-    function cerrarSesion(v, ev) {
-      if (!AP.SCHEMA.AP_Vigilantes.cols.some(function (c) { return c[0] === 'CierreSesionTurnoId'; })) {
-        return AP.toast('Recargue la página (Ctrl+F5) para aplicar la actualización de la aplicación y vuelva a intentarlo.', 'warn', 9000);
-      }
-      AP.modal({
-        title: 'Cerrar turno y sesión — ' + v.Title,
-        body: function (close) {
-          var motivo = AP.select('motivo', [''].concat(AP.CAT.motivosCierreSesion), '');
-          var detalle = AP.textarea('detalle', '', { rows: 2, placeholder: 'Opcional: quién informó, a qué hora salió, etc.' });
-          var btn = h('button', { class: 'btn danger', type: 'button', onclick: async function () {
-            if (!motivo.value) return AP.toast('Seleccione el motivo.', 'warn');
-            if (motivo.value === 'Otro' && detalle.value.trim().length < 6) return AP.toast('Describa el motivo.', 'warn');
-            btn.disabled = true; btn.lastChild.textContent = 'Cerrando…';
-            var ahora = new Date().toISOString(), yo = AP.Session.user;
-            var mot = motivo.value + (detalle.value.trim() ? ': ' + detalle.value.trim() : '');
-            try {
-              // 1) La orden que lee el celular del vigilante (se aplica solo a este turno)
-              await AP.B.update('AP_Vigilantes', v.id, { CierreSesion: ahora, CierreSesionTurnoId: ev.TurnoId, CierreSesionPor: yo.usuario, CierreSesionMotivo: mot });
-              Object.assign(v, { CierreSesion: ahora, CierreSesionTurnoId: ev.TurnoId, CierreSesionPor: yo.usuario, CierreSesionMotivo: mot });
-              // 2) El cierre en el registro de turnos (la consola deja de mostrarlo como abierto)
-              var f = {
-                IdLocal: U.uuid(), Title: v.Title, Evento: 'Cierre de turno por el administrador', TurnoId: ev.TurnoId, VigilanteId: String(v.id), VigilanteUsuario: v.Usuario,
-                Rol: v.Rol, FechaHora: ahora, InicioTurno: ev.InicioTurno || ev.FechaHora, Dispositivo: ev.Dispositivo, Cuenta: yo.usuario, SinConexion: false,
-                Detalle: mot + '. Cerró: ' + (yo.nombre || yo.usuario) + ' desde la consola.'
-              };
-              Object.keys(f).forEach(function (k) { if (f[k] === undefined || f[k] === null || f[k] === '') delete f[k]; });
-              f.Hash = await U.hashRecord(f);
-              var rec = await AP.B.create('AP_Turnos', f);
-              datos.turnos.unshift(rec);
-              await AP.Audit.log('Cierre de sesión de usuario', v.Usuario + ' — ' + v.Title, 'Turno iniciado el ' + U.fDateTime(ev.FechaHora) + '. Motivo: ' + mot, f.Hash);
-              close();
-              AP.toast('Turno cerrado. El celular de ' + v.Title + ' cierra la sesión en cuanto se conecte.', 'info', 7000);
-              pintar();
-            } catch (e) { AP.toast('No se pudo cerrar la sesión: ' + e.message, 'error', 8000); btn.disabled = false; btn.lastChild.textContent = 'Cerrar turno y sesión'; }
-          } }, AP.icon('logout', 18), 'Cerrar turno y sesión');
-          return h('div', { class: 'stack' },
-            h('div', { class: 'kv' }, h('span', null, 'Usuario'), h('strong', null, v.Usuario + ' · ' + v.Rol)),
-            h('div', { class: 'kv' }, h('span', null, 'Turno abierto desde'), h('strong', null, U.fDateTime(ev.FechaHora) + ' (' + U.duracion(ev.FechaHora) + ')')),
-            ev.Dispositivo ? h('div', { class: 'kv' }, h('span', null, 'Dispositivo'), h('strong', null, ev.Dispositivo)) : null,
-            h('p', { class: 'note' }, 'El turno queda cerrado desde ahora en el registro. El celular de la persona cierra la sesión en cuanto se conecte a internet; ' +
-              'los registros que tenga sin enviar no se pierden: se envían antes de salir o cuando vuelva a ingresar. Para volver a trabajar, la persona inicia sesión con su usuario y su PIN, que no cambian.'),
-            AP.field('Motivo *', motivo), AP.field('Detalle', detalle),
-            h('div', { class: 'row gap wrap end' }, h('button', { class: 'btn', type: 'button', onclick: function () { close(); } }, 'Cancelar'), btn));
-        }
       });
     }
 

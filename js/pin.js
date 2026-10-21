@@ -112,11 +112,6 @@
         await P.cerrarTurno('Cierre por baja de la credencial', 'El usuario fue dado de baja desde la consola.');
         return { msg: 'El turno se cerró: su usuario fue dado de baja.', salir: true };
       }
-      // El Director cerró desde la consola la sesión de este turno (el vigilante se fue sin cerrarlo)
-      if (v && v.CierreSesionTurnoId && String(v.CierreSesionTurnoId) === String(t.id)) {
-        await P.cerrarTurno('Cierre de sesión ordenado por el administrador', 'Aplicado en el celular. ' + (v.CierreSesionMotivo || 'Cierre ordenado desde la consola') + (v.CierreSesionPor ? ' (' + v.CierreSesionPor + ')' : '') + '.');
-        return { msg: 'El Director de Seguridad Integral cerró su turno y su sesión desde la consola.', salir: true, enviar: true };
-      }
       if (v && Number(v.PinVersion || 0) !== Number(t.pinVersion || 0)) {
         await P.cerrarTurno('Cierre por restablecimiento del PIN', 'El administrador restableció la contraseña durante el turno.');
         return { msg: 'El turno se cerró: el administrador restableció su PIN.', salir: true };

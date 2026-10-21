@@ -239,51 +239,6 @@
           return h('tr', null, h('td', { 'data-label': 'Elemento' }, i.desc), h('td', { 'data-label': 'Cant.' }, String(i.cant || 1)), h('td', { 'data-label': 'Serial' }, i.serial || '—'));
         }) : h('tr', null, h('td', { colspan: 3, class: 'center muted' }, 'Sin elementos')))));
     },
-    // Estado para mostrar. La salida que la persona decide no hacer queda como Rechazado con la nota "No los sacó"
-    // (es lo que las reglas del servidor le permiten registrar al vigilante); el regreso solo cuenta si la salida se verificó.
-    NO_SALE: 'No los sacó',
-    noSale: function (x) { return !!x && x.Estado === 'Rechazado' && String(x.NotaPorteria || '').indexOf('No los sacó') === 0; },
-    mapa: function (lista) { var m = {}; (lista || []).forEach(function (x) { m[x.id] = x; }); return m; },
-    regresoActivo: function (x, mapa) {
-      if (!x || !x.EsRegreso || x.Estado !== 'Pendiente') return false;
-      var s = mapa && mapa[x.SalidaId];
-      return !!(s && s.Estado === 'Confirmado');
-    },
-    vencido: function (x) { return !!x && x.Estado === 'Pendiente' && !!x.FechaPrevista && new Date(x.FechaPrevista) < new Date(); },
-    estado: function (x, mapa) {
-      var E = AP.Elem;
-      if (x.Estado === 'Cancelado') return { t: 'Cancelado', k: 'muted' };
-      if (x.EsRegreso) {
-        var s = mapa ? mapa[x.SalidaId] : null;
-        if (x.Estado === 'Confirmado') return { t: 'Regresó', k: 'ok' };
-        if (x.Estado === 'Rechazado') return { t: 'Regresó con novedad', k: 'deny' };
-        if (s && s.Estado === 'Pendiente') return { t: 'Aún no ha salido', k: 'muted' };
-        if (s && s.Estado !== 'Confirmado') return { t: 'Sin efecto: no salió', k: 'muted' };
-        return E.vencido(x) ? { t: 'Por regresar (vencido)', k: 'deny' } : { t: 'Por regresar', k: 'warn' };
-      }
-      if (x.Estado === 'Pendiente') return U.ymd(x.FechaPrevista) < U.ymd() ? { t: 'Pendiente desde ' + U.fDate(x.FechaPrevista), k: 'warn' } : { t: 'Pendiente', k: 'warn' };
-      if (x.Estado === 'Confirmado') return { t: x.Sentido === 'Salida' ? 'Salió' : 'Ingresó', k: 'ok' };
-      if (E.noSale(x)) return { t: 'No los sacó', k: 'muted' };
-      return { t: 'No coincidió', k: 'deny' };
-    },
-    pill: function (x, mapa) { var e = AP.Elem.estado(x, mapa); return AP.pill(e.t, e.k); },
-    lista: function (x) { return AP.Elem.items(x).map(function (i) { return '• ' + (i.cant || 1) + ' × ' + i.desc + (i.serial ? ' (serial ' + i.serial + ')' : ''); }).join('\n'); },
-    // Aviso a la persona al registrar los elementos
-    textoAviso: function (x, nombre) {
-      return 'Señor(a) ' + (nombre || x.Title) + ': la Dirección de Seguridad Integral de ' + AP.CFG.empresa + ' registró a su nombre la ' + (x.Sentido === 'Salida' ? 'SALIDA' : 'ENTRADA') +
-        ' de los siguientes elementos, autorizada por ' + (x.AutorizadoPor || '—') + ':\n' + AP.Elem.lista(x) +
-        '\nFecha prevista: ' + U.fDateTime(x.FechaPrevista) + '.' +
-        (x.DebeRegresar && x.FechaRegresoPrevista ? '\nEstos elementos deben regresar a más tardar el ' + U.fDateTime(x.FechaRegresoPrevista) + '.' : '') +
-        '\nEn portería el vigilante los verificará contra este registro.';
-    },
-    // Recordatorio de elementos pendientes por regresar
-    textoRecordatorio: function (r, salida, nombre) {
-      var venc = new Date(r.FechaPrevista) < new Date();
-      return 'Señor(a) ' + (nombre || r.Title) + ': la Dirección de Seguridad Integral de ' + AP.CFG.empresa + ' le recuerda que tiene pendiente el regreso de los siguientes elementos' +
-        (salida && salida.FechaConfirmacion ? ', que salieron el ' + U.fDateTime(salida.FechaConfirmacion) : '') + ' con autorización de ' + (r.AutorizadoPor || '—') + ':\n' + AP.Elem.lista(r) +
-        '\n' + (venc ? 'La fecha prevista de regreso era el ' : 'La fecha prevista de regreso es el ') + U.fDateTime(r.FechaPrevista) +
-        '. Al devolverlos, preséntelos en portería para que el vigilante registre su regreso.';
-    },
     // Fotografías guardadas (se descargan del servidor solo cuando se muestran)
     galeria: function (fotos) {
       var gal = h('div', { class: 'gallery' });
@@ -337,8 +292,7 @@
           return U.fold([p.Title, p.Cargo, p.Area].join(' ')).indexOf(t) >= 0 || (d.length >= 3 && U.normDoc(p.NumDoc).indexOf(d) >= 0);
         }).slice(0, 8);
         if (!l.length) {
-          res.replaceChildren(h('p', { class: opt.libre ? 'muted small' : 'note' }, 'No aparece en el personal propio habilitado.' + (opt.libre && buscar.value.trim() ? ' Se registrará como texto: «' + buscar.value.trim() + '», sin vínculo con un colaborador.'
-            : opt.libre ? '' : ' Pruebe con el apellido, el cargo o el área. Si el colaborador no está registrado, comuníquese con el Director de Seguridad Integral: sin anfitrión de la lista no se puede enviar la solicitud.')));
+          res.replaceChildren(h('p', { class: 'muted small' }, 'No aparece en el personal propio habilitado.' + (opt.libre && buscar.value.trim() ? ' Se registrará como texto: «' + buscar.value.trim() + '», sin vínculo con un colaborador.' : '')));
           return;
         }
         res.replaceChildren.apply(res, l.map(function (p) {
