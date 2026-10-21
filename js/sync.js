@@ -7,7 +7,7 @@
   // ======================= SINCRONIZACIÓN =======================
   var listeners = [];
   var Sync = (AP.Sync = {
-    personas: [], visitas: [], movs: [], vigilantes: [], horarios: [], permisos: [], solicitudes: [], puntos: [], outbox: [],
+    personas: [], visitas: [], movs: [], vigilantes: [], horarios: [], permisos: [], solicitudes: [], puntos: [], elementos: [], outbox: [],
     byToken: new Map(),
     state: { online: navigator.onLine, syncing: false, lastPull: null, lastPush: null, lastError: null, authProblem: false, skew: null, pullErrors: {} },
     on: function (fn) { listeners.push(fn); return function () { listeners = listeners.filter(function (f) { return f !== fn; }); }; },
@@ -23,6 +23,7 @@
       Sync.permisos = (await S.get('c:permisos')) || [];
       Sync.solicitudes = (await S.get('c:solicitudes')) || [];
       Sync.puntos = (await S.get('c:puntos')) || [];
+      Sync.elementos = (await S.get('c:elementos')) || [];
       var meta = (await S.get('c:meta')) || {};
       Sync.state.lastPull = meta.lastPull || null;
       Sync.state.lastPush = meta.lastPush || null;
@@ -304,6 +305,14 @@
         await S.set('c:horarios', hr); await S.set('c:permisos', pm);
       } catch (e) { if (e.offline || e.authRequired) throw e; errs.horarios = e.message; }
 
+      // Elementos registrados por el Director en los últimos meses: el vigilante ve lo pendiente por salir, por ingresar
+      // y por regresar, aunque la fecha prevista ya haya pasado (si falla, no se detiene la sincronización de lo demás)
+      try {
+        var el = await B.listRange('AP_Elementos', 'FechaCreacion', U.addDays(new Date(), -AP.DIAS_ELEMENTOS), null);
+        Sync.elementos = el;
+        await S.set('c:elementos', el);
+      } catch (e) { if (e.offline || e.authRequired) throw e; console.warn('[AP] Elementos:', e.message); }
+
       Sync.reindex();
       Sync.state.pullErrors = errs;
       // Solo se considera "actualizado" si llegaron personas y visitas (base de las decisiones de acceso).
@@ -320,9 +329,9 @@
     // Borra la copia local de datos (no los registros pendientes de envío)
     limpiarLocal: async function () {
       var S = AP.Store;
-      var keys = ['c:personas', 'c:visitas', 'c:movs', 'c:vigilantes', 'c:horarios', 'c:permisos', 'c:solicitudes', 'c:puntos', 'c:meta'];
+      var keys = ['c:personas', 'c:visitas', 'c:movs', 'c:vigilantes', 'c:horarios', 'c:permisos', 'c:solicitudes', 'c:puntos', 'c:elementos', 'c:meta'];
       for (var i = 0; i < keys.length; i++) await S.del(keys[i]);
-      Sync.personas = []; Sync.visitas = []; Sync.movs = []; Sync.vigilantes = []; Sync.horarios = []; Sync.permisos = []; Sync.solicitudes = []; Sync.puntos = [];
+      Sync.personas = []; Sync.visitas = []; Sync.movs = []; Sync.vigilantes = []; Sync.horarios = []; Sync.permisos = []; Sync.solicitudes = []; Sync.puntos = []; Sync.elementos = [];
       Sync.state.lastPull = null; Sync.state.pullErrors = {};
       Sync.reindex();
     },

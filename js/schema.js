@@ -68,7 +68,9 @@
         ['Usuario', 'text', UNQ], ['TipoDoc', 'text'], ['NumDoc', 'text', IDX], ['Empresa', 'text'], ['Cargo', 'text'], ['Telefono', 'text'],
         ['Rol', 'text'], ['Activo', 'bool'], ['Uid', 'text'], ['PinVersion', 'number'], ['PinTemporal', 'bool'], ['PinPersonalDesde', 'datetime'],
         ['PinFecha', 'datetime'], ['PinPor', 'text'], ['SolicitadoPor', 'text'], ['Soporte', 'text'], ['FechaAlta', 'datetime'],
-        ['AltaPor', 'text'], ['FechaBaja', 'datetime'], ['BajaPor', 'text'], ['MotivoBaja', 'text'], ['Observaciones', 'note']
+        ['AltaPor', 'text'], ['FechaBaja', 'datetime'], ['BajaPor', 'text'], ['MotivoBaja', 'text'], ['Observaciones', 'note'],
+        // Cierre de la sesión de un vigilante ordenado desde la consola: el celular lo aplica en su próxima actualización
+        ['CierreSesion', 'datetime'], ['CierreSesionTurnoId', 'text'], ['CierreSesionPor', 'text'], ['CierreSesionMotivo', 'text']
       ]
     },
     AP_Turnos: {
@@ -85,7 +87,9 @@
       desc: 'Horario o turno programado de cada persona (lo registra la Dirección de Seguridad Integral)',
       cols: [
         ['Token', 'text', IDX], ['NumDoc', 'text', IDX], ['Area', 'text'], ['Turno', 'text'], ['Dias', 'text'],
-        ['HoraEntrada', 'text'], ['HoraSalida', 'text'], ['VigenteDesde', 'text'], ['VigenteHasta', 'text'], ['Activo', 'bool'], ['Observaciones', 'note']
+        ['HoraEntrada', 'text'], ['HoraSalida', 'text'], ['VigenteDesde', 'text'], ['VigenteHasta', 'text'], ['Activo', 'bool'], ['Observaciones', 'note'],
+        // Turno (control de puntualidad y de salida) o Libre (entra y sale las veces que necesite dentro del horario habilitado)
+        ['Modalidad', 'text']
       ]
     },
     AP_Permisos: {
@@ -154,7 +158,11 @@
         ['Items', 'note'], ['Fotos', 'note'],
         ['Vigilante', 'text'], ['VigilanteUsuario', 'text'], ['FechaConfirmacion', 'datetime'], ['NotaPorteria', 'note'],
         ['Observaciones', 'note'], ['CreadoPor', 'text'], ['FechaCreacion', 'datetime', IDX],
-        ['AutorizadoPorId', 'text'], ['AutorizadoPorDoc', 'text'], ['AutorizadoPorCargo', 'text']
+        ['AutorizadoPorId', 'text'], ['AutorizadoPorDoc', 'text'], ['AutorizadoPorCargo', 'text'],
+        // Elementos que salen y deben regresar: la salida queda enlazada a un registro de regreso (EsRegreso) que el
+        // vigilante verifica cuando los elementos vuelven. Avisos y recordatorios a la persona por WhatsApp o correo.
+        ['DebeRegresar', 'bool'], ['FechaRegresoPrevista', 'datetime'], ['EsRegreso', 'bool'], ['SalidaId', 'text'], ['RegresoId', 'text'],
+        ['AvisoPersona', 'datetime'], ['Recordatorios', 'number'], ['UltimoRecordatorio', 'datetime']
       ]
     }
   };
@@ -185,6 +193,10 @@
       ['p18', 'Contaminación agrícola visible (plagas, tierra, material vegetal)']
     ],
     dias: [['1', 'Lun'], ['2', 'Mar'], ['3', 'Mié'], ['4', 'Jue'], ['5', 'Vie'], ['6', 'Sáb'], ['0', 'Dom']],
+    // Modalidad del horario: Turno = control de llegada tarde y de salida antes de la hora; Libre = entradas y salidas libres
+    // dentro de los días y horas habilitados (conductores, contratistas), sin medir llegada tarde ni salida anticipada.
+    modalidadesHorario: [['Turno', 'Turno con control de puntualidad y salida'], ['Libre', 'Acceso libre dentro del horario']],
+    motivosCierreSesion: ['Se retiró sin cerrar el turno', 'Cambio de turno: el relevo ya ingresó', 'Celular perdido, dañado o en poder de otra persona', 'Otro'],
     tiposPermiso: ['Ingreso tardío', 'Salida anticipada', 'Salida temporal (cita o diligencia)', 'Ingreso y salida fuera de horario'],
     resultadosVerificacion: ['Justificada', 'No justificada', 'Pendiente de soporte'],
     operacionesCarga: ['Ingreso de vehículo de carga', 'Salida / despacho con carga', 'Salida en vacío', 'Ingreso de contenedor vacío'],
@@ -198,6 +210,9 @@
     turnosProg: [['D', 'Día'], ['N', 'Noche'], ['X', 'Descanso']],
     rolesProgramables: ['Vigilante', 'Supervisor', 'Rondero']
   };
+
+  // Días hacia atrás (por fecha de registro) de los elementos que conserva el celular: cubre préstamos largos por regresar
+  AP.DIAS_ELEMENTOS = 115;
 
   AP.ROLES = {
     Administrador: { consola: true, porteria: true, admin: true },
