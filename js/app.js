@@ -29,6 +29,20 @@
     return { nombre: u.nombre, upn: u.upn, usuario: u.usuario };
   };
   Session.can = function (p) { return !!Session.perms[p]; };
+  // Consola con lectura del panel, personas, visitas, historial e inspecciones (Director, Analista, Gobierno Corporativo)
+  Session.lectura = function () { return Session.rol === 'Administrador' || Session.rol === 'Analista' || Session.rol === 'Gobierno Corporativo'; };
+  // Perfiles que solo usan su módulo (Jefe de Producción, Talento Humano): no descargan los datos de portería
+  Session.soloModulo = function () { return Session.rol === 'Jefe de Producción' || Session.rol === 'Talento Humano'; };
+  // Pantalla de inicio de cada perfil
+  Session.inicio = function () {
+    if (Session.can('rondas') && !Session.can('porteria')) return '/rondas';
+    if (Session.rol === 'Jefe de Producción') return '/consola/planta';
+    if (Session.rol === 'Talento Humano') return '/consola/th';
+    if (Session.can('consola') && (!Session.can('porteria') || !U.isMobile())) return '/consola/panel';
+    return '/porteria';
+  };
+  // Solo el Director crea, modifica y borra: los demás perfiles de consola consultan y descargan
+  AP.ed = function (node) { return Session.can('editar') ? node : null; };
 
   // ---------- Navegación ----------
   var routes = {};
@@ -54,17 +68,22 @@
     document.querySelectorAll('.modal-wrap').forEach(function (m) { m.remove(); });
     AP.State._navCount++;
     var r = parseHash();
-    if (!Session.user) return AP.State.instalado === false ? AP.Views.instalacion() : AP.Views.login();
+    // La instalación inicial ya no se ofrece en el inicio de sesión: solo se abre con la dirección #/instalar
+    if (!Session.user) return AP.State.instalado === false || r.path === '/instalar' ? AP.Views.instalacion() : AP.Views.login();
     if (!Session.rol) return AP.Views.noAccess();
     if (Session.user.perfil && Session.user.perfil.PinTemporal) return AP.Views.claveObligatoria();
     if (Session.dispositivo && !Session.turno) return AP.Views.pin();
     var path = r.path;
-    // El rondero solo usa las pantallas de rondas
-    if (Session.can('rondas') && !Session.can('porteria') && path.indexOf('/ronda') !== 0) path = '/rondas';
-    if (path === '/' || path === '') path = Session.can('consola') && !U.isMobile() ? '/consola/panel' : '/porteria';
+    // El rondero solo usa las pantallas de rondas (y el manual de uso)
+    if (Session.can('rondas') && !Session.can('porteria') && path.indexOf('/ronda') !== 0 && path !== '/manual-uso') path = '/rondas';
+    // Las pantallas de portería son solo para quienes operan la portería
+    if (!Session.can('porteria') && !Session.can('historial') && path.indexOf('/consola') !== 0 && path.indexOf('/ronda') !== 0 && ['/manual-uso', '/imprimir', '/imprimir-puntos'].indexOf(path) < 0) path = Session.inicio();
+    if (path === '/' || path === '' || path === '/instalar') path = Session.inicio();
+    // Cada perfil solo abre las pantallas de su menú
+    if (path.indexOf('/consola/') === 0 && AP.navPermitido && !AP.navPermitido(path)) path = Session.inicio();
     var fn = routes[path];
     if (!fn) { var k = Object.keys(routes).find(function (p) { return p.slice(-1) === '*' && path.indexOf(p.slice(0, -1)) === 0; }); fn = k && routes[k]; }
-    if (!fn) fn = routes['/porteria'];
+    if (!fn) fn = routes[Session.inicio()] || routes['/porteria'];
     try { fn(r.q, path); } catch (e) { console.error(e); AP.mount(AP.empty('alert', 'Ocurrió un error al mostrar la pantalla', e.message)); }
     window.scrollTo(0, 0);
   }
@@ -99,7 +118,7 @@
       opt.back
         ? h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Volver', onclick: function () { AP.go(opt.back); } }, AP.icon('back', 22))
         : h('img', { class: 'brand-mark', src: 'img/logo-avo.png', alt: 'Avo Pak' }),
-      h('div', { class: 'topbar-title' }, h('strong', null, title), h('small', null, opt.sub || AP.CFG.porteria)),
+      h('div', { class: 'topbar-title' }, h('strong', null, AP.t(title)), h('small', null, opt.sub || AP.CFG.porteria)),
       AP.statusChip());
     var page = h('div', { class: 'porteria' }, head, AP.Views.banners(), h('main', { class: 'p-main' }, content));
     if (AP.CFG.modo === 'demo') page.prepend(h('div', { class: 'demo-ribbon' }, 'MODO DEMOSTRACIÓN — datos ficticios'));
@@ -107,39 +126,51 @@
     return page;
   };
 
+  // [ruta, ícono, etiqueta, permiso]. 'lectura' = Director, Analista y Gobierno Corporativo; 'ver' = Director y Gobierno Corporativo
   var NAV = [
-    ['/consola/panel', 'chart', 'Panel'],
-    ['/consola/personas', 'users', 'Personas'],
-    ['/consola/visitas', 'user', 'Visitas'],
-    ['/consola/solicitudes', 'inbox', 'Solicitudes de ingreso', 'admin'],
-    ['/consola/historial', 'history', 'Ingresos y salidas'],
-    ['/consola/inspecciones', 'truck', 'Inspecciones'],
-    ['/consola/horarios', 'clock', 'Horarios', 'admin'],
-    ['/consola/permisos', 'key', 'Permisos', 'admin'],
-    ['/consola/novedades', 'alert', 'Novedades', 'admin'],
-    ['/consola/vigilantes', 'badge', 'Usuarios', 'admin'],
-    ['/consola/elementos', 'package', 'Elementos', 'admin'],
-    ['/consola/rondas', 'route', 'Rondas', 'admin'],
-    ['/consola/programacion', 'calendar', 'Programación', 'admin'],
-    ['/consola/bitacora', 'file', 'Bitácora', 'admin'],
+    ['/consola/panel', 'chart', 'Panel', 'lectura'],
+    ['/consola/estadisticas', 'trend', 'Estadísticas', 'estadisticas'],
+    ['/consola/personas', 'users', 'Personas', 'lectura'],
+    ['/consola/visitas', 'user', 'Visitas', 'lectura'],
+    ['/consola/solicitudes', 'inbox', 'Solicitudes de ingreso', 'ver'],
+    ['/consola/historial', 'history', 'Ingresos y salidas', 'lectura'],
+    ['/consola/inspecciones', 'truck', 'Inspecciones', 'lectura'],
+    ['/consola/planta', 'calendar', 'Planta', 'planta'],
+    ['/consola/th', 'users', 'Talento Humano', 'th'],
+    ['/consola/horarios', 'clock', 'Horarios', 'ver'],
+    ['/consola/permisos', 'key', 'Permisos', 'ver'],
+    ['/consola/novedades', 'alert', 'Novedades', 'ver'],
+    ['/consola/vigilantes', 'badge', 'Usuarios', 'ver'],
+    ['/consola/elementos', 'package', 'Elementos', 'ver'],
+    ['/consola/rondas', 'route', 'Rondas', 'ver'],
+    ['/consola/programacion', 'calendar', 'Programación', 'ver'],
+    ['/consola/bitacora', 'file', 'Bitácora', 'ver'],
     ['/consola/instalacion', 'settings', 'Instalación', 'admin'],
-    ['/consola/notificaciones', 'bell', 'Notificaciones', 'admin']
+    ['/consola/notificaciones', 'bell', 'Notificaciones', 'admin'],
+    ['/manual-uso', 'file', 'Manual de uso', 'consola']
   ];
+  function navPermitido(n) {
+    if (n[0] === '/consola/historial' && Session.can('historial')) return true;   // el supervisor consulta el historial
+    if ((n[0] === '/consola/planta' || n[0] === '/consola/th') && Session.can('ver')) return true;   // Gobierno Corporativo consulta
+    return n[3] === 'lectura' ? Session.lectura() : Session.can(n[3]);
+  }
+  AP.navPermitido = function (ruta) { var n = NAV.find(function (x) { return x[0] === ruta; }); return !n || navPermitido(n); };
   AP.consolaShell = function (active, title, content, actions) {
     var nav = h('nav', { class: 'side', 'aria-label': 'Consola' },
-      h('div', { class: 'side-brand' }, h('img', { src: 'img/logo-avo.png', alt: 'Avo Pak' }), h('div', null, h('strong', null, 'Control de Acceso'), h('small', null, 'Dirección de Seguridad Integral'))),
-      NAV.filter(function (n) { return !n[3] || Session.can(n[3]); }).map(function (n) {
+      h('div', { class: 'side-brand' }, h('img', { src: 'img/logo-avo.png', alt: 'Avo Pak' }), h('div', null, h('strong', null, AP.t('Control de Acceso')), h('small', null, 'Dirección de Seguridad Integral'))),
+      NAV.filter(navPermitido).map(function (n) {
         var badge = n[0] === '/consola/visitas' ? h('b', { class: 'nav-badge', title: 'Visitas por aprobar', dataset: { k: 'vis' } }, AP.visitasPorAprobar().length || '')
           : n[0] === '/consola/solicitudes' ? h('b', { class: 'nav-badge', title: 'Solicitudes de ingreso por decidir', dataset: { k: 'sol' } }, (AP.solicitudesPendientes ? AP.solicitudesPendientes().length : 0) || '') : null;
-        return h('a', { href: '#' + n[0], class: active === n[0] ? 'on' : '' }, AP.icon(n[1], 19), h('span', null, n[2]), badge);
+        return h('a', { href: '#' + n[0], class: active === n[0] ? 'on' : '' }, AP.icon(n[1], 19), h('span', null, AP.t(n[2])), badge);
       }),
       h('div', { class: 'side-foot' },
-        h('a', { href: '#/porteria' }, AP.icon('door', 19), h('span', null, 'Ir a portería')),
-        h('div', { class: 'who' }, AP.icon('user', 16), h('span', null, Session.operador().nombre), h('small', null, Session.rol)),
-        h('button', { class: 'linkish', type: 'button', onclick: function () { AP.Views.definirPin(); } }, AP.icon('lock', 16), ' Cambiar mi contraseña'),
-        h('button', { class: 'linkish', type: 'button', onclick: AP.Views.logout }, AP.icon('logout', 16), ' Cerrar sesión')));
+        Session.can('porteria') ? h('a', { href: '#/porteria' }, AP.icon('door', 19), h('span', null, AP.t('Ir a portería'))) : null,
+        h('div', { class: 'who' }, AP.icon('user', 16), h('span', null, Session.operador().nombre), h('small', null, Session.rol + (Session.can('editar') || Session.can('planta') || Session.can('th') ? '' : ' · ' + AP.t('Solo consulta').toLowerCase()))),
+        AP.selectorIdioma(),
+        h('button', { class: 'linkish', type: 'button', onclick: function () { AP.Views.definirPin(); } }, AP.icon('lock', 16), ' ' + AP.t('Cambiar mi contraseña')),
+        h('button', { class: 'linkish', type: 'button', onclick: AP.Views.logout }, AP.icon('logout', 16), ' ' + AP.t('Cerrar sesión'))));
     var menuBtn = h('button', { class: 'icon-btn only-mobile', type: 'button', 'aria-label': 'Menú', onclick: function () { page.classList.toggle('nav-open'); } }, AP.icon('menu', 22));
-    var head = h('header', { class: 'c-head' }, menuBtn, h('h1', null, title), h('div', { class: 'c-actions' }, actions || null), AP.statusChip());
+    var head = h('header', { class: 'c-head' }, menuBtn, h('h1', null, AP.t(title)), h('div', { class: 'c-actions' }, actions || null), AP.statusChip());
     var page = h('div', { class: 'consola' }, nav, h('div', { class: 'c-main' }, AP.CFG.modo === 'demo' ? h('div', { class: 'demo-ribbon' }, 'MODO DEMOSTRACIÓN — datos ficticios') : null, head, AP.Views.banners(true), h('main', { class: 'c-content' }, content)));
     nav.addEventListener('click', function (e) { if (e.target.closest('a')) page.classList.remove('nav-open'); });
     AP.mount(page, 'is-consola');
@@ -153,7 +184,7 @@
   };
   var avisadas = null;
   function avisarVisitas() {
-    if (!Session.user || !Session.can('consola')) return;
+    if (!Session.user || !Session.can('editar')) return;
     var pend = AP.visitasPorAprobar();
     document.querySelectorAll('.nav-badge[data-k="vis"]').forEach(function (b) { b.textContent = pend.length || ''; });
     var port = pend.filter(function (v) { return v.Origen === 'Portería'; });
@@ -186,6 +217,21 @@
       U.beep('warn');
       AP.toast('Solicitud de ingreso en portería: ' + x.Title + ' — ' + (x.Novedad || x.Tipo) + '. Decida en Solicitudes de ingreso.', 'warn', 12000);
       if (AP.Notif && AP.Notif.aviso) AP.Notif.aviso('Ingreso por decidir — ' + x.Title, (x.Novedad || x.Tipo) + ' · registró ' + (x.SolicitadoPorNombre || ''), 'sol-' + x.id);
+    });
+  }
+
+  // ---------- Salidas con alerta del Director (la salida no se impide; el Director recibe el aviso) ----------
+  var salidasAvisadas = null;
+  function avisarAlertasSalida() {
+    if (!Session.user || !Session.can('admin')) return;
+    var desde = Date.now() - 12 * 3600000;
+    var l = (AP.Sync.movs || []).filter(function (m) { return m.Sentido === 'Salida' && /Alerta de salida del Director/.test(m.Novedad || '') && new Date(m.FechaHora).getTime() >= desde; });
+    if (salidasAvisadas === null) { salidasAvisadas = new Set(l.map(function (m) { return m.IdLocal; })); return; }
+    l.filter(function (m) { return !salidasAvisadas.has(m.IdLocal); }).forEach(function (m) {
+      salidasAvisadas.add(m.IdLocal);
+      U.beep('warn');
+      AP.toast('Salió ' + m.Title + ' a las ' + U.fTime(m.FechaHora) + ' (alerta de salida). Registró ' + (m.Vigilante || 'portería') + '.', 'warn', 15000);
+      if (AP.Notif && AP.Notif.aviso) AP.Notif.aviso('Salida con alerta — ' + m.Title, U.fTime(m.FechaHora) + ' · registró ' + (m.Vigilante || ''), 'sal-' + m.IdLocal);
     });
   }
 
@@ -263,8 +309,7 @@
         AP.State.bootError ? h('p', { class: 'banner deny' }, AP.State.bootError) : null,
         AP.B.lastLoginError ? h('p', { class: 'banner warn' }, AP.B.lastLoginError) : null,
         form,
-        h('div', { class: 'login-sello' }, h('img', { src: 'img/sello-dsi.png', alt: 'Sello de la Dirección de Seguridad de Avo Pak' }), h('p', { class: 'muted small' }, AVISO_USO)),
-        AP.State.configError ? null : h('button', { class: 'linkish small', type: 'button', onclick: function () { AP.State.instalado = false; render(); } }, 'Primera instalación')),
+        h('div', { class: 'login-sello' }, h('img', { src: 'img/sello-dsi.png', alt: 'Sello de la Dirección de Seguridad de Avo Pak' }), h('p', { class: 'muted small' }, AVISO_USO))),
       h('p', { class: 'login-foot' }, AP.CFG.empresa + ' · v' + AP.VERSION));
     AP.mount(box, 'is-login');
     setTimeout(function () { try { usuario.focus(); } catch (e) { /* ignorar */ } }, 50);
@@ -314,7 +359,7 @@
       AP.field('Contraseña', f.clave, 'Mínimo 10 caracteres, con letras y números.'),
       AP.field('Confirme la contraseña', f.clave2),
       msg, btn,
-      h('button', { class: 'linkish small', type: 'button', onclick: function () { AP.State.instalado = null; render(); } }, 'La aplicación ya está instalada: ir al inicio de sesión'));
+      h('button', { class: 'linkish small', type: 'button', onclick: function () { AP.State.instalado = null; location.hash = '#/'; render(); } }, 'La aplicación ya está instalada: ir al inicio de sesión'));
     AP.mount(h('div', { class: 'login' }, h('div', { class: 'login-card' }, cabecera('Instalación inicial'), form),
       h('p', { class: 'login-foot' }, AP.CFG.empresa + ' · v' + AP.VERSION)), 'is-login');
   };
@@ -381,6 +426,7 @@
       AP.Sync.on(U.debounce(vigilarTurno, 500));
       AP.Sync.on(U.debounce(avisarVisitas, 400));
       AP.Sync.on(U.debounce(avisarSolicitudes, 450));
+      AP.Sync.on(U.debounce(avisarAlertasSalida, 500));
       setInterval(vigilarTurno, 60000);
       // El Director recibe las solicitudes de ingreso de portería en menos de 30 segundos
       setInterval(function () {
@@ -414,7 +460,7 @@
     render();
   }
   AP.startSession = startSession;
-  AP.endSession = function () { avisadas = null; solAvisadas = null; Session.user = null; Session.rol = null; Session.perms = {}; Session.turno = null; Session.dispositivo = false; };
+  AP.endSession = function () { avisadas = null; solAvisadas = null; salidasAvisadas = null; Session.user = null; Session.rol = null; Session.perms = {}; Session.turno = null; Session.dispositivo = false; };
 
   function registerSW() {
     if (!('serviceWorker' in navigator)) return;

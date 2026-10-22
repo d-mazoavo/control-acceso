@@ -14,7 +14,9 @@
         ['Correo', 'text'], ['Empresa', 'text'], ['Cargo', 'text'], ['Area', 'text'], ['Estado', 'text', IDX],
         ['MotivoEstado', 'text'], ['VigenciaHasta', 'text'], ['Placa', 'text'], ['VehiculoTipo', 'text'], ['Foto', 'note'],
         ['AutorizaDatos', 'bool'], ['AutorizaFoto', 'bool'], ['FechaAutorizacion', 'text'], ['VersionAutorizacion', 'text'],
-        ['Observaciones', 'note']
+        ['Observaciones', 'note'],
+        // v1.0.0: clase de personal propio (el Jefe de Producción solo ve y programa a los operarios) y alerta de salida del Director
+        ['TipoPersonal', 'text', IDX], ['AlertaSalida', 'bool'], ['MotivoAlertaSalida', 'text']
       ]
     },
     AP_Visitas: {
@@ -46,7 +48,7 @@
         ['CarneDevuelto', 'bool'], ['DatosAdicionales', 'note'], ['FechaHora', 'datetime', IDX], ['Vigilante', 'text'],
         ['VigilanteCorreo', 'text'], ['VigilanteUsuario', 'text'], ['TurnoId', 'text'], ['Dispositivo', 'text'], ['SinConexion', 'bool'],
         ['DesfaseReloj', 'number'], ['Porteria', 'text'], ['EntradaId', 'text'], ['InspeccionId', 'text'], ['Novedad', 'text', IDX], ['PermisoId', 'text'], ['HorarioInfo', 'text'], ['Hash', 'text'], ['Observaciones', 'note'],
-        ['SolicitudId', 'text'], ['InduccionConfirmada', 'bool']
+        ['SolicitudId', 'text'], ['InduccionConfirmada', 'bool'], ['TipoPersonal', 'text', IDX]
       ]
     },
     AP_Inspecciones: {
@@ -99,7 +101,9 @@
         ['Token', 'text', IDX], ['NumDoc', 'text', IDX], ['Tipo', 'text'], ['Desde', 'datetime', IDX], ['Hasta', 'datetime', IDX],
         ['Estado', 'text'], ['Detalle', 'note'], ['AutorizadoPor', 'text'], ['AnuladoPor', 'text'], ['MotivoAnulacion', 'text'],
         // Quién autoriza, elegido de la lista de personas registradas
-        ['AutorizadoPorId', 'text'], ['AutorizadoPorDoc', 'text'], ['AutorizadoPorCargo', 'text'], ['SolicitudId', 'text']
+        ['AutorizadoPorId', 'text'], ['AutorizadoPorDoc', 'text'], ['AutorizadoPorCargo', 'text'], ['SolicitudId', 'text'],
+        // Persona del permiso (los permisos del Jefe de Producción se validan contra la ficha de la persona)
+        ['PersonaId', 'text'], ['TipoPersonal', 'text', IDX], ['Area', 'text'], ['FechaAnulacion', 'datetime']
       ]
     },
     AP_Solicitudes: {
@@ -117,7 +121,9 @@
       titulo: 'Nombre del punto',
       desc: 'Puntos de control de las rondas (cada uno con su código QR fijo en sitio)',
       cols: [
-        ['Codigo', 'text', UNQ], ['Ubicacion', 'text'], ['Instrucciones', 'note'], ['Orden', 'number'], ['Activo', 'bool']
+        ['Codigo', 'text', UNQ], ['Ubicacion', 'text'], ['Instrucciones', 'note'], ['Orden', 'number'], ['Activo', 'bool'],
+        // Revistas exigidas por turno y minutos mínimos entre una y otra para que cuenten
+        ['VecesTurno', 'number'], ['IntervaloMin', 'number']
       ]
     },
     AP_Rondas: {
@@ -135,6 +141,31 @@
       cols: [
         ['Mes', 'text', UNQ], ['Datos', 'note'], ['HorarioDia', 'text'], ['HorarioNoche', 'text'], ['Soporte', 'text'], ['Observaciones', 'note']
       ]
+    },
+    // ---------- Planta: turnos de los operarios (Jefe de Producción) ----------
+    AP_TurnosPlanta: {
+      titulo: 'Nombre del turno',
+      desc: 'Turnos de planta (código, hora de entrada y de salida) que usa el Jefe de Producción para programar la semana',
+      cols: [['Codigo', 'text', UNQ], ['HoraEntrada', 'text'], ['HoraSalida', 'text'], ['Activo', 'bool'], ['Observaciones', 'note']]
+    },
+    AP_ProgPlanta: {
+      titulo: 'Semana',
+      desc: 'Programación semanal de turnos de los operarios: la portería aplica las reglas de puntualidad con esta programación',
+      cols: [['Semana', 'text', UNQ], ['Desde', 'datetime', IDX], ['Datos', 'note'], ['Turnos', 'note'], ['Version', 'number'], ['Observaciones', 'note']]
+    },
+    AP_CambiosPlanta: {
+      titulo: 'Cambio',
+      desc: 'Registro de los cambios a la programación de planta y a las ausencias (no se modifica ni se borra)',
+      cols: [['Tipo', 'text', IDX], ['Semana', 'text'], ['Referencia', 'text'], ['FechaHora', 'datetime', IDX], ['Usuario', 'text'], ['UsuarioNombre', 'text'],
+        ['Rol', 'text'], ['Cambios', 'number'], ['MismoDia', 'number'], ['Detalle', 'note'], ['Motivo', 'note']]
+    },
+    // ---------- Talento Humano: ausencias del personal (vacaciones, permisos de día completo, licencias) ----------
+    AP_Ausencias: {
+      titulo: 'Nombre de la persona',
+      desc: 'Ausencias registradas por Talento Humano: en esas fechas la portería no deja ingresar a la persona sin aprobación del Director',
+      cols: [['PersonaId', 'text'], ['Token', 'text', IDX], ['NumDoc', 'text', IDX], ['TipoPersonal', 'text', IDX], ['Area', 'text'], ['Cargo', 'text'],
+        ['Tipo', 'text'], ['Desde', 'datetime', IDX], ['Hasta', 'datetime', IDX], ['Estado', 'text'], ['Detalle', 'note'],
+        ['RegistradoPorNombre', 'text'], ['AnuladoPor', 'text'], ['MotivoAnulacion', 'text'], ['FechaAnulacion', 'datetime']]
     },
     AP_Verificaciones: {
       titulo: 'Nombre de la persona',
@@ -171,7 +202,13 @@
     tiposPersona: ['Personal propio', 'Personal de finca', 'Contratista', 'Conductor / transportador'],
     tiposDoc: ['CC', 'CE', 'PA', 'PPT', 'TI', 'NIT', 'Otro'],
     vehiculos: ['', 'Automóvil', 'Camioneta', 'Motocicleta', 'Bicicleta', 'Camión', 'Tractocamión', 'Furgón', 'Otro'],
-    roles: ['Administrador', 'Analista', 'Supervisor', 'Vigilante', 'Rondero'],
+    roles: ['Administrador', 'Analista', 'Gobierno Corporativo', 'Jefe de Producción', 'Talento Humano', 'Supervisor', 'Vigilante', 'Rondero'],
+    // Clase de personal propio (el Jefe de Producción programa a los operarios)
+    tiposPersonal: ['Operario', 'Administrativo', 'Calidad', 'Mantenimiento', 'Logística', 'Seguridad', 'Otro'],
+    // Ausencias que registra Talento Humano. Incapacidades, licencias de maternidad o paternidad y demás asuntos de salud se
+    // registran como «Ausencia justificada (reservada)», sin diagnóstico (dato sensible, art. 5 Ley 1581 de 2012).
+    tiposAusencia: ['Vacaciones', 'Permiso remunerado (día completo)', 'Permiso no remunerado (día completo)', 'Licencia (luto, calamidad u otra legal)',
+      'Ausencia justificada (reservada)', 'Suspensión', 'Otra'],
     rolesPin: ['Vigilante', 'Supervisor', 'Rondero'],
     motivosBaja: ['Retiro del servicio informado por el contratista', 'Cambio de puesto o rotación informado por el contratista',
       'Terminación del contrato de vigilancia', 'Retiro o cambio de cargo del trabajador de Avo Pak', 'Credencial comprometida (PIN conocido por terceros)', 'Otro'],
@@ -198,6 +235,8 @@
     modalidadesHorario: [['Turno', 'Turno con control de puntualidad y salida'], ['Libre', 'Acceso libre dentro del horario']],
     motivosCierreSesion: ['Se retiró sin cerrar el turno', 'Cambio de turno: el relevo ya ingresó', 'Celular perdido, dañado o en poder de otra persona', 'Otro'],
     tiposPermiso: ['Ingreso tardío', 'Salida anticipada', 'Salida temporal (cita o diligencia)', 'Ingreso y salida fuera de horario'],
+    // Salida anticipada: la persona no regresa, así que el permiso no lleva hora final (vale desde la hora indicada hasta el fin del día)
+    permisosSinFin: ['Salida anticipada'],
     resultadosVerificacion: ['Justificada', 'No justificada', 'Pendiente de soporte'],
     operacionesCarga: ['Ingreso de vehículo de carga', 'Salida / despacho con carga', 'Salida en vacío', 'Ingreso de contenedor vacío'],
     sentidosElemento: ['Ingreso', 'Salida'],
@@ -214,9 +253,18 @@
   // Días hacia atrás (por fecha de registro) de los elementos que conserva el celular: cubre préstamos largos por regresar
   AP.DIAS_ELEMENTOS = 115;
 
+  // consola: entra a la consola · ver: consulta también las pantallas del Director (solo lectura) · editar: crea, modifica y borra
+  // (solo el Director) · porteria: opera la portería · planta: programa turnos y permisos de operarios · th: Talento Humano
   AP.ROLES = {
-    Administrador: { consola: true, porteria: true, admin: true },
-    Analista: { consola: true, porteria: true, admin: false },
+    Administrador: { consola: true, porteria: true, admin: true, ver: true, editar: true, estadisticas: true, planta: true, th: true },
+    // Solo consulta y descarga (personas, visitas, ingresos y salidas, inspecciones)
+    Analista: { consola: true },
+    // Gerencia u órgano de gobierno: ve y descarga toda la información, sin modificar ni borrar nada
+    'Gobierno Corporativo': { consola: true, ver: true, estadisticas: true },
+    // Programa los turnos semanales, los horarios y los permisos de los operarios; no borra; todo cambio queda registrado
+    'Jefe de Producción': { consola: true, planta: true },
+    // Registra ausencias (vacaciones, permisos de día completo, licencias) y consulta el estado y las horas de los operarios
+    'Talento Humano': { consola: true, th: true },
     Supervisor: { consola: false, porteria: true, historial: true },
     Vigilante: { consola: false, porteria: true },
     // El rondero solo marca los puntos de control de la ronda: no ve personas, visitas ni movimientos

@@ -43,7 +43,8 @@
   function norm(u) { return String(u || '').trim().toLowerCase().replace(/\s+/g, ''); }
   function emailDe(usuario, version) { return norm(usuario) + '.' + (version || 1) + '@' + (cfg.dominioUsuarios || 'usuarios.avo-pak.com'); }
   function venceTemporal() { return firebase.firestore.Timestamp.fromMillis(Date.now() + (cfg.horasVigenciaPinTemporal || 72) * 3600000); }
-  function esConsola() { return !!(cuenta && (cuenta.rol === 'Administrador' || cuenta.rol === 'Analista')); }
+  // Roles de consola con lectura completa: conservan la copia local del historial (los demás solo lo que usan)
+  function esConsola() { return !!(cuenta && (cuenta.rol === 'Administrador' || cuenta.rol === 'Analista' || cuenta.rol === 'Gobierno Corporativo')); }
 
   // ---------- Errores y tiempo de espera ----------
   function codigo(e) { return String((e && e.code) || '').replace(/^(firestore|auth)\//, ''); }
@@ -58,6 +59,11 @@
     if (c === 'already-exists') return err('api', 'El registro ya existe.', { status: 409, code: c });
     if (c === 'resource-exhausted' || c === 'quota-exceeded') return err('api', 'Se alcanzó el límite diario del plan gratuito de Firebase. Los registros quedan guardados en el celular y se enviarán después.', { status: 429, code: c });
     if (c === 'too-many-requests') return err('api', 'Demasiados intentos. Espere unos minutos e intente de nuevo.', { status: 429, code: c });
+    // Consulta filtrada que necesita un índice compuesto aún no creado en Firebase (el mensaje trae el enlace para crearlo)
+    if (c === 'failed-precondition' && /index/i.test((e && e.message) || '')) {
+      var url = (/(https:\/\/console\.firebase\.google\.com\S+)/.exec(e.message) || [])[1] || '';
+      return err('api', 'Falta crear un índice en la base de datos de Firebase para esta consulta. El Director de Seguridad Integral debe crearlo (ver las instrucciones de la actualización).', { code: c, indiceUrl: url });
+    }
     return err('api', (e && e.message) || String(e), { code: c });
   }
   // Ejecuta una operación con tiempo máximo; sin internet falla de inmediato.
@@ -414,7 +420,10 @@
       }
       if (!cubierto) {
         // Consulta histórica puntual: no se guarda en el celular y tiene tope de registros
-        var q2 = db.collection(list).where(field, '>=', a).where(field, '<=', b || new Date(Date.now() + 864e5).toISOString()).limit(LIMITE_CONSULTA);
+        // Sin fecha final se incluye todo lo posterior (p. ej., ausencias y permisos que terminan en el futuro)
+        var q2 = db.collection(list).where(field, '>=', a);
+        if (b) q2 = q2.where(field, '<=', b);
+        q2 = q2.limit(LIMITE_CONSULTA);
         var s2 = await op(function () { return q2.get({ source: 'server' }); }, 60000);
         if (s2.size >= LIMITE_CONSULTA) throw err('api', 'La consulta supera ' + LIMITE_CONSULTA + ' registros. Reduzca el rango de fechas.');
         var out = [];
@@ -424,6 +433,25 @@
       await refrescar(list, c);
       podar(list, c, field, a);
       return valores(c, opt).filter(function (r) { var v = r[field]; return v && v >= a && (!b || v <= b); });
+    },
+
+    // Consulta filtrada directa al servidor, sin copia local: la usan los perfiles que solo pueden leer una parte de
+    // una colección (Jefe de Producción: operarios; Talento Humano: personal propio). filtros = [[campo, op, valor], ...]
+    consulta: async function (list, filtros, opt) {
+      opt = opt || {};
+      var q = db.collection(list);
+      (filtros || []).forEach(function (f) {
+        var v = f[2];
+        if (v instanceof Date) v = v.toISOString();
+        q = q.where(f[0], f[1], v);
+      });
+      var lim = opt.limite || LIMITE_CONSULTA;
+      q = q.limit(lim);
+      var snap = await op(function () { return q.get({ source: 'server' }); }, 60000);
+      if (snap.size >= lim && !opt.probar) throw err('api', 'La consulta supera ' + lim + ' registros. Reduzca el rango de fechas.');
+      var out = [], ex = opt.exclude || [];
+      snap.forEach(function (d) { var r = normDoc(d); if (r._borrado) return; ex.forEach(function (k) { delete r[k]; }); out.push(r); });
+      return out;
     },
 
     findBy: async function (list, field, value) {
@@ -524,7 +552,7 @@
     },
 
     // Borrado físico: solo el Administrador puede borrar documentos de colecciones permitidas
-    COLECCIONES_BORRABLES: { AP_Personas: 1, AP_Visitas: 1, AP_Movimientos: 1, AP_Turnos: 1 },
+    COLECCIONES_BORRABLES: { AP_Personas: 1, AP_Visitas: 1, AP_Movimientos: 1, AP_Turnos: 1, AP_Permisos: 1, AP_Horarios: 1, AP_Ausencias: 1, AP_ProgPlanta: 1, AP_TurnosPlanta: 1 },
     borrarFisico: async function (list, id) {
       if (!cuenta || cuenta.rol !== 'Administrador') throw err('api', 'Solo el Administrador puede borrar registros.');
       if (!AP.B.COLECCIONES_BORRABLES[list]) throw err('api', 'No está permitido borrar registros de esta colección.');

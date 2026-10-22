@@ -25,8 +25,11 @@
     'Cierre de turno por el administrador': 'deny', 'Cierre de sesión ordenado por el administrador': 'warn'
   };
   var DESCRIPCION_ROL = {
-    Administrador: 'Consola completa: usuarios, horarios, permisos, novedades, bitácora y portería.',
-    Analista: 'Consola de personas, visitas, historial e inspecciones, y portería.',
+    Administrador: 'Consola completa (único perfil que crea, modifica y borra): usuarios, horarios, permisos, novedades, bitácora, estadísticas y portería.',
+    Analista: 'Solo consulta y descarga: panel, personas, visitas, ingresos y salidas e inspecciones. No modifica ni borra.',
+    'Gobierno Corporativo': 'Gerencia u órgano de gobierno: consulta y descarga toda la información y las estadísticas. No modifica ni borra.',
+    'Jefe de Producción': 'Programa por semana los turnos de los operarios y sus permisos; ve su estado en planta. No borra; cada cambio queda registrado.',
+    'Talento Humano': 'Registra vacaciones, permisos de día completo y licencias; consulta el estado y las horas en planta del personal propio. No borra.',
     Supervisor: 'Portería por turnos e historial de ingresos y salidas.',
     Vigilante: 'Solo portería, por turnos.',
     Rondero: 'Solo rondas, por turnos: marca los puntos de control con su QR y reporta novedades con fotografía. No ve personas ni movimientos.'
@@ -35,7 +38,8 @@
   AP.route('/consola/usuarios', function () { AP.go('/consola/vigilantes'); });
 
   AP.route('/consola/vigilantes', function (qs) {
-    if (!AP.Session.can('admin')) { AP.go('/porteria'); return; }
+    if (!AP.Session.can('ver')) { AP.go('/'); return; }
+    var ED = AP.Session.can('editar');
     var datos = { vig: [], turnos: [] };
     var filtro = qs.f || 'Activos';
     var q = h('input', { type: 'search', placeholder: 'Buscar por nombre, usuario, documento, empresa o rol', class: 'grow' });
@@ -47,7 +51,7 @@
     var content = h('div', { class: 'stack' }, AP.spinner('Cargando…'));
     AP.consolaShell('/consola/vigilantes', 'Usuarios', content, [
       h('button', { class: 'btn', type: 'button', onclick: exportar }, AP.icon('download', 18), 'Excel'),
-      h('button', { class: 'btn primary', type: 'button', onclick: crear }, AP.icon('plus', 18), 'Agregar usuario')]);
+      ED ? h('button', { class: 'btn primary', type: 'button', onclick: crear }, AP.icon('plus', 18), 'Agregar usuario') : AP.pill('Solo consulta', 'muted')]);
     q.addEventListener('input', U.debounce(pintar, 200));
 
     async function cargar() {
@@ -132,7 +136,7 @@
             return h('span', { class: largo ? 'txt-deny' : '' }, U.duracion(x.ev.FechaHora) + (largo ? ' (supera ' + maxH + ' h)' : ''));
           }],
           ['Dispositivo', function (x) { return x.ev.Dispositivo || ''; }],
-          ['', function (x) { return h('button', { class: 'btn small danger-outline', type: 'button', onclick: function (e) { e.stopPropagation(); cerrarSesion(x.v, x.ev); } }, AP.icon('logout', 16), 'Cerrar turno y sesión'); }]
+          ['', function (x) { return ED ? h('button', { class: 'btn small danger-outline', type: 'button', onclick: function (e) { e.stopPropagation(); cerrarSesion(x.v, x.ev); } }, AP.icon('logout', 16), 'Cerrar turno y sesión') : null; }]
         ], l)));
     }
     function pintar() {
@@ -171,7 +175,7 @@
               v.Observaciones ? kv('Observaciones', v.Observaciones) : null),
             esYo(v) ? h('p', { class: 'note small' }, 'Este es su propio usuario: no puede darlo de baja ni quitarle el rol de Administrador. Su contraseña la cambia en "Cambiar mi contraseña" (menú lateral).') : null,
             turnoAbierto(v) ? h('p', { class: 'banner warn' }, AP.icon('clock', 18), h('span', null, 'Turno abierto desde el ' + U.fDateTime(turnoAbierto(v).FechaHora) + ' (' + U.duracion(turnoAbierto(v).FechaHora) + ').')) : null,
-            h('div', { class: 'row gap wrap' },
+            !ED ? null : h('div', { class: 'row gap wrap' },
               turnoAbierto(v) ? h('button', { class: 'btn danger-outline', type: 'button', onclick: function () { close(); cerrarSesion(v, turnoAbierto(v)); } }, AP.icon('logout', 18), 'Cerrar turno y sesión') : null,
               h('button', { class: 'btn', type: 'button', onclick: function () { close(); editar(v); } }, AP.icon('edit', 18), 'Editar datos'),
               activo && !esYo(v) ? h('button', { class: 'btn', type: 'button', onclick: function () { close(); restablecer(v); } }, AP.icon('key', 18), 'Restablecer PIN') : null,

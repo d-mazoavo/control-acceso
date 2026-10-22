@@ -23,14 +23,15 @@
   function errBox(e) { return AP.empty(e && e.offline ? 'offline' : 'alert', e && e.offline ? 'Sin conexión con el servidor' : 'No fue posible cargar la información', e && e.message); }
 
   AP.route('/consola/programacion', function (qs) {
-    if (!AP.Session.can('admin')) { AP.go('/porteria'); return; }
+    if (!AP.Session.can('ver')) { AP.go('/'); return; }
+    var ED = AP.Session.can('editar');   // Gobierno Corporativo: solo consulta
     var mes = /^\d{4}-\d{2}$/.test(qs.m || '') ? qs.m : U.ymd().slice(0, 7);
     var N = diasMes(mes);
     var content = h('div', { class: 'stack' }, AP.spinner('Cargando…'));
     var sucio = false;
     var estadoGuardado = h('span', { class: 'muted small' });
     var guardarBtn = h('button', { class: 'btn primary', type: 'button', onclick: function () { guardar(); } }, AP.icon('check', 18), 'Guardar programación');
-    AP.consolaShell('/consola/programacion', 'Programación de vigilantes y ronderos', content, [estadoGuardado, guardarBtn]);
+    AP.consolaShell('/consola/programacion', 'Programación de vigilantes y ronderos', content, ED ? [estadoGuardado, guardarBtn] : [AP.pill('Solo consulta', 'muted')]);
     AP.onLeave(function () { if (sucio) AP.toast('La programación de ' + nombreMes(mes) + ' tenía cambios sin guardar.', 'warn', 7000); });
 
     var doc = null;          // registro AP_Programacion del mes
@@ -134,7 +135,7 @@
           h('button', { class: 'btn', type: 'button', 'aria-label': 'Mes siguiente', onclick: function () { ir(mesMas(mes, 1)); } }, h('span', { style: { display: 'inline-block', transform: 'scaleX(-1)' } }, AP.icon('back', 18))),
           h('strong', { class: 'pg-mes' }, capital(nombreMes(mes))),
           h('span', { class: 'grow' }),
-          h('button', { class: 'btn', type: 'button', onclick: function () { patron(null); } }, AP.icon('calendar', 18), 'Aplicar patrón'),
+          ED ? h('button', { class: 'btn', type: 'button', onclick: function () { patron(null); } }, AP.icon('calendar', 18), 'Aplicar patrón') : null,
           AP.btnExcel(exportarExcel, 'Excel del mes')),
         h('section', { class: 'card stack sm' },
           h('div', { class: 'pg-cfg' },
@@ -146,12 +147,13 @@
             AP.field('Observaciones', obs, null, 'span2'))),
         h('section', { class: 'card stack sm' },
           h('div', { class: 'row between wrap gap' },
-            h('div', { class: 'row gap wrap' }, h('strong', null, 'Pincel:'), seg),
+            ED ? h('div', { class: 'row gap wrap' }, h('strong', null, 'Pincel:'), seg) : h('span'),
             h('small', { class: 'muted' }, 'Elija el turno y haga clic (o arrastre) sobre los días. Clic en el nombre para aplicar un patrón a esa persona.')),
           gridBox),
         resumenBox);
       pintarGrid();
       pintarResumen();
+      if (!ED) content.querySelectorAll('.pg-cfg input, .pg-cfg textarea, .pg-cfg select').forEach(function (el) { el.disabled = true; });
     }
     async function ir(m) {
       if (sucio && !(await AP.confirm('Cambios sin guardar', 'Hay cambios sin guardar en la programación de ' + nombreMes(mes) + '. ¿Cambiar de mes sin guardarlos?', 'Cambiar sin guardar', 'danger'))) return;
@@ -165,6 +167,7 @@
     document.addEventListener('pointerup', soltar);
     AP.onLeave(function () { document.removeEventListener('pointerup', soltar); });
     function pintarCelda(btn) {
+      if (!ED) return;
       var f = filas[+btn.dataset.r], i = +btn.dataset.d;
       if (!f || f.dias[i] === pincel) return;
       f.dias[i] = pincel;
@@ -310,6 +313,7 @@
 
     // ---------- Patrones de rotación ----------
     function patron(r) {
+      if (!ED) return;
       AP.modal({
         title: 'Aplicar patrón de turnos', size: 'wide',
         body: function (close) {

@@ -1,0 +1,54 @@
+CONTROL DE ACCESO AVO PAK — ACTUALIZACIÓN DEL 22 DE OCTUBRE DE 2026 (versión 1.0.0)
+==================================================================================
+
+Este paquete trae SOLO los archivos que cambiaron o son nuevos (25 archivos). No trae config.js ni textos.js:
+los que ya están en GitHub siguen sirviendo y NO se deben reemplazar.
+
+Las reglas de Firebase vienen APARTE, en el archivo «reglas-firestore-NO-SUBIR-A-GITHUB.txt».
+Ese archivo NUNCA se sube a GitHub (contiene el código de instalación).
+
+
+PASO 1 — SUBIR LOS ARCHIVOS A GITHUB
+1. Descomprima este ZIP en el computador.
+2. Abra https://github.com/d-mazoavo/control-acceso
+3. Arriba a la derecha, botón «Add file» → «Upload files».
+4. Abra la carpeta descomprimida «control-acceso» y ARRASTRE a la página, de una sola vez:
+   - la CARPETA «js» (la carpeta completa, no los archivos sueltos),
+   - la CARPETA «css» (la carpeta completa),
+   - el archivo «index.html»,
+   - el archivo «sw.js».
+   No arrastre este archivo LEEME. No suba nada a la raíz fuera de esos cuatro.
+5. Espere a que GitHub termine de cargar la lista de archivos (debe decir js/..., css/app.css, index.html, sw.js).
+6. Abajo, botón verde «Commit changes».
+
+
+PASO 2 — PUBLICAR LAS REGLAS EN FIREBASE
+1. Abra https://console.firebase.google.com con la cuenta propietaria del proyecto y entre al proyecto de la aplicación.
+2. Menú de la izquierda: «Firestore Database» → pestaña «Reglas».
+3. Haga clic dentro del texto de las reglas, oprima Ctrl+A (seleccionar todo) y Suprimir.
+4. Abra «reglas-firestore-NO-SUBIR-A-GITHUB.txt» con el Bloc de notas, Ctrl+A, Ctrl+C, y pegue (Ctrl+V) en Firebase.
+5. Botón «Publicar».
+
+
+PASO 3 — CREAR LOS 3 ÍNDICES (una sola vez)
+Las pantallas del Jefe de Producción y de Talento Humano solo consultan a los operarios y al personal propio.
+Esas consultas filtradas necesitan 3 índices en Firebase.
+1. Abra la aplicación con su usuario de Director → menú «Instalación».
+2. En «2a. Índices de la base de datos», botón «Verificar índices».
+3. En cada fila que muestre el botón «Crear índice», haga clic: se abre Firebase con el índice ya llenado.
+   Allí oprima «Crear» (o «Guardar»). Repita con las demás filas.
+4. Espere unos minutos y vuelva a oprimir «Verificar índices» hasta que las 3 filas digan «Listo».
+(Si prefiere crearlos a mano, en Firestore Database → Índices → crear índice compuesto, con ámbito «Colección»:
+   AP_Movimientos: TipoPersonal ascendente + FechaHora ascendente
+   AP_Movimientos: Categoria ascendente + FechaHora ascendente
+   AP_Permisos:    TipoPersonal ascendente + Hasta ascendente)
+
+
+PASO 4 — DEJAR LISTA LA INFORMACIÓN
+1. Personas → filtro «Personal propio sin clase» → abra a cada trabajador y elija la «Clase de personal»
+   (Operario, Administrativo, Calidad…). Solo los «Operario» le aparecen al Jefe de Producción.
+   También puede hacerlo por «Carga masiva» con la columna «Clase de personal» (la plantilla nueva ya la trae).
+2. Usuarios → «Agregar usuario» → rol «Jefe de Producción», «Talento Humano» o «Gobierno Corporativo».
+3. Rondas → «Puntos de control y metas» → abra cada punto y fije «Revistas exigidas por turno» y
+   «Tiempo mínimo entre revistas».
+4. En cada celular y computador: cierre la aplicación y vuelva a abrirla (o recargue) para tomar la actualización.

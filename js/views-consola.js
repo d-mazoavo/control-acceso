@@ -104,8 +104,8 @@
         B.listRange('AP_Visitas', 'FechaFin', U.addDays(hoy0, -1), null),
         B.listAll('AP_Personas', { exclude: ['Foto', 'Observaciones'] }),
         B.listRange('AP_Inspecciones', 'FechaHora', hoy0, null).catch(function () { return []; }),
-        AP.Session.can('admin') ? B.listRange('AP_Rondas', 'FechaHora', hoy0, null).catch(function () { return []; }) : Promise.resolve([]),
-        AP.Session.can('admin') ? AP.Sync.pullSolicitudes().catch(function () { return AP.Sync.solicitudes || []; }) : Promise.resolve([])
+        AP.Session.can('ver') ? B.listRange('AP_Rondas', 'FechaHora', hoy0, null).catch(function () { return []; }) : Promise.resolve([]),
+        AP.Session.can('ver') ? AP.Sync.pullSolicitudes().catch(function () { return AP.Sync.solicitudes || []; }) : Promise.resolve([])
       ]);
       var movs = res[0], vis = res[1], pers = res[2], insp = res[3], rondas = res[4], solic = res[5];
       // Se combinan los registros de este dispositivo que aún no se han enviado
@@ -263,7 +263,7 @@
               ['Área', function (v) { return v.Area; }]
             ], visHoy, 'Sin visitas aprobadas para hoy.');
           }),
-          kpi(pend.length, 'Visitas por aprobar', 'inbox', pend.length ? 'warn' : '', '/consola/visitas?t=pendientes'),
+          kpi(pend.length, AP.Session.can('editar') ? 'Visitas por aprobar' : 'Visitas pendientes de aprobación', 'inbox', pend.length ? 'warn' : '', '/consola/visitas?t=pendientes'),
           kpi(insp.length, 'Inspecciones hoy', 'truck', nc.length ? 'deny' : '', null, function () {
             modalLista('Inspecciones de hoy (' + insp.length + ')', [
               ['Hora', function (i) { return U.fTime(i.FechaHora); }],
@@ -274,8 +274,8 @@
               ['Inspector', function (i) { return i.Inspector; }]
             ], insp, 'Sin inspecciones registradas hoy.');
           }),
-          AP.Session.can('admin') ? kpi(solic.filter(function (x) { return x.Estado === 'Pendiente'; }).length, 'Ingresos por decidir', 'inbox', solic.some(function (x) { return x.Estado === 'Pendiente'; }) ? 'deny' : '', '/consola/solicitudes') : null,
-          AP.Session.can('admin') ? kpi(rondas.length, 'Marcaciones de ronda hoy', 'route', rondas.some(function (x) { return x.Novedad; }) ? 'warn' : '', null, function () {
+          AP.Session.can('ver') ? kpi(solic.filter(function (x) { return x.Estado === 'Pendiente'; }).length, 'Ingresos por decidir', 'inbox', solic.some(function (x) { return x.Estado === 'Pendiente'; }) ? 'deny' : '', '/consola/solicitudes') : null,
+          AP.Session.can('ver') ? kpi(rondas.length, 'Marcaciones de ronda hoy', 'route', rondas.some(function (x) { return x.Novedad; }) ? 'warn' : '', null, function () {
             modalLista('Marcaciones de ronda de hoy (' + rondas.length + ')', [
               ['Hora', function (x) { return U.fTime(x.FechaHora); }],
               ['Punto', function (x) { return x.Title; }],
@@ -316,13 +316,15 @@
     var sel = new Set();
     var q = AP.input('q', '', { type: 'search', placeholder: 'Buscar por nombre, documento, empresa o placa' });
     var fTipo = AP.select('tipo', [['', 'Todos los tipos']].concat(AP.CAT.tiposPersona), '');
-    var fEst = AP.select('estado', [['', 'Todos los estados'], 'Habilitado', 'Inhabilitado', ['vencido', 'Habilitación vencida']], '');
+    var fEst = AP.select('estado', [['', 'Todos los estados'], 'Habilitado', 'Inhabilitado', ['vencido', 'Habilitación vencida'], ['alerta', 'Con alerta de salida']], '');
+    var fTP = AP.select('tipoPersonal', [['', 'Toda clase de personal']].concat(AP.CAT.tiposPersonal, [['sin', 'Personal propio sin clase']]), '');
     var tbl = null;
-    var actions = [
+    var ED = AP.Session.can('editar');
+    var actions = ED ? [
       h('button', { class: 'btn primary', type: 'button', onclick: function () { editar(null); } }, AP.icon('plus', 18), 'Nueva persona'),
       h('button', { class: 'btn', type: 'button', onclick: function () { AP.cargaMasiva(function () { AP.render(); }); } }, AP.icon('upload', 18), 'Carga masiva'),
       h('button', { class: 'btn', type: 'button', onclick: fotosLote }, AP.icon('camera', 18), 'Fotos en lote')
-    ];
+    ] : [AP.pill('Solo consulta', 'muted')];
     AP.consolaShell('/consola/personas', 'Personas habilitadas', content, actions);
 
     function filtrar() {
@@ -330,7 +332,10 @@
       return personas.filter(function (p) {
         if (fTipo.value && p.Tipo !== fTipo.value) return false;
         if (fEst.value === 'vencido') { if (!(p.Estado === 'Habilitado' && p.VigenciaHasta && p.VigenciaHasta < hoy)) return false; }
+        else if (fEst.value === 'alerta') { if (!p.AlertaSalida) return false; }
         else if (fEst.value && p.Estado !== fEst.value) return false;
+        if (fTP.value === 'sin') { if (!(p.Tipo === 'Personal propio' && !p.TipoPersonal)) return false; }
+        else if (fTP.value && p.TipoPersonal !== fTP.value) return false;
         if (!t) return true;
         return U.fold(p.Title + ' ' + p.Empresa + ' ' + p.Cargo + ' ' + p.Area + ' ' + p.Placa).indexOf(t) >= 0 || (d && U.normDoc(p.NumDoc).indexOf(d) >= 0);
       }).sort(function (a, b) { return U.fold(a.Title) < U.fold(b.Title) ? -1 : 1; });
@@ -353,23 +358,25 @@
       var rows = filtrar();
       var hoy = U.ymd();
       var cols = [
-        { label: '', cls: 'w-check', render: function (p) { var c = h('input', { type: 'checkbox', checked: sel.has(p.id), 'aria-label': 'Seleccionar ' + p.Title }); c.addEventListener('change', function () { c.checked ? sel.add(p.id) : sel.delete(p.id); selInfo(); }); return c; } },
+        ED ? { label: '', cls: 'w-check', render: function (p) { var c = h('input', { type: 'checkbox', checked: sel.has(p.id), 'aria-label': 'Seleccionar ' + p.Title }); c.addEventListener('change', function () { c.checked ? sel.add(p.id) : sel.delete(p.id); selInfo(); }); return c; } } : null,
         { label: '', cls: 'w-photo', render: function (p) { return h('img', { class: 'photo xs', src: fotoCache[p.id] || U.avatar(p.Title), alt: '', dataset: { pid: p.id } }); } },
         { label: 'Nombre', render: function (p) { return h('div', null, h('strong', null, p.Title), h('small', { class: 'block muted' }, (p.TipoDoc || '') + ' ' + (p.NumDoc || ''))); } },
-        { label: 'Tipo', key: 'Tipo' },
+        { label: 'Tipo', render: function (p) { return h('div', null, p.Tipo || '', p.TipoPersonal ? h('small', { class: 'block muted' }, p.TipoPersonal) : null); } },
         { label: 'Empresa / cargo', render: function (p) { return h('div', null, p.Empresa || '', h('small', { class: 'block muted' }, [p.Cargo, p.Area].filter(Boolean).join(' · '))); } },
         { label: 'Placa', key: 'Placa' },
         { label: 'Vigencia', render: function (p) { return p.VigenciaHasta ? h('span', { class: p.VigenciaHasta < hoy ? 'txt-deny' : '' }, p.VigenciaHasta) : '—'; } },
-        { label: 'Estado', render: function (p) { return AP.estadoPill(p.Estado); } },
+        { label: 'Estado', render: function (p) { return h('div', null, AP.estadoPill(p.Estado), p.AlertaSalida ? h('small', { class: 'block' }, AP.pill('Alerta de salida', 'warn')) : null); } },
         { label: '', cls: 'right', render: function (p) {
+          if (!ED) return h('button', { class: 'btn small', type: 'button', title: 'Ver ficha', onclick: function () { editar(p); } }, AP.icon('eye', 16), 'Ver');
           return h('div', { class: 'row gap nowrap' },
             h('button', { class: 'btn small', type: 'button', title: 'Editar', onclick: function () { editar(p); } }, AP.icon('edit', 16)),
             h('button', { class: 'btn small ' + (p.Estado === 'Habilitado' ? 'danger-outline' : ''), type: 'button', onclick: function () { cambiarEstado(p); } },
               AP.icon(p.Estado === 'Habilitado' ? 'lock' : 'unlock', 16), p.Estado === 'Habilitado' ? 'Inhabilitar' : 'Habilitar'),
+            h('button', { class: 'btn small' + (p.AlertaSalida ? ' warn-outline' : ''), type: 'button', title: p.AlertaSalida ? 'Quitar la alerta de salida' : 'Alerta de salida: avisarme cuando salga', onclick: function () { alertaSalida(p); } }, AP.icon('bell', 16)),
             h('button', { class: 'btn small', type: 'button', title: 'Credencial QR', onclick: function () { credencial(p); } }, AP.icon('qr', 16)),
             AP.Session.can('admin') ? h('button', { class: 'btn small danger-outline', type: 'button', title: 'Borrar registro', onclick: function (e) { e.stopPropagation(); borrarPersona(p); } }, AP.icon('trash', 16)) : null);
         } }
-      ];
+      ].filter(Boolean);
       if (!tbl) tbl = table(cols, rows, { onRow: editar, afterPaint: fotosPagina, rowClass: function (p) { return p.Estado !== 'Habilitado' ? 'row-deny' : ''; } });
       else tbl.repaint(rows);
       return tbl;
@@ -378,6 +385,10 @@
     function selInfo() {
       selBox.replaceChildren();
       var n = sel.size;
+      if (!ED) {
+        AP.add(selBox, h('button', { class: 'btn small', type: 'button', onclick: function () { exportarPersonas(filtrar()); } }, AP.icon('download', 16), 'Exportar listado'));
+        return;
+      }
       AP.add(selBox, h('span', { class: 'muted' }, n ? n + ' seleccionada(s)' : 'Seleccione personas para imprimir carnés'),
         h('button', { class: 'btn small', type: 'button', disabled: !n, onclick: function () {
           var ids = Array.from(sel);
@@ -390,11 +401,11 @@
     }
     AP.render.personasRepaint = function () { selInfo(); tbl && tbl.repaint(filtrar()); };
 
-    [q, fTipo, fEst].forEach(function (el) { el.addEventListener(el.tagName === 'INPUT' ? 'input' : 'change', U.debounce(function () { tbl.repaint(filtrar()); }, 150)); });
+    [q, fTipo, fEst, fTP].forEach(function (el) { el.addEventListener(el.tagName === 'INPUT' ? 'input' : 'change', U.debounce(function () { tbl.repaint(filtrar()); }, 150)); });
 
     load(content, async function () {
       personas = await AP.B.listAll('AP_Personas', { exclude: ['Foto'] });
-      content.replaceChildren(h('div', { class: 'filters' }, q, fTipo, fEst), selBox, render());
+      content.replaceChildren(h('div', { class: 'filters' }, q, fTipo, fTP, fEst), selBox, render());
       selInfo();
     });
 
@@ -422,6 +433,31 @@
       });
     }
 
+    // Alerta de salida: la salida no se impide (arts. 24 y 28 C.P.); el vigilante la registra y el Director recibe el aviso
+    function alertaSalida(p) {
+      var activa = !!p.AlertaSalida;
+      AP.modal({
+        title: (activa ? 'Quitar la alerta de salida de ' : 'Alerta de salida — ') + p.Title,
+        body: function (close) {
+          var mot = AP.input('motivo', p.MotivoAlertaSalida || '', { placeholder: 'Motivo breve: lo ve el vigilante. Escriba solo lo necesario, sin datos sensibles.' });
+          return h('div', { class: 'stack' },
+            h('p', { class: 'note' }, activa ? 'Al quitarla, la portería registra sus salidas sin aviso.'
+              : 'Cuando esta persona salga, el vigilante registra la salida normalmente y se le avisa a usted de inmediato (en la consola y por WhatsApp desde portería). La salida NO se impide: nadie puede ser retenido por el personal de vigilancia (arts. 24 y 28 de la Constitución). Para impedir el INGRESO use «Inhabilitar».'),
+            activa ? null : AP.field('Motivo *', mot),
+            h('button', { class: 'btn block ' + (activa ? '' : 'primary'), type: 'button', onclick: async function () {
+              if (!activa && mot.value.trim().length < 4) return AP.toast('Indique el motivo.', 'warn');
+              try {
+                var d = activa ? { AlertaSalida: false, MotivoAlertaSalida: '' } : { AlertaSalida: true, MotivoAlertaSalida: mot.value.trim() };
+                await AP.B.update('AP_Personas', p.id, d);
+                await AP.Audit.log(activa ? 'Retiro de alerta de salida' : 'Alerta de salida', p.Title + ' (' + (p.NumDoc || '') + ')', d.MotivoAlertaSalida || '');
+                Object.assign(p, d); close(); AP.toast(activa ? 'Alerta de salida retirada.' : 'Alerta de salida activada.');
+                tbl.repaint(filtrar()); AP.Sync.run();
+              } catch (e) { AP.toast(e.message, 'error'); }
+            } }, activa ? 'Quitar alerta' : 'Activar alerta de salida'));
+        }
+      });
+    }
+
     async function editar(p) {
       var nuevo = !p;
       var full = p ? Object.assign({}, p) : { Tipo: 'Personal propio', TipoDoc: 'CC', Estado: 'Habilitado', Empresa: AP.CFG.empresa };
@@ -430,7 +466,7 @@
       }
       var foto = full.Foto || '';
       AP.modal({
-        title: nuevo ? 'Nueva persona' : full.Title,
+        title: nuevo ? 'Nueva persona' : full.Title + (ED ? '' : ' (solo consulta)'),
         size: 'wide',
         body: function (close) {
           var I = AP.input;
@@ -454,6 +490,7 @@
             AP.field('Vigente hasta', I('VigenciaHasta', full.VigenciaHasta, { type: 'date' }), 'Contratistas: fecha hasta la cual está verificada la seguridad social.'),
             AP.field('Placa(s) de vehículo', I('Placa', full.Placa, { autocapitalize: 'characters' }), 'Separe varias con coma.'),
             AP.field('Tipo de vehículo', AP.select('VehiculoTipo', AP.CAT.vehiculos, full.VehiculoTipo)),
+            AP.field('Clase de personal', AP.select('TipoPersonal', [['', '— No aplica / sin clase —']].concat(AP.CAT.tiposPersonal), full.TipoPersonal || ''), 'Personal propio: los operarios los programa el Jefe de Producción.'),
             AP.field('Estado', AP.select('Estado', ['Habilitado', 'Inhabilitado'], full.Estado)),
             AP.field('Motivo del estado', I('MotivoEstado', full.MotivoEstado)),
             h('div', { class: 'field span2 stack sm' },
@@ -462,9 +499,20 @@
             AP.field('Observaciones', AP.textarea('Observaciones', full.Observaciones), null, 'span2'));
           var qrBox = h('div', { class: 'qr-mini' });
           if (full.Token) AP.add(qrBox, h('div', { class: 'qr', html: U.qrSvg(U.qrPayload(full.Token), 4, 2) }), h('small', { class: 'muted' }, 'Credencial vigente'));
+          if (!ED) {
+            // Solo consulta: la ficha se muestra sin posibilidad de cambio
+            form.querySelectorAll('input,select,textarea').forEach(function (el) { el.disabled = true; });
+            return h('div', { class: 'edit-person' },
+              h('div', { class: 'edit-side' }, img, h('p', { class: 'help' }, 'Solo consulta.')),
+              h('div', { class: 'stack' }, form,
+                h('div', { class: 'row gap wrap end' },
+                  full.Tipo === 'Personal propio' ? h('button', { class: 'btn', type: 'button', onclick: function () { visitasRecibidas(p); } }, AP.icon('user', 18), 'Visitas recibidas') : null,
+                  h('button', { class: 'btn', type: 'button', onclick: function () { close(); } }, 'Cerrar'))));
+          }
           var save = async function () {
             var d = AP.formData(form);
             if (d.Title.length < 5 || !d.NumDoc) return AP.toast('Nombre y número de documento son obligatorios.', 'warn');
+            if (d.Tipo !== 'Personal propio') d.TipoPersonal = '';
             if (foto && !d.AutorizaFoto) return AP.toast('Para guardar la fotografía debe constar la autorización de su uso. Márquela o quite la foto.', 'warn', 7000);
             var dup = personas.find(function (x) { return U.normDoc(x.NumDoc) === U.normDoc(d.NumDoc) && (!p || x.id !== p.id); });
             if (dup) return AP.toast('Ya existe una persona con ese documento: ' + dup.Title, 'warn');
@@ -632,7 +680,9 @@
         ['Nombre', function (p) { return p.Title; }, 34], ['Tipo', function (p) { return p.Tipo; }, 18], ['Tipo doc.', function (p) { return p.TipoDoc; }, 8],
         ['Documento', function (p) { return p.NumDoc; }, 16], ['Empresa', function (p) { return p.Empresa; }, 28], ['Cargo', function (p) { return p.Cargo; }, 22],
         ['Área', function (p) { return p.Area; }, 18], ['Teléfono', function (p) { return p.Telefono; }, 14], ['Placa', function (p) { return p.Placa; }, 12],
+        ['Clase de personal', function (p) { return p.TipoPersonal; }, 16],
         ['Vigente hasta', function (p) { return p.VigenciaHasta; }, 13], ['Estado', function (p) { return p.Estado; }, 12], ['Motivo estado', function (p) { return p.MotivoEstado; }, 30],
+        ['Alerta de salida', function (p) { return p.AlertaSalida ? 'Sí — ' + (p.MotivoAlertaSalida || '') : 'No'; }, 22],
         ['Autoriza datos', function (p) { return U.yesNo(p.AutorizaDatos); }, 10], ['Autoriza foto', function (p) { return U.yesNo(p.AutorizaFoto); }, 10]
       ], rows, 'xlsx', [['Generado por', AP.Session.user.nombre + ' (' + AP.Session.user.upn + ')'], ['Fecha', U.fDateTime(new Date())], ['Filtro', q.value || 'ninguno']]);
     }

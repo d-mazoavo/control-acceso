@@ -31,8 +31,9 @@
     if (!guard()) return;
     var tab = qs.t || 'pendientes';
     var content = h('div', { class: 'stack' });
+    var ED = AP.Session.can('editar');
     AP.consolaShell('/consola/visitas', 'Visitas', content,
-      h('button', { class: 'btn primary', type: 'button', onclick: function () { editar(null); } }, AP.icon('plus', 18), 'Nueva visita'));
+      ED ? h('button', { class: 'btn primary', type: 'button', onclick: function () { editar(null); } }, AP.icon('plus', 18), 'Nueva visita') : AP.pill('Solo consulta', 'muted'));
     var visitas = [];   // visitas recientes (desde ayer): por aprobar, hoy y próximas
     var rango = [];     // visitas del rango de fechas (pestaña "Todas")
     var desdeV = AP.input('desde', U.ymd(U.addDays(new Date(), -60)), { type: 'date' });
@@ -276,6 +277,7 @@
           return h('div', null, AP.estadoPill(v.Estado), txt ? h('small', { class: 'block ' + (m.clave === 'dentro' ? 'txt-ok' : 'muted') }, txt) : null);
         }],
         ['', function (v) {
+          if (!ED) return h('button', { class: 'btn small', type: 'button', onclick: function () { verVisita(v); } }, AP.icon('eye', 16), 'Ver');
           return h('div', { class: 'row gap nowrap' },
             v.Estado === 'Pendiente' ? h('button', { class: 'btn small primary', type: 'button', onclick: function () { decidir(v, true); } }, AP.icon('check', 16), 'Aprobar') : null,
             v.Estado === 'Pendiente' ? h('button', { class: 'btn small danger-outline', type: 'button', onclick: function () { decidir(v, false); } }, 'Rechazar') : null,
@@ -284,7 +286,14 @@
             h('button', { class: 'btn small', type: 'button', title: 'Editar', onclick: function () { editar(v); } }, AP.icon('edit', 16)),
             AP.Session.can('admin') ? h('button', { class: 'btn small danger-outline', type: 'button', title: 'Borrar registro', onclick: function (e) { e.stopPropagation(); borrarVisita(v); } }, AP.icon('trash', 16)) : null);
         }]
-      ], filtradas(), function (v) { if (v.Estado === 'Pendiente') decidir(v, true); else editar(v); }));
+      ], filtradas(), function (v) { if (!ED) verVisita(v); else if (v.Estado === 'Pendiente') decidir(v, true); else editar(v); }));
+    }
+    // Ficha de la visita en modo consulta (perfiles sin edición)
+    function verVisita(v) {
+      AP.modal({ title: 'Visita de ' + v.Title + ' (solo consulta)', size: 'wide', body: h('div', { class: 'kv-grid' }, COLS_VIS.map(function (c) {
+        var x = c[1](v); if (x instanceof Date) x = U.fDateTime(x);
+        return x ? h('div', { class: 'kv' }, h('span', null, c[0]), h('strong', null, String(x))) : null;
+      })) });
     }
     // Visitante dentro: aviso al anfitrión por WhatsApp para que lo reciba y lo acompañe
     function avisoAnfBtn(v) {
@@ -830,7 +839,7 @@
 
   // =================== BITÁCORA ===================
   AP.route('/consola/bitacora', function () {
-    if (!guard('admin')) return;
+    if (!guard('ver')) return;
     var content = h('div', { class: 'stack' });
     AP.consolaShell('/consola/bitacora', 'Bitácora de actuaciones', content);
     content.appendChild(AP.spinner());
@@ -883,17 +892,40 @@
     }
     var reglas = [
       'Las reglas de seguridad de Firestore (archivo firestore.rules de la entrega) deben estar publicadas en la consola de Firebase: Firestore Database → Reglas.',
-      'Con esas reglas, el servidor exige un usuario activo para leer o escribir; solo el Administrador crea usuarios, horarios, permisos y verificaciones; el Analista administra personas y visitas.',
+      'Con esas reglas, el servidor exige un usuario activo para leer o escribir. Solo el Administrador (Director de Seguridad Integral) crea, modifica y borra en la consola; el Analista y Gobierno Corporativo solo consultan y descargan; el Jefe de Producción programa turnos y permisos de operarios y Talento Humano registra ausencias, sin borrar nada.',
       'Los registros de ingresos, salidas, inspecciones, turnos, verificaciones y bitácora no pueden modificarse ni borrarse por nadie, y cada uno queda firmado por el servidor con el usuario que lo hizo y la hora del servidor.',
       'Cuando un usuario se da de baja o se le restablece el PIN, su sesión anterior deja de tener acceso de inmediato.',
       'Si vuelve a publicar las reglas, use siempre la última versión entregada.'
     ];
+    // Índices compuestos que necesitan las consultas filtradas del Jefe de Producción y de Talento Humano
+    var indicesBox = h('div', { class: 'stack sm' }, h('p', { class: 'muted small' }, 'Oprima «Verificar índices» después de publicar las reglas de esta actualización.'));
+    var INDICES = [
+      ['Ingresos y salidas de operarios (Jefe de Producción)', 'AP_Movimientos', 'TipoPersonal + FechaHora', [['TipoPersonal', '==', 'Operario'], ['FechaHora', '>=', new Date(Date.now() - 864e5)]]],
+      ['Ingresos y salidas del personal propio (Talento Humano)', 'AP_Movimientos', 'Categoria + FechaHora', [['Categoria', 'in', ['Personal propio', 'Personal propio sin carné']], ['FechaHora', '>=', new Date(Date.now() - 864e5)]]],
+      ['Permisos de operarios (Jefe de Producción)', 'AP_Permisos', 'TipoPersonal + Hasta', [['TipoPersonal', '==', 'Operario'], ['Hasta', '>=', new Date(Date.now() - 864e5)]]]
+    ];
+    async function verificarIndices() {
+      indicesBox.replaceChildren(AP.spinner('Verificando…'));
+      var filas = [];
+      for (var i = 0; i < INDICES.length; i++) {
+        var x = INDICES[i];
+        try { await AP.B.consulta(x[1], x[3], { limite: 1, probar: true }); filas.push(h('div', { class: 'kv' }, h('span', null, x[0]), h('strong', null, x[1] + ' (' + x[2] + ')'), AP.pill('Listo', 'ok'))); }
+        catch (e) {
+          filas.push(h('div', { class: 'kv' }, h('span', null, x[0]), h('strong', null, x[1] + ' (' + x[2] + ')'),
+            e.indiceUrl ? h('a', { class: 'btn small primary', href: e.indiceUrl, target: '_blank', rel: 'noopener' }, AP.icon('settings', 16), 'Crear índice') : AP.pill(e.message, 'deny')));
+        }
+      }
+      indicesBox.replaceChildren.apply(indicesBox, filas.concat([h('p', { class: 'muted small' }, '«Crear índice» abre la consola de Firebase con el índice ya llenado: inicie sesión con la cuenta propietaria del proyecto y oprima «Crear» (o «Guardar»). Tarda unos minutos; luego vuelva a verificar.')]));
+    }
     AP.add(content,
       h('section', { class: 'card stack' }, h('h3', null, '1. Conexión'), estado,
         h('div', { class: 'row gap wrap' },
           h('button', { class: 'btn', type: 'button', onclick: verificar }, AP.icon('sync', 18), 'Verificar'))),
       h('section', { class: 'card stack' }, h('h3', null, '2. Seguridad en el servidor'),
         h('ol', { class: 'steps' }, reglas.map(function (p) { return h('li', null, p); }))),
+      h('section', { class: 'card stack' }, h('h3', null, '2a. Índices de la base de datos'),
+        h('p', { class: 'small' }, 'El Jefe de Producción y Talento Humano solo pueden consultar a los operarios y al personal propio. Esas consultas filtradas necesitan tres índices en Firebase, que se crean una sola vez.'),
+        indicesBox, h('div', { class: 'row gap wrap' }, h('button', { class: 'btn', type: 'button', onclick: verificarIndices }, AP.icon('search', 18), 'Verificar índices'))),
       h('section', { class: 'card stack' }, h('h3', null, '3. Este dispositivo'),
         h('div', { class: 'kv' }, h('span', null, 'Identificador'), h('strong', null, U.deviceId())),
         h('div', { class: 'kv' }, h('span', null, 'Almacenamiento sin conexión'), h('strong', null, AP.Store.isMemory() ? 'Temporal (este navegador no permite guardar datos)' : 'Disponible')),
@@ -916,9 +948,10 @@
     'tipo doc': 'TipoDoc', 'tipo documento': 'TipoDoc', 'tipo de documento': 'TipoDoc', 'documento': 'NumDoc', 'numero de documento': 'NumDoc', 'n documento': 'NumDoc', 'cedula': 'NumDoc',
     'telefono': 'Telefono', 'celular': 'Telefono', 'correo': 'Correo', 'email': 'Correo', 'empresa': 'Empresa', 'cargo': 'Cargo', 'area': 'Area',
     'estado': 'Estado', 'vigente hasta': 'VigenciaHasta', 'vigencia': 'VigenciaHasta', 'placa': 'Placa', 'tipo de vehiculo': 'VehiculoTipo', 'vehiculo': 'VehiculoTipo',
-    'autoriza datos': 'AutorizaDatos', 'autoriza foto': 'AutorizaFoto', 'observaciones': 'Observaciones'
+    'autoriza datos': 'AutorizaDatos', 'autoriza foto': 'AutorizaFoto', 'observaciones': 'Observaciones',
+    'clase de personal': 'TipoPersonal', 'tipo de personal': 'TipoPersonal', 'clase': 'TipoPersonal'
   };
-  var PLANTILLA = ['Nombre completo', 'Tipo', 'Tipo de documento', 'Número de documento', 'Teléfono', 'Correo', 'Empresa', 'Cargo', 'Área', 'Estado', 'Vigente hasta', 'Placa', 'Tipo de vehículo', 'Autoriza datos', 'Autoriza foto', 'Observaciones'];
+  var PLANTILLA = ['Nombre completo', 'Tipo', 'Tipo de documento', 'Número de documento', 'Teléfono', 'Correo', 'Empresa', 'Cargo', 'Área', 'Estado', 'Vigente hasta', 'Placa', 'Tipo de vehículo', 'Autoriza datos', 'Autoriza foto', 'Observaciones', 'Clase de personal'];
 
   // =================== ELEMENTOS (exclusivo del Director de Seguridad Integral) ===================
   // El Director registra qué elementos ingresa o retira cada persona registrada. Si salen y deben volver (préstamo,
@@ -926,12 +959,13 @@
   // al leer el QR de la persona, y el regreso también desde "Elementos" en portería. La persona recibe aviso y recordatorios
   // por WhatsApp o correo.
   AP.route('/consola/elementos', function (qs) {
-    if (!guard('admin')) return;
+    if (!guard('ver')) return;
     var E = AP.Elem;
     var tab = qs.t || 'pendientes';
     var content = h('div', { class: 'stack' });
+    var ED = AP.Session.can('editar');
     AP.consolaShell('/consola/elementos', 'Control de elementos', content,
-      h('button', { class: 'btn primary', type: 'button', onclick: function () { editar(null); } }, AP.icon('plus', 18), 'Nuevo registro'));
+      ED ? h('button', { class: 'btn primary', type: 'button', onclick: function () { editar(null); } }, AP.icon('plus', 18), 'Nuevo registro') : AP.pill('Solo consulta', 'muted'));
     var registros = [];
     var MAX_FOTOS = 4;
     var mapa = {};
@@ -1043,7 +1077,7 @@
         ['Recordatorios', function (x) { return x.Recordatorios ? h('div', null, String(x.Recordatorios), h('small', { class: 'block muted' }, 'Último: ' + U.fDateTime(x.UltimoRecordatorio))) : h('small', { class: 'muted' }, 'Ninguno'); }],
         ['Estado', function (x) { return h('div', null, E.pill(x, mapa), x.NotaPorteria ? h('small', { class: 'block muted' }, x.NotaPorteria) : null); }],
         ['', function (x) {
-          return E.regresoActivo(x, mapa) ? h('div', { class: 'row gap nowrap' },
+          return ED && E.regresoActivo(x, mapa) ? h('div', { class: 'row gap nowrap' },
             h('button', { class: 'btn small primary', type: 'button', onclick: function (e) { e.stopPropagation(); avisar(x, 'recordatorio'); } }, AP.icon('bell', 16), 'Recordar'),
             h('button', { class: 'btn small', type: 'button', title: 'Editar fecha de regreso', onclick: function (e) { e.stopPropagation(); editarRegreso(x); } }, AP.icon('edit', 16))) : null;
         }]
@@ -1059,7 +1093,7 @@
             reg && x.Estado === 'Confirmado' ? h('small', { class: 'block' }, 'Regreso: ', E.pill(reg, mapa)) : null);
         }],
         ['', function (x) {
-          return x.Estado !== 'Pendiente' || (x.EsRegreso && !E.regresoActivo(x, mapa)) ? null : h('div', { class: 'row gap nowrap' },
+          return !ED || x.Estado !== 'Pendiente' || (x.EsRegreso && !E.regresoActivo(x, mapa)) ? null : h('div', { class: 'row gap nowrap' },
             x.EsRegreso ? h('button', { class: 'btn small', type: 'button', title: 'Recordar el regreso', onclick: function (e) { e.stopPropagation(); avisar(x, 'recordatorio'); } }, AP.icon('bell', 16))
               : h('button', { class: 'btn small', type: 'button', title: 'Avisar a la persona', onclick: function (e) { e.stopPropagation(); avisar(x, 'aviso'); } }, AP.icon('whatsapp', 16)),
             h('button', { class: 'btn small', type: 'button', title: 'Editar', onclick: function (e) { e.stopPropagation(); editar(x); } }, AP.icon('edit', 16)),
@@ -1415,7 +1449,7 @@
             h('h3', null, 'Elementos (' + elems.length + ')'), E.tabla(elems),
             fotos.length ? h('h3', null, 'Fotografías') : null,
             fotos.length ? E.galeria(fotos) : null,
-            h('div', { class: 'row gap wrap' },
+            !ED ? h('div', { class: 'row gap wrap' }, h('button', { class: 'btn', type: 'button', onclick: function () { close(); } }, 'Cerrar')) : h('div', { class: 'row gap wrap' },
               x.Estado === 'Pendiente' && !x.EsRegreso ? h('button', { class: 'btn', type: 'button', onclick: function () { close(); avisar(x, 'aviso'); } }, AP.icon('whatsapp', 18), 'Avisar a la persona') : null,
               E.regresoActivo(x, mapa) ? h('button', { class: 'btn primary', type: 'button', onclick: function () { close(); avisar(x, 'recordatorio'); } }, AP.icon('bell', 18), 'Recordar el regreso') : null,
               E.regresoActivo(x, mapa) ? h('button', { class: 'btn', type: 'button', onclick: async function () {
@@ -1510,10 +1544,11 @@
   });
 
   AP.plantillaPersonas = async function () {
-    var ejemplo = ['Nombre Apellido Apellido', 'Contratista', 'CC', '1234567890', '3000000000', 'correo@empresa.com', 'Empresa contratista S.A.S.', 'Técnico', 'Mantenimiento', 'Habilitado', '2026-12-31', 'ABC123', 'Camioneta', 'Sí', 'Sí', ''];
+    var ejemplo = ['Nombre Apellido Apellido', 'Contratista', 'CC', '1234567890', '3000000000', 'correo@empresa.com', 'Empresa contratista S.A.S.', 'Técnico', 'Mantenimiento', 'Habilitado', '2026-12-31', 'ABC123', 'Camioneta', 'Sí', 'Sí', '', ''];
     var guia = [
       ['Tipo', AP.CAT.tiposPersona.join(' | ')], ['Tipo de documento', AP.CAT.tiposDoc.join(' | ')], ['Estado', 'Habilitado | Inhabilitado'],
       ['Vigente hasta', 'AAAA-MM-DD (opcional). Contratistas: fecha de la seguridad social verificada.'], ['Autoriza datos / Autoriza foto', 'Sí | No — debe existir el soporte firmado.'],
+      ['Clase de personal', 'Solo personal propio: ' + AP.CAT.tiposPersonal.join(' | ') + '. Los operarios los programa el Jefe de Producción.'],
       ['Regla', 'Si el número de documento ya existe, la fila actualiza a esa persona; si no, se crea con una credencial QR nueva.']
     ];
     if (window.writeXlsxFile) {
@@ -1563,6 +1598,10 @@
                 if (t) o.Tipo = t; else err.push('tipo');
               }
               o.Tipo = o.Tipo || 'Personal propio';
+              if (o.TipoPersonal) {
+                var tp = AP.CAT.tiposPersonal.find(function (x) { return U.fold(x) === U.fold(o.TipoPersonal) || U.fold(x).indexOf(U.fold(o.TipoPersonal)) === 0; });
+                if (tp && o.Tipo === 'Personal propio') o.TipoPersonal = tp; else if (o.Tipo !== 'Personal propio') delete o.TipoPersonal; else err.push('clase de personal');
+              }
               o.TipoDoc = o.TipoDoc || 'CC';
               o.Estado = U.fold(o.Estado) === 'inhabilitado' ? 'Inhabilitado' : 'Habilitado';
               if (o.VigenciaHasta && !/^\d{4}-\d{2}-\d{2}$/.test(o.VigenciaHasta)) {
@@ -1583,7 +1622,7 @@
               h('div', { class: 'row gap wrap' }, AP.pill(nuevos + ' nuevas', 'ok'), AP.pill(act + ' a actualizar', 'brand'), malos.length ? AP.pill(malos.length + ' con errores (se omiten)', 'deny') : null),
               malos.length ? h('div', { class: 'log' }, malos.slice(0, 50).map(function (x) { return h('div', { class: 'txt-deny' }, 'Fila ' + x.n + ': revisar ' + x.err.join(', ')); })) : null,
               simpleTable([['Fila', function (x) { return String(x.n); }], ['Nombre', function (x) { return x.data.Title; }], ['Documento', function (x) { return x.data.NumDoc; }],
-                ['Tipo', function (x) { return x.data.Tipo; }], ['Estado', function (x) { return x.data.Estado; }], ['Acción', function (x) { return x.err.length ? AP.pill('Error', 'deny') : x.existente ? AP.pill('Actualizar', 'brand') : AP.pill('Crear', 'ok'); }]],
+                ['Tipo', function (x) { return x.data.Tipo + (x.data.TipoPersonal ? ' · ' + x.data.TipoPersonal : ''); }], ['Estado', function (x) { return x.data.Estado; }], ['Acción', function (x) { return x.err.length ? AP.pill('Error', 'deny') : x.existente ? AP.pill('Actualizar', 'brand') : AP.pill('Crear', 'ok'); }]],
               filas.slice(0, 200)),
               h('button', { class: 'btn primary', type: 'button', disabled: !(nuevos + act), onclick: importar }, AP.icon('upload', 18), 'Importar ' + (nuevos + act) + ' personas'));
           } catch (e) { prev.replaceChildren(h('div', { class: 'banner deny' }, AP.icon('alert', 18), h('span', null, e.message))); }

@@ -35,7 +35,7 @@
     var dentro = AP.Access.inside();
     var tel = AP.CFG.telefonos || {};
     var tile = function (icon, title, sub, path, cls) {
-      return h('a', { class: 'tile ' + (cls || ''), href: '#' + path }, AP.icon(icon, 28), h('strong', null, title), sub ? h('small', null, sub) : null);
+      return h('a', { class: 'tile ' + (cls || ''), href: '#' + path }, AP.icon(icon, 28), h('strong', null, AP.t(title)), sub ? h('small', null, AP.t(sub)) : null);
     };
     function porLlegarTxt() { var n = AP.Access.visitasPorLlegar().length; return n ? n + ' por llegar' : 'Ninguna por llegar'; }
     function permisosTxt() { var n = AP.permisosDelTurno().vigentes.length; return n ? n + (n === 1 ? ' vigente ahora' : ' vigentes ahora') : 'Ninguno vigente ahora'; }
@@ -80,7 +80,7 @@
     pintarSolIng();
     var content = h('div', { class: 'stack' },
       h('a', { class: 'scan-cta', href: '#/escanear' }, h('span', { class: 'scan-ico' }, AP.icon('qr', 44)),
-        h('span', null, h('strong', null, 'Leer código QR'), h('small', null, 'Ingreso y salida: siempre con lectura del QR'))),
+        h('span', null, h('strong', null, AP.t('Leer código QR')), h('small', null, AP.t('Ingreso y salida: siempre con lectura del QR')))),
       h('div', { class: 'tiles' },
         tile('search', 'Buscar', 'Por documento o nombre', '/buscar'),
         tile('edit', 'Registro manual', 'No anunciado / sin QR / salidas', '/manual'),
@@ -101,12 +101,14 @@
         h('span', null, AP.Session.turno ? 'Turno de: ' : 'Vigilante: ', h('strong', null, user().nombre),
           AP.Session.turno ? ' (' + AP.Session.turno.usuario + ') desde las ' + U.fTime(AP.Session.turno.inicio) : null),
         h('span', null, 'Datos: ' + (AP.Sync.state.lastPull ? U.rel(AP.Sync.state.lastPull) : 'sin descargar')),
+        AP.selectorIdioma(true),
         h('div', { class: 'row gap wrap' },
-          h('button', { class: 'btn small', type: 'button', onclick: function () { AP.Sync.run().then(function () { AP.render(); }); } }, AP.icon('sync', 16), 'Sincronizar'),
-          AP.Session.can('consola') ? h('a', { class: 'btn small', href: '#/consola/panel' }, AP.icon('chart', 16), 'Consola') : null,
-          !AP.Session.can('consola') && AP.Session.can('historial') ? h('a', { class: 'btn small', href: '#/consola/historial' }, AP.icon('history', 16), 'Historial') : null,
-          AP.State.installPrompt ? h('button', { class: 'btn small', type: 'button', onclick: function () { AP.State.installPrompt.prompt(); } }, AP.icon('download', 16), 'Instalar app') : null,
-          h('button', { class: 'btn small', type: 'button', onclick: AP.Views.logout }, AP.icon('logout', 16), AP.Session.turno ? 'Cerrar turno' : 'Salir'))));
+          h('button', { class: 'btn small', type: 'button', onclick: function () { AP.Sync.run().then(function () { AP.render(); }); } }, AP.icon('sync', 16), AP.t('Sincronizar')),
+          AP.Session.can('consola') ? h('a', { class: 'btn small', href: '#/consola/panel' }, AP.icon('chart', 16), AP.t('Consola')) : null,
+          !AP.Session.can('consola') && AP.Session.can('historial') ? h('a', { class: 'btn small', href: '#/consola/historial' }, AP.icon('history', 16), AP.t('Historial')) : null,
+          h('a', { class: 'btn small', href: '#/manual-uso' }, AP.icon('file', 16), AP.t('Manual')),
+          AP.State.installPrompt ? h('button', { class: 'btn small', type: 'button', onclick: function () { AP.State.installPrompt.prompt(); } }, AP.icon('download', 16), AP.t('Instalar app')) : null,
+          h('button', { class: 'btn small', type: 'button', onclick: AP.Views.logout }, AP.icon('logout', 16), AP.Session.turno ? AP.t('Cerrar turno') : AP.t('Salir')))));
     AP.porteriaShell('Control de Acceso', content);
     AP.onLeave(AP.Sync.on(U.debounce(function () {
       var t = document.querySelector('a.tile[href="#/dentro"] small');
@@ -260,6 +262,9 @@
     }
 
     var ult = r.ultimo;
+    var alertaSal = r.alertaSalida && sentido === 'Salida'
+      ? h('div', { class: 'banner warn' }, AP.icon('bell', 20), h('span', null, h('strong', null, 'ALERTA DE SALIDA DEL DIRECTOR. '), String(r.alertaSalida).replace(/[.\s]*$/, '.') + ' Registre la salida normalmente (no retenga a la persona) y avise de inmediato al Director.'))
+      : null;
     var ultimo = ult ? h('p', { class: 'muted small' }, AP.icon('clock', 14), ' Último registro: ', h('strong', null, ult.Sentido), ' ' + U.fDateTime(ult.FechaHora) + ' (' + U.rel(ult.FechaHora) + ')') : null;
 
     // --- Controles ---
@@ -577,6 +582,9 @@
           f.DocumentoCustodia = custodia.querySelector('input').checked;
         }
         if ((esVisita || esManual) && sent === 'Salida') f.CarneDevuelto = devuelto.querySelector('input').checked;
+        if (!esVisita && !esManual && rec.TipoPersonal) f.TipoPersonal = rec.TipoPersonal;
+        var conAlerta = sent === 'Salida' && r.alertaSalida && resultado === 'Permitido';
+        if (conAlerta) f.Novedad = ['Alerta de salida del Director', f.Novedad].filter(Boolean).join(' | ');
         if (mx) Object.assign(f, mx);
         Object.assign(f, ex);
         var mov = await registrar(f);
@@ -584,10 +592,30 @@
         await flash(resultado === 'Permitido', resultado === 'Negado' ? 'INGRESO NEGADO' : sent === 'Ingreso' ? 'INGRESO REGISTRADO' : 'SALIDA REGISTRADA', rec.Title);
         AP.State.result = null;
         if (esVisita && sent === 'Ingreso' && resultado === 'Permitido' && rec.Anfitrion && location.hash.indexOf('#/resultado') === 0) { avisarAnfitrion(mov); return; }
+        if (conAlerta && location.hash.indexOf('#/resultado') === 0) { avisarSalidaDirector(mov); return; }
         if (location.hash.indexOf('#/resultado') === 0) AP.go(vuelta);
       } catch (e) {
         AP.toast('No se pudo guardar: ' + e.message, 'error');
       } finally { saving = false; }
+    }
+
+    // Salida con alerta del Director: la salida ya quedó registrada; el vigilante le avisa por WhatsApp
+    function avisarSalidaDirector(mov) {
+      var texto = 'ALERTA DE SALIDA: ' + rec.Title + ' (' + (rec.NumDoc || '') + ') salió por ' + AP.CFG.porteria + ' a las ' + U.fTime(mov.FechaHora) + '. Registró: ' + user().nombre + '.';
+      AP.modal({
+        title: 'Avise al Director',
+        onClose: function () { if (location.hash.indexOf('#/resultado') === 0) AP.go(vuelta); },
+        body: function (close) {
+          return h('div', { class: 'stack' },
+            h('p', null, 'La salida de ', h('strong', null, rec.Title), ' quedó registrada. El Director pidió ser avisado cuando esta persona salga.'),
+            h('a', { class: 'btn big block primary', href: AP.waLink(AP.WA_DIRECTOR, texto), target: '_blank', rel: 'noopener', onclick: function () {
+              AP.Audit.log('Aviso de salida al Director', rec.Title, 'WhatsApp desde portería (' + AP.CFG.porteria + ')');
+              setTimeout(close, 400);
+            } }, AP.icon('whatsapp', 22), 'Avisar al Director por WhatsApp'),
+            (AP.CFG.telefonos || {}).director ? h('a', { class: 'btn block', href: 'tel:' + AP.CFG.telefonos.director }, AP.icon('phone', 18), 'Llamar al Director') : null,
+            h('button', { class: 'btn block', type: 'button', onclick: function () { close(); } }, 'Continuar'));
+        }
+      });
     }
 
     // Después de registrar el ingreso de un visitante: WhatsApp al anfitrión para que lo reciba y lo acompañe
@@ -610,7 +638,7 @@
       });
     }
 
-    var cont = h('div', { class: 'stack' }, banner, ficha, ultimo, elem.el,
+    var cont = h('div', { class: 'stack' }, banner, alertaSal, ficha, ultimo, elem.el,
       r.invalido ? null : h('div', { class: 'card stack' }, h('h3', null, 'Registro'), sentidoCtl, enVeh, vehBox, visIn, visOut, obs),
       acciones);
     form.appendChild(cont);
@@ -1171,7 +1199,7 @@
     function item(p, k) {
       var per = p.Token ? (AP.Sync.byToken.get(p.Token) || {}).rec : null;
       return h('div', { class: 'list-item static' },
-        h('div', { class: 'vh-hora' }, horaCorta(p.Desde), h('small', { class: 'block muted' }, 'a ' + horaCorta(p.Hasta))),
+        h('div', { class: 'vh-hora' }, horaCorta(p.Desde), h('small', { class: 'block muted' }, AP.CAT.permisosSinFin.indexOf(p.Tipo) >= 0 ? 'en adelante (no regresa)' : 'a ' + horaCorta(p.Hasta))),
         h('div', null, h('strong', null, p.Title),
           h('small', null, [p.NumDoc, per && per.Tipo, per && (per.Cargo || per.Area)].filter(Boolean).join(' · ')),
           h('small', null, h('strong', null, p.Tipo), p.AutorizadoPor ? ' — autoriza ' + p.AutorizadoPor : ''),

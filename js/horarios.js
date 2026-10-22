@@ -31,13 +31,59 @@
     return AP.Sync.horarios.filter(function (x) { return x.Token === token && x.Activo !== false; });
   };
 
+  // ---------- Programación semanal de planta (Jefe de Producción) ----------
+  // Cada semana (lunes a domingo) es un registro con { idPersona: { t: token, d: { 'AAAA-MM-DD': código } } } y la copia de
+  // los turnos usados ({ código: { n: nombre, e: 'HH:MM', s: 'HH:MM' } }). Código 'D' = descanso. Para las fechas de una
+  // semana en la que la persona figura, la programación de planta reemplaza su horario general.
+  function jsonDe(t, def) { try { var v = JSON.parse(t || ''); return v && typeof v === 'object' ? v : def; } catch (e) { return def; } }
+  H.jsonDe = jsonDe;
+  H.lunes = function (ymd) { var d = dow(ymd); return addYmd(ymd, d === 0 ? -6 : 1 - d); };
+  H.addYmd = addYmd;
+  var cachePlanta = { src: null, idx: null };
+  function indicePlanta() {
+    var src = AP.Sync.planta || [];
+    if (cachePlanta.src === src && cachePlanta.idx) return cachePlanta.idx;
+    var idx = {};   // semana → { token → { d, turnos } }
+    src.forEach(function (w) {
+      var datos = jsonDe(w.Datos, {}), turnos = jsonDe(w.Turnos, {}), porTok = {};
+      Object.keys(datos).forEach(function (pid) { var x = datos[pid]; if (x && x.t) porTok[x.t] = { d: x.d || {}, turnos: turnos }; });
+      idx[w.Semana] = porTok;
+    });
+    cachePlanta = { src: src, idx: idx };
+    return idx;
+  }
+  // Asignación de planta de la persona en una fecha: null = la semana no la incluye (rige su horario general);
+  // { cod: '' | 'D' | código, turno } = la semana sí la incluye
+  H.planta = function (token, ymd) {
+    var w = indicePlanta()[H.lunes(ymd)];
+    var x = w && w[token];
+    if (!x) return null;
+    var cod = x.d[ymd] || '';
+    return { cod: cod, turno: cod && cod !== 'D' ? x.turnos[cod] || null : null };
+  };
+  // ¿La persona tiene horario general o programación de planta en los días cercanos?
+  H.tieneHorario = function (token, now) {
+    if (H.deTokenOf(token).length) return true;
+    var hoy = U.ymd(now || new Date());
+    return [-1, 0, 1].some(function (off) { return !!H.planta(token, addYmd(hoy, off)); });
+  };
+
   // Jornadas (instancias con fecha) de la persona en los días cercanos a "now"
   H.instancias = function (token, now) {
     var hs = H.deTokenOf(token), out = [];
-    if (!hs.length) return out;
     var hoy = U.ymd(now);
     [-1, 0, 1].forEach(function (off) {
       var ymd = addYmd(hoy, off), wd = String(dow(ymd));
+      var pl = H.planta(token, ymd);
+      if (pl) {
+        // Programación de planta: un turno ese día, o descanso / sin turno (sin jornada ese día)
+        if (pl.turno && toMin(pl.turno.e) != null && toMin(pl.turno.s) != null) {
+          var a1 = toMin(pl.turno.e), b1 = toMin(pl.turno.s);
+          out.push({ rec: { Turno: pl.turno.n || pl.cod, HoraEntrada: pl.turno.e, HoraSalida: pl.turno.s, Modalidad: 'Turno', Planta: true }, ymd: ymd,
+            start: U.fromLocal(ymd, pl.turno.e), end: U.fromLocal(b1 <= a1 ? addYmd(ymd, 1) : ymd, pl.turno.s) });
+        }
+        return;
+      }
       hs.forEach(function (x) {
         if (x.VigenteDesde && ymd < x.VigenteDesde) return;
         if (x.VigenteHasta && ymd > x.VigenteHasta) return;
@@ -71,15 +117,29 @@
     return best;
   };
 
+  // Ausencia registrada por Talento Humano que cubre la fecha (vacaciones, permiso de día completo, licencia…)
+  H.ausenciaVigente = function (token, now) {
+    var t = now.getTime();
+    return (AP.Sync.ausencias || []).filter(function (a) {
+      return a.Token === token && a.Estado !== 'Anulada' && new Date(a.Desde).getTime() <= t && t <= new Date(a.Hasta).getTime();
+    }).sort(function (a, b) { return a.Hasta < b.Hasta ? 1 : -1; })[0] || null;
+  };
+
   // Permisos vigentes del instante, de los tipos indicados
   H.permisosVigentes = function (token, now, tipos) {
     var t = now.getTime();
     return AP.Sync.permisos.filter(function (p) {
       return p.Token === token && p.Estado !== 'Anulado' && (!tipos || tipos.indexOf(p.Tipo) >= 0) &&
-        new Date(p.Desde).getTime() <= t && t <= new Date(p.Hasta).getTime();
+        new Date(p.Desde).getTime() <= t && t <= H.finPermiso(p).getTime();
     }).sort(function (a, b) { return a.Hasta < b.Hasta ? 1 : -1; });
   };
+  // Fin de vigencia de un permiso. La salida anticipada no lleva hora final (la persona no regresa): vale hasta el fin del día.
+  H.finPermiso = function (p) {
+    if (p.Hasta) return new Date(p.Hasta);
+    return U.fromLocal(U.ymd(new Date(p.Desde)), '23:59');
+  };
   var TIPOS_ENTRADA = ['Ingreso tardío', 'Ingreso y salida fuera de horario'];
+  H.TIPOS_ENTRADA = TIPOS_ENTRADA;
   var TIPOS_SALIDA = ['Salida anticipada', 'Salida temporal (cita o diligencia)', 'Ingreso y salida fuera de horario'];
 
   function hm(d) { return U.fTime(d); }
@@ -92,7 +152,15 @@
   // ult = último movimiento permitido de la persona.
   H.evaluarIngreso = function (p, now, ult) {
     var token = p.Token, c = cfg();
-    if (!H.deTokenOf(token).length) return null;
+    // Ausencia registrada por Talento Humano: el vigilante no autoriza; decide el Director (salvo permiso de ingreso vigente).
+    // Al vigilante no se le muestra la clase de ausencia (minimización de datos).
+    var aus = H.ausenciaVigente(token, now);
+    if (aus && !H.permisosVigentes(token, now, TIPOS_ENTRADA).length) {
+      return { nivel: 'deny', sinExcepcion: true, aprobacionDirector: true, tipoSolicitud: 'Ausencia registrada', novedad: 'Ingreso durante ausencia registrada por Talento Humano',
+        etiqueta: 'AUSENCIA REGISTRADA — REQUIERE APROBACIÓN DEL DIRECTOR',
+        detalle: 'Talento Humano registró una ausencia de esta persona hasta el ' + U.fDate(aus.Hasta) + '. El vigilante no puede autorizar el ingreso: envíe la solicitud al Director de Seguridad Integral.', horarioInfo: '' };
+    }
+    if (!H.tieneHorario(token, now)) return null;
     var j = H.jornada(token, now);
     var perm = H.permisosVigentes(token, now, TIPOS_ENTRADA)[0];
     var info = j ? descJornada(j) : '';
@@ -161,11 +229,11 @@
   H.evaluarSalida = function (p, now) {
     var token = p.Token, c = cfg();
     var hs = H.deTokenOf(token);
-    if (!hs.length) return null;
+    if (!H.tieneHorario(token, now)) return null;
     var j = H.jornada(token, now, { salida: true });
     var info = j ? descJornada(j) : '';
     // Acceso libre: la salida nunca se marca como no autorizada (sale y vuelve las veces que necesite)
-    if ((j && esLibre(j.rec)) || hs.every(esLibre)) {
+    if ((j && esLibre(j.rec)) || (hs.length && hs.every(esLibre) && !(j && j.rec.Planta))) {
       return { nivel: 'ok', etiqueta: 'SALIDA — ACCESO LIBRE', detalle: 'Puede salir y volver a ingresar dentro de su horario de acceso' + (info ? ' (' + info + ')' : '') + '.', horarioInfo: info };
     }
     if (j && now.getTime() >= j.end.getTime() - c.minutosSalidaAntesDeFin * 60000) {
@@ -173,7 +241,10 @@
     }
     var perm = H.permisosVigentes(token, now, TIPOS_SALIDA)[0];
     if (perm) {
-      return { nivel: 'ok', etiqueta: 'SALIDA AUTORIZADA — ' + perm.Tipo.toUpperCase(), detalle: 'Permiso vigente hasta las ' + hm(perm.Hasta) + (perm.Tipo.indexOf('temporal') > 0 ? '; debe reingresar leyendo su QR.' : '.'), permisoId: perm.id || perm.IdLocal, horarioInfo: info };
+      var detS = perm.Tipo === 'Salida anticipada'
+        ? 'Salida anticipada autorizada desde las ' + hm(perm.Desde) + (perm.AutorizadoPor ? ' (autoriza ' + perm.AutorizadoPor + ')' : '') + '. No regresa en esta jornada.'
+        : 'Permiso vigente hasta las ' + hm(H.finPermiso(perm)) + (perm.Tipo.indexOf('temporal') > 0 ? '; debe reingresar leyendo su QR.' : '.');
+      return { nivel: 'ok', etiqueta: 'SALIDA AUTORIZADA — ' + perm.Tipo.toUpperCase(), detalle: detS, permisoId: perm.id || perm.IdLocal, horarioInfo: info };
     }
     return { nivel: 'deny', salidaNoAutorizada: true, novedad: 'Salida no autorizada', etiqueta: 'SALIDA NO AUTORIZADA',
       detalle: (j ? 'Su jornada termina a las ' + hm(j.end) + ' (' + info + '). ' : 'No tiene jornada programada hoy. ') + 'No tiene permiso de salida registrado.', horarioInfo: info };

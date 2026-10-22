@@ -113,6 +113,8 @@
     var t = AP.Session.turno;
     if (!t) { AP.render(); return; }
     var r = AP.Pin.resumenTurno(t);
+    // Rondero: el cierre muestra y deja constancia del cumplimiento de la ronda del turno
+    var ronda = AP.Session.can('rondas') && !AP.Session.can('porteria') && AP.Rondas && AP.Rondas.resumenTurno ? await AP.Rondas.resumenTurno(t) : null;
     var ok = await new Promise(function (res) {
       AP.modal({
         title: 'Cerrar turno',
@@ -121,13 +123,15 @@
           h('div', { class: 'kv' }, h('span', null, 'Usuario'), h('strong', null, t.nombre + ' (' + t.usuario + ')')),
           h('div', { class: 'kv' }, h('span', null, 'Inicio'), h('strong', null, U.fDateTime(t.inicio) + ' · ' + U.duracion(t.inicio))),
           h('div', { class: 'kv' }, h('span', null, 'Registros del turno'), h('strong', null, String(r.registros))),
+          ronda ? h('div', { class: 'kv' }, h('span', null, 'Cumplimiento de la ronda'), h('strong', { class: ronda.c.tot.pct >= 100 ? 'txt-ok' : 'txt-warn' }, ronda.c.tot.pct + ' % (' + ronda.c.tot.ok + ' de ' + ronda.c.tot.req + ' revistas)')) : null,
+          ronda && ronda.c.tot.pct < 100 ? h('p', { class: 'note small' }, 'Puntos incompletos: ' + ronda.c.filas.filter(function (f) { return !f.completo; }).map(function (f) { return f.p.Title + ' (' + f.ok + '/' + f.meta.veces + ')'; }).join(', ') + '.') : null,
           r.pendientes ? h('p', { class: 'banner warn' }, AP.icon('sync', 18), h('span', null, r.pendientes + ' registro(s) aún no se han enviado. Conéctese a internet antes de cerrar; si no es posible, quedan guardados en este celular y se enviarán cuando vuelva a ingresar. No borre los datos del navegador.')) : null,
           h('p', { class: 'muted' }, 'Al cerrar el turno también se cierra su sesión en este celular.')),
         actions: [{ label: 'Cancelar', value: false }, { label: 'Cerrar turno y salir', kind: 'primary', icon: 'logout', value: true }]
       });
     });
     if (!ok) return;
-    await AP.Pin.cerrarTurno('Fin de turno');
+    await AP.Pin.cerrarTurno('Fin de turno', ronda ? ronda.texto : undefined);
     AP.mount(AP.spinner('Enviando registros…'), 'is-login');
     await Promise.race([AP.Sync.run({ skipPull: true }), U.sleep(8000)]);
     var quedan = AP.Sync.pendingCount();

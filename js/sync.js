@@ -8,6 +8,8 @@
   var listeners = [];
   var Sync = (AP.Sync = {
     personas: [], visitas: [], movs: [], vigilantes: [], horarios: [], permisos: [], solicitudes: [], puntos: [], elementos: [], outbox: [],
+    // v1.0.0: programación semanal de planta, turnos de planta y ausencias registradas por Talento Humano
+    planta: [], turnosPlanta: [], ausencias: [],
     byToken: new Map(),
     state: { online: navigator.onLine, syncing: false, lastPull: null, lastPush: null, lastError: null, authProblem: false, skew: null, pullErrors: {} },
     on: function (fn) { listeners.push(fn); return function () { listeners = listeners.filter(function (f) { return f !== fn; }); }; },
@@ -24,6 +26,9 @@
       Sync.solicitudes = (await S.get('c:solicitudes')) || [];
       Sync.puntos = (await S.get('c:puntos')) || [];
       Sync.elementos = (await S.get('c:elementos')) || [];
+      Sync.planta = (await S.get('c:planta')) || [];
+      Sync.turnosPlanta = (await S.get('c:turnosPlanta')) || [];
+      Sync.ausencias = (await S.get('c:ausencias')) || [];
       var meta = (await S.get('c:meta')) || {};
       Sync.state.lastPull = meta.lastPull || null;
       Sync.state.lastPush = meta.lastPush || null;
@@ -254,6 +259,18 @@
         }
         return;
       }
+      // Jefe de Producción y Talento Humano: no descargan personas, visitas ni movimientos al celular; sus pantallas
+      // consultan en línea solo la parte que les corresponde (operarios o personal propio). Aquí solo se verifica su usuario.
+      if (AP.Session.soloModulo && AP.Session.soloModulo()) {
+        try {
+          var yo2 = await B.miPerfil();
+          Sync.vigilantes = [yo2].filter(Boolean); await S.set('c:vigilantes', Sync.vigilantes);
+          Sync.state.lastPull = new Date().toISOString();
+          Sync.state.pullErrors = {};
+          await Sync.saveMeta();
+        } catch (e) { if (e.offline || e.authRequired) throw e; Sync.state.pullErrors = { perfil: e.message }; }
+        return;
+      }
       // Personas: primero sin fotos; luego solo las fotos que cambiaron.
       try {
         var lista = await B.listAll('AP_Personas', { exclude: ['Foto'] });
@@ -313,6 +330,18 @@
         await S.set('c:elementos', el);
       } catch (e) { if (e.offline || e.authRequired) throw e; console.warn('[AP] Elementos:', e.message); }
 
+      // Programación semanal de planta (semanas recientes y próximas), turnos de planta y ausencias vigentes o próximas:
+      // la portería aplica con ellas las reglas de puntualidad y de ausencia sin conexión (si fallan, no se detiene lo demás)
+      try {
+        var r3 = await Promise.all([
+          B.listRange('AP_ProgPlanta', 'Desde', U.addDays(new Date(), -15), null),
+          B.listAll('AP_TurnosPlanta'),
+          B.listRange('AP_Ausencias', 'Hasta', U.addDays(new Date(), -1), null)
+        ]);
+        Sync.planta = r3[0]; Sync.turnosPlanta = r3[1]; Sync.ausencias = r3[2];
+        await S.set('c:planta', Sync.planta); await S.set('c:turnosPlanta', Sync.turnosPlanta); await S.set('c:ausencias', Sync.ausencias);
+      } catch (e) { if (e.offline || e.authRequired) throw e; console.warn('[AP] Planta y ausencias:', e.message); }
+
       Sync.reindex();
       Sync.state.pullErrors = errs;
       // Solo se considera "actualizado" si llegaron personas y visitas (base de las decisiones de acceso).
@@ -329,9 +358,10 @@
     // Borra la copia local de datos (no los registros pendientes de envío)
     limpiarLocal: async function () {
       var S = AP.Store;
-      var keys = ['c:personas', 'c:visitas', 'c:movs', 'c:vigilantes', 'c:horarios', 'c:permisos', 'c:solicitudes', 'c:puntos', 'c:elementos', 'c:meta'];
+      var keys = ['c:personas', 'c:visitas', 'c:movs', 'c:vigilantes', 'c:horarios', 'c:permisos', 'c:solicitudes', 'c:puntos', 'c:elementos', 'c:planta', 'c:turnosPlanta', 'c:ausencias', 'th:movs', 'c:meta'];
       for (var i = 0; i < keys.length; i++) await S.del(keys[i]);
       Sync.personas = []; Sync.visitas = []; Sync.movs = []; Sync.vigilantes = []; Sync.horarios = []; Sync.permisos = []; Sync.solicitudes = []; Sync.puntos = []; Sync.elementos = [];
+      Sync.planta = []; Sync.turnosPlanta = []; Sync.ausencias = [];
       Sync.state.lastPull = null; Sync.state.pullErrors = {};
       Sync.reindex();
     },
@@ -410,6 +440,9 @@
         r.nivel = 'ok'; r.etiqueta = 'HABILITADO'; r.detalle = p.VigenciaHasta ? 'Vigente hasta el ' + p.VigenciaHasta : '';
       }
       r.categoria = p.Tipo || 'Personal propio';
+      // Alerta de salida: el Director pidió saber cuándo sale esta persona. La salida NUNCA se impide (arts. 24 y 28 C.P.):
+      // se registra normalmente y el vigilante avisa al Director.
+      if (salida && p.AlertaSalida) r.alertaSalida = p.MotivoAlertaSalida || 'El Director de Seguridad Integral pidió ser avisado cuando esta persona salga.';
       // Horario y permisos
       if (AP.Horario && p.Estado === 'Habilitado') {
         var s = salida ? AP.Horario.evaluarSalida(p, now) : AP.Horario.evaluarIngreso(p, now, r.ultimo);
