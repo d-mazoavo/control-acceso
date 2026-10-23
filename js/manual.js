@@ -11,7 +11,7 @@
   AP.MANUAL = {
     titulo: 'Instructivo de uso de la aplicación Control de Acceso',
     codigo: 'Por asignar (Dirección de Calidad)',
-    version: '01',
+    version: '02',
     fecha: '2026-10-22',
     appVersion: '1.0.0',
     secciones: [
@@ -30,8 +30,11 @@
           ['Solicitud de ingreso', 'Caso que el vigilante no puede autorizar (llegada tardía desde {pendiente} minutos, fuera de turno, contratista en día no programado, ausencia registrada por Talento Humano). Decide el Director desde la consola.'],
           ['Permiso', 'Autorización registrada para ingresar tarde, salir antes, salir temporalmente o entrar y salir fuera de horario.'],
           ['Ausencia', 'Vacaciones, permiso de día completo, licencia u otra ausencia registrada por Talento Humano.'],
-          ['Turno de planta', 'Plantilla de horario (código, hora de entrada y de salida) con la que el Jefe de Producción programa a los operarios.'],
-          ['Clase de personal', 'Clasificación del personal propio (operario, administrativo, calidad, mantenimiento, logística, seguridad u otro). El Jefe de Producción solo ve y programa a los operarios.'],
+          ['Turno de planta', 'Turno con código, hora de entrada y hora de salida con el que el Jefe de Producción programa a su personal a cargo.'],
+          ['Jefe inmediato', 'Persona registrada (del personal propio) que figura como superior en la ficha de cada persona. El Jefe de Producción ve, consulta y programa solo a quienes lo tienen como jefe inmediato.'],
+          ['Empresa (persona jurídica)', 'Empresa registrada por el Director con nombre o razón social, NIT y logo. Toda persona natural se vincula a una empresa ya creada.'],
+          ['Cargo', 'Cargo del catálogo que administra el Director. Al asignarlo a una persona propone su área y su clase de personal.'],
+          ['Clase de personal', 'Clasificación del personal propio (operario, personal operativo, administrativo, calidad, mantenimiento, logística, seguridad u otro). Talento Humano ve en planta, por defecto, a los operarios y al personal operativo.'],
           ['Alerta de salida', 'Marca que el Director pone a una persona para ser avisado cuando salga. No impide la salida.'],
           ['Revista', 'Paso del rondero por un punto de control, registrado con la lectura del QR del punto.'],
           ['Huella SHA-256', 'Código que identifica un archivo o registro: si el contenido cambia, la huella cambia. Permite demostrar que una exportación no fue alterada.']
@@ -51,11 +54,11 @@
       ] },
       { id: 'perfiles', titulo: 'Perfiles de usuario y permisos', roles: ['todos'], bloques: [
         { tabla: { cab: ['Perfil', 'Qué puede hacer', 'Qué no puede hacer'], filas: [
-          ['Administrador (Director de Seguridad Integral)', 'Todo: crea, modifica y borra en la consola; aprueba visitas y solicitudes de ingreso; habilita e inhabilita personas; programa horarios y permisos; administra usuarios, rondas, programación de planta y ausencias; consulta estadísticas; opera la portería.', '—'],
+          ['Administrador (Director de Seguridad Integral)', 'Todo: crea, modifica y borra en la consola; administra empresas, cargos y usuarios (único perfil que ve «Usuarios»); aprueba visitas y solicitudes de ingreso; habilita e inhabilita personas; programa horarios y permisos; administra rondas, programación de planta y ausencias; consulta estadísticas; opera la portería.', '—'],
           ['Analista', 'Consulta y descarga: panel, personas, visitas, ingresos y salidas, inspecciones.', 'Crear, aprobar, modificar o borrar. Operar la portería.'],
-          ['Gobierno Corporativo', 'Consulta y descarga toda la información, incluidas estadísticas, usuarios, bitácora, planta y Talento Humano.', 'Crear, aprobar, modificar o borrar.'],
-          ['Jefe de Producción', 'Crea los turnos de planta, programa por semana a los operarios, registra y anula permisos de operarios y consulta su estado en planta.', 'Ver visitantes, contratistas u otro personal. Borrar cualquier registro. Decidir solicitudes de ingreso.'],
-          ['Talento Humano', 'Registra y anula ausencias del personal propio; consulta su estado en planta y las horas entre la entrada y la salida.', 'Ver visitantes o contratistas. Borrar registros. Modificar la programación.'],
+          ['Gobierno Corporativo', 'Consulta y descarga la información, incluidas estadísticas, bitácora, planta y Talento Humano.', 'Crear, aprobar, modificar o borrar. Ver el ítem «Usuarios».'],
+          ['Jefe de Producción', 'Ve, consulta y filtra al personal que lo tiene como jefe inmediato; crea turnos con horario, asigna personas a los turnos, programa la semana, registra y anula permisos de su personal, consulta su estado en planta y sus estadísticas, y descarga la programación por turnos.', 'Ver visitantes, contratistas o personal de otros jefes. Modificar los datos de las personas. Borrar cualquier registro. Decidir solicitudes de ingreso.'],
+          ['Talento Humano', 'Consulta el personal propio y la ficha de cada persona; registra y anula permisos y ausencias (vacaciones, licencias); ve el estado en planta de los operarios y del personal operativo, la programación de los Jefes de Producción, las horas según portería y las estadísticas del personal.', 'Modificar los datos de las personas. Ver visitantes o contratistas. Borrar registros. Modificar la programación.'],
           ['Supervisor y Vigilante', 'Operan la portería por turnos: leen QR, registran ingresos y salidas, inspecciones, elementos, solicitudes al Director. El supervisor consulta además el historial.', 'Modificar o borrar registros. Autorizar lo que corresponde al Director.'],
           ['Rondero', 'Marca los puntos de control de la ronda y reporta novedades con fotografía; ve su avance y su cumplimiento.', 'Ver personas, visitas o movimientos.']
         ] } },
@@ -67,6 +70,7 @@
           'Escriba su usuario y su contraseña o PIN. Nadie usa correo para ingresar.',
           'La primera vez, o después de un restablecimiento, la aplicación exige cambiar la clave temporal (vence a las {horasPin} horas). Vigilantes, supervisores y ronderos usan un PIN de 6 a 8 dígitos; los demás perfiles, una contraseña de al menos 10 caracteres con letras y números.',
           'Vigilantes, supervisores y ronderos abren su turno al ingresar y lo cierran con «Cerrar turno»: sus registros quedan a su nombre.',
+          'Si el Director le cambia el perfil (por ejemplo, de vigilante a rondero), el celular cierra el turno y la sesión en su siguiente actualización; al volver a ingresar verá el panel y las actividades del nuevo perfil.',
           'Para ver el menú en inglés, use el selector ES / EN (en la consola, abajo en el menú lateral; en el celular, al pie de la pantalla de inicio). La elección queda guardada en ese equipo. Los registros, documentos y mensajes siguen en español.'
         ] },
         { nota: 'La contraseña o el PIN son personales e intransferibles. Quien los preste responde por los registros hechos a su nombre.' }
@@ -96,13 +100,14 @@
         { h: 'Visitantes, autoridades y registro manual' },
         { ul: [
           'Visitante con QR: confirme que autorizó el tratamiento de datos y que recibió la inducción; registre el ingreso y avise a su anfitrión con el botón de WhatsApp. El QR solo vale en el lapso aprobado por el Director.',
-          'Visitante no anunciado: en «Registro manual» diligencie la solicitud; el Director la aprueba o la rechaza y, si aprueba, se le envía el QR.',
+          'Visitante no anunciado: en «Registro manual» diligencie la solicitud; el Director la aprueba o la rechaza y, si aprueba, se le envía el QR. Si el documento corresponde a una persona registrada (personal propio, contratista o conductor), la aplicación no la tramita como visitante: debe ingresar con su propia credencial.',
           'Autoridades: «Autoridad» registra la visita con entidad, motivo y documento; el Director diligencia luego el formato de visita de autoridad.',
           'Persona sin carné o QR ilegible: búsquela por documento o use el registro manual; queda como ingreso por excepción con quién autorizó y por qué.'
         ] },
         { h: 'Otras opciones de la portería' },
         { ul: [
-          '«Visitas de hoy», «Permisos» y «Elementos» muestran lo previsto para el turno (solo consulta).',
+          '«Visitas de hoy», «Permisos» y «Elementos» muestran lo previsto para el turno (solo consulta). En «Visitas de hoy» el visitante desaparece de la lista al registrar su ingreso, porque ya está dentro.',
+          'Todas las listas tienen un filtro de texto: escriba parte del nombre, documento, empresa u otro dato para ver solo lo que coincide.',
           '«Vehículo de carga»: inspección de 17 puntos más contaminación agrícola, precintos (verificación VVTT) y fotografías con su huella.',
           '«Personas dentro» muestra quién está en las instalaciones.',
           '«Mi turno» muestra los registros del celular y lo pendiente por enviar; desde allí se cierra el turno.'
@@ -120,15 +125,24 @@
         { nota: 'Cada punto tiene una meta fijada por el Director: cuántas revistas por turno y el tiempo mínimo entre una y otra. Una revista hecha antes de ese tiempo queda registrada, pero NO cuenta para el cumplimiento; la aplicación lo avisa en el momento.' }
       ] },
       { id: 'consola-director', titulo: 'Consola del Director de Seguridad Integral', roles: ['Administrador'], bloques: [
+        { h: 'Empresas y cargos' },
+        { ul: [
+          '«Empresas»: registre cada persona jurídica (la empresa propia, los contratistas, las transportadoras) con su nombre o razón social, NIT y logo. No se admite un NIT repetido. Una empresa con personas vinculadas no se borra: se inactiva.',
+          '«Cargos»: catálogo de cargos con su área y su clase de personal.',
+          'Para las personas registradas antes de esta versión, abra la empresa o el cargo y use «Vincular personas con este nombre» (o «con este cargo escrito»): las personas que lo tenían escrito quedan vinculadas.'
+        ] },
         { h: 'Personas' },
         { ul: [
-          'Registre a cada persona con su tipo (personal propio, personal de finca, contratista, conductor) y, si es personal propio, su clase de personal. El Jefe de Producción solo ve a quienes tengan la clase «Operario».',
+          'Registre a cada persona con su tipo (personal propio, personal de finca, contratista, conductor), su empresa (obligatoria, de la lista de Empresas), su cargo (de la lista de Cargos) y, si es personal propio, su clase de personal y su jefe inmediato.',
+          'El jefe inmediato se busca entre el personal propio habilitado. El Jefe de Producción ve y programa solo a quienes lo tienen como jefe inmediato; cámbielo en la ficha cuando la persona cambie de jefe.',
+          'La carga masiva por Excel incluye «NIT empresa», «Cargo» y «Documento jefe inmediato»: la empresa y el cargo deben existir; el jefe debe estar registrado o venir en el mismo archivo.',
           '«Inhabilitar» impide el ingreso de inmediato (con motivo, que ve el vigilante). La campana activa la «alerta de salida»: no impide la salida, pero el vigilante le avisa y la consola le muestra el aviso.',
           'Credenciales: imprimir carné, descargar la imagen, enviar por WhatsApp o correo, o regenerar (la anterior deja de funcionar). Carga masiva por Excel con la plantilla.'
         ] },
         { h: 'Visitas y solicitudes de ingreso' },
         { ul: [
-          'Visitas: prerregistro, aprobación o rechazo con justificación, envío del QR, aviso al anfitrión y libro de ingresos y salidas de visitantes.',
+          'Visitas: prerregistro, aprobación o rechazo con justificación, envío del QR, aviso al anfitrión y libro de ingresos y salidas de visitantes. La pestaña «Hoy» muestra por defecto las visitas por llegar; al ingresar el visitante sale de esa lista (filtre «Dentro» o «Ya salieron» para verlas).',
+          'Si registra una visita para una persona que ya tiene autorizado el ingreso ese día y a esa hora (ingreso libre, turno, permiso o acceso sin horario), la aplicación lo informa y no registra la visita: la persona entra con su credencial.',
           'Solicitudes de ingreso: aprobar (se crea un permiso de corta duración) o rechazar, con justificación sin datos de salud.'
         ] },
         { h: 'Horarios, permisos y novedades' },
@@ -140,50 +154,60 @@
         { h: 'Elementos, usuarios, rondas y programación' },
         { ul: [
           'Elementos: registre lo que sale, ingresa o debe regresar; el vigilante lo verifica al leer el QR de la persona.',
-          'Usuarios: alta con PIN temporal (se muestra una sola vez), restablecimiento, baja y cierre de turnos abiertos.',
+          'Usuarios (solo el Director lo ve): para crear un usuario, busque a la persona ya registrada en Personas y asígnele el perfil y el usuario; su nombre, documento, empresa y cargo salen de la ficha. Alta con PIN temporal (se muestra una sola vez), restablecimiento, baja y cierre de turnos abiertos. Los usuarios anteriores se vinculan con «Editar datos». Al cambiar el perfil de un usuario con turno abierto, su celular cierra el turno y le pide ingresar de nuevo.',
           'Rondas: puntos de control con su QR y su meta (revistas por turno y tiempo mínimo entre revistas), marcaciones y cumplimiento por turno.',
           'Programación: programación mensual del servicio de vigilancia que remite el contratista, para verificar el cubrimiento.',
           'Instalación: estado de la conexión y verificación de los índices de la base de datos que necesitan las consultas del Jefe de Producción y de Talento Humano.'
         ] }
       ] },
-      { id: 'planta', titulo: 'Programación de planta (Jefe de Producción)', roles: ['Jefe de Producción', 'Administrador', 'Gobierno Corporativo'], bloques: [
-        { h: 'Turnos de planta' },
-        { p: 'En la pestaña «Turnos de planta» cree las plantillas de turno con un código de 1 a 3 caracteres (por ejemplo, T1 06:00–14:00, T2 14:00–22:00, T3 22:00–06:00). Si la hora de salida es menor que la de entrada, el turno termina al día siguiente. Un turno no se borra: se marca inactivo.' },
+      { id: 'planta', titulo: 'Personal a cargo y programación de planta (Jefe de Producción)', roles: ['Jefe de Producción', 'Administrador', 'Gobierno Corporativo'], bloques: [
+        { p: 'El Jefe de Producción ve únicamente a las personas que lo tienen como jefe inmediato en su ficha. Su usuario debe estar vinculado a su propia ficha en Personas (lo hace el Director en Usuarios). El Director y Gobierno Corporativo eligen arriba el grupo de cada jefe.' },
+        { h: 'Mi personal' },
+        { p: 'Muestra a cada persona a cargo con su turno de hoy y su estado según la portería (en planta, fuera, no ha llegado, ya salió, con ausencia), con filtros por área, cargo, estado y texto, y descarga en Excel. «Ficha» abre los datos de la persona (solo consulta), su programación de los próximos 7 días, sus permisos y sus ausencias.' },
+        { h: 'Turnos y asignación' },
+        { p: 'Cree los turnos con un código de 1 a 3 caracteres y su hora de entrada y de salida (por ejemplo, T1 06:00–14:00, T2 14:00–22:00, T3 22:00–06:00). Si la hora de salida es menor que la de entrada, el turno termina al día siguiente. Un turno no se borra: se marca inactivo. Con «Asignar turno a personas» (o «Asignar personas» en cada turno) elija el turno, el rango de fechas, los días de la semana y las personas: la programación de cada semana se guarda sola y queda en el registro de cambios.' },
         { h: 'Programación semanal' },
         { ol: [
           'En «Programación semanal» elija la semana con las flechas o la fecha.',
-          'Elija el turno en el «Pincel» y haga clic (o arrastre) sobre los días de cada operario. «D» es descanso y «Quitar» deja el día sin turno.',
-          'Use «Aplicar patrón» para asignar un turno por día de la semana a varios operarios, o «Copiar semana anterior».',
+          'Elija el turno en el «Pincel» y haga clic (o arrastre) sobre los días de cada persona. «D» es descanso y «Quitar» deja el día sin turno.',
+          'Use «Aplicar patrón» para asignar un turno por día de la semana a varias personas, o «Copiar semana anterior».',
           'Revise la columna de horas: en rojo, quienes superan {maxSemanal} horas programadas en la semana (jornada máxima ordinaria de referencia).',
           'Oprima «Guardar semana». Si cambia un día que ya empezó (hoy o anteriores), la aplicación exige el motivo.'
         ] },
         { ul: [
           'La portería aplica a esta programación las mismas reglas de puntualidad de la sección de portería.',
           'Las celdas rayadas indican una ausencia registrada por Talento Humano.',
-          'Si otra persona guarda la misma semana mientras usted la edita, la aplicación no sobrescribe: le pide recargar.'
+          'Si otra persona guarda la misma semana mientras usted la edita, la aplicación no sobrescribe: le pide recargar.',
+          '«Excel por turnos» descarga, para el periodo que elija (hasta 92 días), una hoja por turno con quién está en cada turno día por día, una hoja de descansos y un resumen.'
         ] },
-        { h: 'Permisos de operarios' },
-        { p: 'Registre permisos de ingreso tardío, salida anticipada (sin hora final), salida temporal o ingreso y salida fuera de horario. Por defecto usted figura como quien autoriza. Un permiso no se borra: se anula con motivo.' },
-        { h: 'Estado del personal y registro de cambios' },
+        { h: 'Permisos del personal' },
+        { p: 'Registre permisos de ingreso tardío, salida anticipada (sin hora final), salida temporal o ingreso y salida fuera de horario para su personal. Por defecto usted figura como quien autoriza. Un permiso no se borra: se anula con motivo.' },
+        { h: 'Estadísticas y registro de cambios' },
         { ul: [
-          '«Estado del personal» muestra, según la portería, quién está en planta, quién no ha llegado a su turno, quién salió y quién tiene ausencia.',
+          '«Estadísticas» muestra, para el periodo elegido, la asistencia a los turnos programados (por turno, por día y por persona), las llegadas tarde, los días de ausencia, los permisos y las horas en planta según portería, con descarga en Excel.',
           '«Registro de cambios» conserva cada cambio de programación, turnos, permisos y ausencias, con el usuario verificado por el servidor, la hora y el motivo. Nadie puede modificarlo ni borrarlo.'
         ] },
         { nota: 'El Director de Seguridad Integral está por encima de esta programación: puede modificarla e inhabilitar el ingreso de cualquier persona. Las llegadas tarde desde {pendiente} minutos las decide el Director.' }
       ] },
       { id: 'th', titulo: 'Talento Humano', roles: ['Talento Humano', 'Administrador', 'Gobierno Corporativo'], bloques: [
-        { h: 'Ausencias' },
+        { h: 'Personal' },
+        { p: 'Lista el personal propio de Avo Pak con filtros por clase, área, cargo, jefe inmediato y estado. «Ficha» muestra los datos de la persona (solo consulta), su programación de la semana, sus permisos y sus ausencias. Talento Humano no modifica los datos de las personas: los registra y corrige el Director de Seguridad Integral.' },
+        { h: 'Permisos' },
+        { p: 'Registre permisos por horas del personal propio (ingreso tardío, salida anticipada, salida temporal, ingreso y salida fuera de horario). La portería los aplica al leer el QR. Un permiso no se borra: se anula con motivo.' },
+        { h: 'Vacaciones y ausencias' },
         { ol: [
-          'En «Ausencias» oprima «Registrar ausencia», busque a la persona y elija el tipo.',
+          'En «Vacaciones y ausencias» oprima «Registrar ausencia», busque a la persona y elija el tipo.',
           'Indique desde y hasta (inclusive). Si se cruza con otra ausencia, la aplicación lo advierte.',
           'En «Detalle» escriba, si quiere, una referencia interna. No escriba diagnósticos ni datos de salud.',
           'Para cancelarla, use «Anular» con el motivo. Las ausencias no se borran.'
         ] },
         { nota: 'Incapacidades, licencias de maternidad o paternidad y demás asuntos de salud se registran como «Ausencia justificada (reservada)», sin la causa: los datos de salud son sensibles (artículo 5 de la Ley 1581 de 2012) y su soporte se conserva en Talento Humano.' },
-        { p: 'Mientras la ausencia esté vigente, la portería no deja ingresar a la persona sin aprobación del Director de Seguridad Integral.' },
-        { h: 'Estado del personal' },
-        { p: 'Muestra en el momento quién está en planta, quién no ha llegado a su turno, quién salió, quién está programado más tarde y quién tiene ausencia, con filtros por clase de personal, área y estado, y descarga en Excel.' },
-        { h: 'Horas en planta' },
+        { p: 'Mientras la ausencia esté vigente (por ejemplo, en vacaciones) no se permite el ingreso: si la persona llega, el vigilante envía la solicitud al Director de Seguridad Integral, que verifica y aprueba o rechaza.' },
+        { h: 'Estado en planta' },
+        { p: 'Muestra, por defecto, a los operarios y al personal operativo: quién está en planta (adentro) y quién está fuera según los registros de portería, quién no ha llegado a su turno, quién salió, quién está programado más tarde y quién tiene ausencia, con filtros y descarga en Excel.' },
+        { h: 'Programación de turnos' },
+        { p: 'Consulta, sin modificarla, la programación semanal que hace cada Jefe de Producción con su personal; permite descargar el Excel por turnos.' },
+        { h: 'Horas según portería' },
         { ol: [
           'Elija el periodo (semana, quincena, mes o rango) y oprima «Calcular».',
           'Filtre por clase de personal, área o persona. Haga clic en una persona para ver el detalle por día.',
@@ -193,11 +217,13 @@
           'Las horas son el tiempo entre la entrada y la salida registradas en portería, divididas en diurnas ({diurno} a {nocturno}), nocturnas ({nocturno} a {diurno}) y en domingo o festivo de Colombia.',
           'No descuentan pausas ni califican horas extra o recargos: Talento Humano las valida antes de liquidar la nómina.',
           'Los registros incompletos (ingreso sin salida o salida sin ingreso) no suman horas hasta que se aclaren.'
-        ] }
+        ] },
+        { h: 'Estadísticas del personal' },
+        { p: 'Composición del personal propio por clase y área, presencia en planta en el momento, asistencia a los turnos programados por jefe inmediato, días de ausencia por tipo y permisos por tipo del periodo, con descarga en Excel.' }
       ] },
       { id: 'consulta', titulo: 'Consulta y descargas (Analista y Gobierno Corporativo)', roles: ['Analista', 'Gobierno Corporativo', 'Administrador'], bloques: [
         { ul: [
-          'Las listas tienen búsqueda (sin importar tildes) y filtros, y se descargan en Excel con lo filtrado.',
+          'Todas las listas tienen búsqueda o filtro de texto (sin importar tildes) y se descargan en Excel con lo filtrado.',
           'Cada descarga queda anotada en la bitácora con su huella SHA-256: permite demostrar después que el archivo no fue alterado.',
           'En los perfiles de consulta, las fichas se abren solo para leer y no aparecen botones para crear, aprobar, modificar o borrar.'
         ] }
@@ -213,9 +239,9 @@
       { id: 'datos', titulo: 'Protección de datos personales y seguridad de la información', roles: ['todos'], bloques: [
         { ul: [
           'Use los datos solo para el control de acceso y la seguridad de las instalaciones. No tome capturas ni comparta información de la aplicación por otros medios.',
-          'Cada perfil ve solo lo que necesita: el rondero no ve personas ni movimientos; el Jefe de Producción solo ve operarios; Talento Humano solo ve al personal propio.',
+          'Cada perfil ve solo lo que necesita: el rondero no ve personas ni movimientos; el Jefe de Producción solo ve a su personal a cargo; Talento Humano solo ve al personal propio.',
           'No registre datos de salud (diagnósticos, tratamientos, citas médicas) en permisos, justificaciones, ausencias ni observaciones; la aplicación advierte cuando detecta estas palabras.',
-          'La fotografía de una persona solo se guarda con su autorización, para el cotejo visual en portería.',
+          'La fotografía de una persona solo se guarda con su autorización, para el cotejo visual en portería; por eso no se muestra al Jefe de Producción ni a Talento Humano (principio de finalidad, artículo 4 de la Ley 1581 de 2012).',
           'Cierre su sesión o su turno al terminar. Si pierde el celular o cree que alguien conoce su PIN, avise de inmediato al Director para bloquearlo.'
         ] }
       ] },
@@ -237,7 +263,8 @@
     ],
     // Historial de versiones del manual (se muestra en la aplicación al Director, Analista y Gobierno Corporativo)
     cambios: [
-      { version: '01', fecha: '2026-10-22', descripcion: 'Versión inicial del instructivo, acorde con la versión 1.0.0 de la aplicación: perfiles de solo consulta, Gobierno Corporativo, Jefe de Producción y Talento Humano; programación de planta; ausencias; horas en planta; salida anticipada sin hora final; alerta de salida; metas de ronda; estadísticas; idioma del menú.' }
+      { version: '01', fecha: '2026-10-22', descripcion: 'Versión inicial del instructivo, acorde con la versión 1.0.0 de la aplicación: perfiles de solo consulta, Gobierno Corporativo, Jefe de Producción y Talento Humano; programación de planta; ausencias; horas en planta; salida anticipada sin hora final; alerta de salida; metas de ronda; estadísticas; idioma del menú.' },
+      { version: '02', fecha: '2026-10-22', descripcion: 'Empresas (personas jurídicas) y catálogo de cargos; jefe inmediato en la ficha de la persona; usuarios creados desde una persona registrada y visibles solo para el Director; panel del Jefe de Producción por personal a cargo (turnos, asignación, estadísticas, Excel por turnos, ficha de consulta); Talento Humano con personal, permisos, programación, estadísticas y horas según portería; filtro en todas las listas; visitas por llegar; bloqueo de visitas de personas con ingreso autorizado; cierre de sesión al cambiar el perfil.' }
     ]
   };
 })();

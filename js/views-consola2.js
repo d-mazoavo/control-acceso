@@ -40,7 +40,14 @@
     var hastaV = AP.input('hasta', U.ymd(), { type: 'date' });
     var fEstado = AP.select('estado', [['', 'Todos los estados']].concat(AP.CAT.estadosVisita), '');
     var fOrigen = AP.select('origen', [['', 'Todos los orígenes'], ['Consola', 'Prerregistro'], ['Portería', 'No anunciado (portería)']], '');
-    [fEstado, fOrigen].forEach(function (s0) { s0.addEventListener('change', function () { pintarTabla(); }); });
+    // Llegada (pestaña Hoy): por defecto solo las visitas que aún no llegan; al ingresar el visitante sale de esa lista
+    var fLlegada = AP.select('llegada', [['porLlegar', 'Por llegar'], ['dentro', 'Dentro'], ['salio', 'Ya salieron'], ['', 'Todas las de hoy']], 'porLlegar');
+    [fEstado, fOrigen, fLlegada].forEach(function (s0) { s0.addEventListener('change', function () { pintarTabla(); }); });
+    function llegada(v) {
+      if (v.Estado !== 'Aprobada') return v.Estado === 'Pendiente' ? 'porLlegar' : '';
+      var e = AP.Access.estadoVisita(v);
+      return e.clave === 'porLlegar' && new Date(v.FechaFin) < new Date() ? 'noIngreso' : e.clave;
+    }
     async function consultar() { return AP.B.listRange('AP_Visitas', 'FechaFin', U.addDays(new Date(), -1), null, { exclude: ['Foto'] }); }
     function rangoValido(dIn, hIn) {
       var a0 = U.fromLocal(dIn.value, '00:00'), b0 = U.fromLocal(hIn.value, '23:59');
@@ -99,6 +106,7 @@
         if (fEstado.value && v.Estado !== fEstado.value) return false;
         if (fOrigen.value === 'Portería' && !dePorteria(v)) return false;
         if (fOrigen.value === 'Consola' && dePorteria(v)) return false;
+        if (tab === 'hoy' && fLlegada.value && llegada(v) !== fLlegada.value) return false;
         return AP.coincide(v, qv.value, ['Title', 'NumDoc', 'Empresa', 'Anfitrion', 'Area', 'Motivo', 'Placa', 'Telefono', 'Estado']);
       });
     }
@@ -131,7 +139,7 @@
         tab === 'historial' ? h('div', { class: 'filters' }, AP.field('Desde', desdeV), AP.field('Hasta', hastaV),
           h('button', { class: 'btn primary', type: 'button', onclick: recargarRango }, AP.icon('search', 18), 'Consultar'),
           h('small', { class: 'muted' }, 'Visitas programadas en el rango, en cualquier estado.')) : null,
-        h('div', { class: 'filters' }, fEstado, fOrigen, qv, AP.btnExcel(function () {
+        h('div', { class: 'filters' }, tab === 'hoy' ? fLlegada : null, fEstado, fOrigen, qv, AP.btnExcel(function () {
           var rows = filtradas();
           if (!rows.length) return AP.toast('No hay visitas para descargar con el filtro actual.', 'warn');
           AP.exportar('Visitas_' + (tab === 'historial' ? 'todas' : nombreTab().replace(/\s+/g, '_')), COLS_VIS, rows, 'xlsx', [['Vista', nombreTab()],
@@ -570,6 +578,8 @@
             if (!a || !b || b <= a) return AP.toast('Revise la fecha y hora de la visita.', 'warn');
             if (d.Correo && !EMAIL_RE.test(d.Correo)) return AP.toast('El correo del visitante no es válido.', 'warn');
             if (!d.AnfitrionId && !(await AP.confirm('Anfitrión sin vincular', 'El anfitrión «' + d.Anfitrion + '» no corresponde a un colaborador del personal propio registrado. ¿Guardar la visita sin vincularla?', 'Guardar sin vincular'))) return;
+            // Persona registrada que ya tiene autorizado el ingreso ese día y a esa hora: no se registra la visita
+            if ((nuevo || new Date(v.FechaInicio).getTime() !== a.getTime() || U.normDoc(v.NumDoc) !== U.normDoc(d.NumDoc)) && d.Estado !== 'Cancelada' && d.Estado !== 'Rechazada' && !(await verificarCobertura(d, a))) return;
             d.FechaInicio = a.toISOString(); d.FechaFin = b.toISOString();
             d.Placa = U.normPlaca(d.Placa);
             try {
@@ -600,6 +610,25 @@
               pendPort ? null : h('button', { class: 'btn primary', type: 'button', onclick: function () { guardar(true); } }, AP.icon('qr', 18), 'Guardar y generar pase')));
         }
       });
+    }
+    // Si el documento corresponde a una persona registrada, se verifica si ya tiene autorizado el ingreso con su
+    // credencial en el día y la hora de la visita (ingreso libre, turno, permiso o acceso sin horario).
+    async function verificarCobertura(d, ini) {
+      var doc = U.normDoc(d.NumDoc);
+      var lista = AP.Sync.personas && AP.Sync.personas.length ? AP.Sync.personas : await AP.B.listAll('AP_Personas', { exclude: ['Foto'] }).catch(function () { return []; });
+      var p = lista.find(function (x) { return U.normDoc(x.NumDoc) === doc; });
+      if (!p || !AP.Horario || !AP.Horario.cobertura) return true;
+      var c = AP.Horario.cobertura(p, ini);
+      if (c.cubre) {
+        AP.modal({ title: 'No se registra la visita', body: h('div', { class: 'stack' },
+          h('p', { class: 'banner deny' }, AP.icon('alert', 18), h('span', null, p.Title + ' (' + (p.Tipo || '') + (p.Empresa ? ', ' + p.Empresa : '') + ') ya tiene autorizado el ingreso el ' + U.fDateTime(ini) + ': ' + c.desc + '.')),
+          h('p', null, 'Debe ingresar y salir leyendo su propia credencial QR. Si necesita cambiar su horario o darle un permiso, hágalo en «Horarios» o «Permisos».')),
+          actions: [{ label: 'Entendido', kind: 'primary' }] });
+        return false;
+      }
+      if (c.inhabilitado) return AP.confirm('Persona inhabilitada', p.Title + ' está registrada en Personas y figura INHABILITADA' + (p.MotivoEstado ? ' (' + p.MotivoEstado + ')' : '') + '. ¿Registrar la visita de todas formas?', 'Registrar visita', 'danger');
+      if (c.ausencia) return AP.confirm('Ausencia registrada', p.Title + ' tiene una ausencia registrada por Talento Humano hasta el ' + U.fDate(c.ausencia.Hasta) + '. ¿Registrar la visita de todas formas?', 'Registrar visita');
+      return true;
     }
     async function borrarVisita(v) {
       var ok = await new Promise(function (res) {
@@ -892,17 +921,21 @@
     }
     var reglas = [
       'Las reglas de seguridad de Firestore (archivo firestore.rules de la entrega) deben estar publicadas en la consola de Firebase: Firestore Database → Reglas.',
-      'Con esas reglas, el servidor exige un usuario activo para leer o escribir. Solo el Administrador (Director de Seguridad Integral) crea, modifica y borra en la consola; el Analista y Gobierno Corporativo solo consultan y descargan; el Jefe de Producción programa turnos y permisos de operarios y Talento Humano registra ausencias, sin borrar nada.',
+      'Con esas reglas, el servidor exige un usuario activo para leer o escribir. Solo el Administrador (Director de Seguridad Integral) crea, modifica y borra en la consola; el Analista y Gobierno Corporativo solo consultan y descargan; el Jefe de Producción ve y programa solo al personal que lo tiene como jefe inmediato, y Talento Humano consulta el personal propio y registra permisos y ausencias, sin borrar nada.',
       'Los registros de ingresos, salidas, inspecciones, turnos, verificaciones y bitácora no pueden modificarse ni borrarse por nadie, y cada uno queda firmado por el servidor con el usuario que lo hizo y la hora del servidor.',
       'Cuando un usuario se da de baja o se le restablece el PIN, su sesión anterior deja de tener acceso de inmediato.',
       'Si vuelve a publicar las reglas, use siempre la última versión entregada.'
     ];
     // Índices compuestos que necesitan las consultas filtradas del Jefe de Producción y de Talento Humano
     var indicesBox = h('div', { class: 'stack sm' }, h('p', { class: 'muted small' }, 'Oprima «Verificar índices» después de publicar las reglas de esta actualización.'));
+    var ayer = new Date(Date.now() - 864e5);
     var INDICES = [
-      ['Ingresos y salidas de operarios (Jefe de Producción)', 'AP_Movimientos', 'TipoPersonal + FechaHora', [['TipoPersonal', '==', 'Operario'], ['FechaHora', '>=', new Date(Date.now() - 864e5)]]],
-      ['Ingresos y salidas del personal propio (Talento Humano)', 'AP_Movimientos', 'Categoria + FechaHora', [['Categoria', 'in', ['Personal propio', 'Personal propio sin carné']], ['FechaHora', '>=', new Date(Date.now() - 864e5)]]],
-      ['Permisos de operarios (Jefe de Producción)', 'AP_Permisos', 'TipoPersonal + Hasta', [['TipoPersonal', '==', 'Operario'], ['Hasta', '>=', new Date(Date.now() - 864e5)]]]
+      ['Ingresos y salidas del personal a cargo (Jefe de Producción)', 'AP_Movimientos', 'JefeId + FechaHora', [['JefeId', '==', 'indice'], ['FechaHora', '>=', ayer]]],
+      ['Permisos del personal a cargo (Jefe de Producción)', 'AP_Permisos', 'JefeId + Hasta', [['JefeId', '==', 'indice'], ['Hasta', '>=', ayer]]],
+      ['Registro de cambios del personal a cargo (Jefe de Producción)', 'AP_CambiosPlanta', 'JefeId + FechaHora', [['JefeId', '==', 'indice'], ['FechaHora', '>=', ayer]]],
+      ['Programación semanal del personal a cargo (Jefe de Producción)', 'AP_ProgPlanta', 'JefeId + Semana', [['JefeId', '==', 'indice'], ['Semana', '==', '2026-01-05']]],
+      ['Ingresos y salidas del personal propio (Talento Humano)', 'AP_Movimientos', 'Categoria + FechaHora', [['Categoria', 'in', ['Personal propio', 'Personal propio sin carné']], ['FechaHora', '>=', ayer]]],
+      ['Permisos del personal propio (Talento Humano)', 'AP_Permisos', 'PersonaTipo + Hasta', [['PersonaTipo', '==', 'Personal propio'], ['Hasta', '>=', ayer]]]
     ];
     async function verificarIndices() {
       indicesBox.replaceChildren(AP.spinner('Verificando…'));
@@ -924,7 +957,7 @@
       h('section', { class: 'card stack' }, h('h3', null, '2. Seguridad en el servidor'),
         h('ol', { class: 'steps' }, reglas.map(function (p) { return h('li', null, p); }))),
       h('section', { class: 'card stack' }, h('h3', null, '2a. Índices de la base de datos'),
-        h('p', { class: 'small' }, 'El Jefe de Producción y Talento Humano solo pueden consultar a los operarios y al personal propio. Esas consultas filtradas necesitan tres índices en Firebase, que se crean una sola vez.'),
+        h('p', { class: 'small' }, 'El Jefe de Producción solo consulta a su personal a cargo y Talento Humano solo al personal propio. Esas consultas filtradas pueden necesitar hasta seis índices en Firebase, que se crean una sola vez (los de la actualización anterior por «TipoPersonal» ya no se usan y pueden borrarse).'),
         indicesBox, h('div', { class: 'row gap wrap' }, h('button', { class: 'btn', type: 'button', onclick: verificarIndices }, AP.icon('search', 18), 'Verificar índices'))),
       h('section', { class: 'card stack' }, h('h3', null, '3. Este dispositivo'),
         h('div', { class: 'kv' }, h('span', null, 'Identificador'), h('strong', null, U.deviceId())),
@@ -949,9 +982,11 @@
     'telefono': 'Telefono', 'celular': 'Telefono', 'correo': 'Correo', 'email': 'Correo', 'empresa': 'Empresa', 'cargo': 'Cargo', 'area': 'Area',
     'estado': 'Estado', 'vigente hasta': 'VigenciaHasta', 'vigencia': 'VigenciaHasta', 'placa': 'Placa', 'tipo de vehiculo': 'VehiculoTipo', 'vehiculo': 'VehiculoTipo',
     'autoriza datos': 'AutorizaDatos', 'autoriza foto': 'AutorizaFoto', 'observaciones': 'Observaciones',
-    'clase de personal': 'TipoPersonal', 'tipo de personal': 'TipoPersonal', 'clase': 'TipoPersonal'
+    'clase de personal': 'TipoPersonal', 'tipo de personal': 'TipoPersonal', 'clase': 'TipoPersonal',
+    'nit': '_NIT', 'nit empresa': '_NIT', 'nit de la empresa': '_NIT',
+    'documento jefe inmediato': '_JefeDoc', 'documento del jefe inmediato': '_JefeDoc', 'cedula jefe inmediato': '_JefeDoc', 'jefe inmediato documento': '_JefeDoc'
   };
-  var PLANTILLA = ['Nombre completo', 'Tipo', 'Tipo de documento', 'Número de documento', 'Teléfono', 'Correo', 'Empresa', 'Cargo', 'Área', 'Estado', 'Vigente hasta', 'Placa', 'Tipo de vehículo', 'Autoriza datos', 'Autoriza foto', 'Observaciones', 'Clase de personal'];
+  var PLANTILLA = ['Nombre completo', 'Tipo', 'Tipo de documento', 'Número de documento', 'Teléfono', 'Correo', 'Empresa', 'NIT empresa', 'Cargo', 'Área', 'Estado', 'Vigente hasta', 'Placa', 'Tipo de vehículo', 'Autoriza datos', 'Autoriza foto', 'Observaciones', 'Clase de personal', 'Documento jefe inmediato'];
 
   // =================== ELEMENTOS (exclusivo del Director de Seguridad Integral) ===================
   // El Director registra qué elementos ingresa o retira cada persona registrada. Si salen y deben volver (préstamo,
@@ -1544,11 +1579,14 @@
   });
 
   AP.plantillaPersonas = async function () {
-    var ejemplo = ['Nombre Apellido Apellido', 'Contratista', 'CC', '1234567890', '3000000000', 'correo@empresa.com', 'Empresa contratista S.A.S.', 'Técnico', 'Mantenimiento', 'Habilitado', '2026-12-31', 'ABC123', 'Camioneta', 'Sí', 'Sí', '', ''];
+    var ejemplo = ['Nombre Apellido Apellido', 'Contratista', 'CC', '1234567890', '3000000000', 'correo@empresa.com', 'Empresa contratista S.A.S.', '900123456-7', 'Técnico', 'Mantenimiento', 'Habilitado', '2026-12-31', 'ABC123', 'Camioneta', 'Sí', 'Sí', '', '', ''];
     var guia = [
       ['Tipo', AP.CAT.tiposPersona.join(' | ')], ['Tipo de documento', AP.CAT.tiposDoc.join(' | ')], ['Estado', 'Habilitado | Inhabilitado'],
       ['Vigente hasta', 'AAAA-MM-DD (opcional). Contratistas: fecha de la seguridad social verificada.'], ['Autoriza datos / Autoriza foto', 'Sí | No — debe existir el soporte firmado.'],
-      ['Clase de personal', 'Solo personal propio: ' + AP.CAT.tiposPersonal.join(' | ') + '. Los operarios los programa el Jefe de Producción.'],
+      ['Clase de personal', 'Solo personal propio: ' + AP.CAT.tiposPersonal.join(' | ') + '.'],
+      ['Empresa / NIT empresa', 'Obligatorio: la empresa debe estar creada en «Empresas». Se busca por NIT (o por el nombre exacto). Personal propio sin empresa: se vincula a ' + AP.CFG.empresa + ' si está creada.'],
+      ['Cargo', 'Opcional: debe existir en «Cargos» con el mismo nombre. Si está vacío, la persona queda sin cargo.'],
+      ['Documento jefe inmediato', 'Opcional, solo personal propio: número de documento del jefe inmediato, que debe estar registrado como persona. El Jefe de Producción ve y programa a quienes lo tienen como jefe inmediato.'],
       ['Regla', 'Si el número de documento ya existe, la fila actualiza a esa persona; si no, se crea con una credencial QR nueva.']
     ];
     if (window.writeXlsxFile) {
@@ -1584,7 +1622,14 @@
             }
             var head = rows[0].map(function (c) { return MAPA[U.fold(c).replace(/[^a-z ]/g, '').replace(/\s+/g, ' ').trim()] || null; });
             if (head.indexOf('Title') < 0 || head.indexOf('NumDoc') < 0) throw new Error('El archivo debe tener las columnas "Nombre completo" y "Número de documento". Use la plantilla.');
-            var existentes = new Map((await AP.B.listAll('AP_Personas', { exclude: ['Foto'] })).map(function (p) { return [U.normDoc(p.NumDoc), p]; }));
+            var todasP = await AP.B.listAll('AP_Personas', { exclude: ['Foto'] });
+            var existentes = new Map(todasP.map(function (p) { return [U.normDoc(p.NumDoc), p]; }));
+            var emps = await AP.Maestros.empresas(true), cars = await AP.Maestros.cargos(true);
+            var propia = AP.Maestros.propia(emps);
+            if (!emps.length) throw new Error('Primero registre las empresas (personas jurídicas) en «Empresas»: cada persona se vincula a una empresa ya creada.');
+            // Documentos del archivo (para jefes inmediatos que vienen en el mismo archivo)
+            var docsArchivo = {};
+            rows.slice(1).forEach(function (r) { var j = head.indexOf('NumDoc'), t = head.indexOf('Title'); if (j >= 0 && r[j]) docsArchivo[U.normDoc(r[j])] = String(r[t] || ''); });
             var vistos = new Set();
             filas = rows.slice(1).map(function (r, i) {
               var o = {};
@@ -1611,6 +1656,18 @@
               if ('AutorizaDatos' in o) o.AutorizaDatos = U.parseBool(o.AutorizaDatos);
               if ('AutorizaFoto' in o) o.AutorizaFoto = U.parseBool(o.AutorizaFoto);
               if (o.Placa) o.Placa = o.Placa.split(',').map(U.normPlaca).filter(Boolean).join(', ');
+              // Empresa (persona jurídica ya creada), cargo del catálogo y jefe inmediato (persona registrada)
+              var emp = AP.Maestros.buscarEmpresa(emps, o._NIT) || AP.Maestros.buscarEmpresa(emps, o.Empresa) || (!o.Empresa && !o._NIT && o.Tipo === 'Personal propio' ? propia : null);
+              if (emp) { o.EmpresaId = emp.id; o.Empresa = emp.Title; } else err.push('empresa no registrada en «Empresas»' + (o.Empresa || o._NIT ? ' (' + [o.Empresa, o._NIT].filter(Boolean).join(' · ') + ')' : ''));
+              if (o.Cargo) { var car = AP.Maestros.buscarCargo(cars, o.Cargo); if (car) { o.CargoId = car.id; o.Cargo = car.Title; if (!o.Area && car.Area) o.Area = car.Area; if (!o.TipoPersonal && car.TipoPersonal && o.Tipo === 'Personal propio') o.TipoPersonal = car.TipoPersonal; } else err.push('cargo no registrado en «Cargos» (' + o.Cargo + ')'); }
+              if (o._JefeDoc) {
+                var jd = U.normDoc(o._JefeDoc), jefe = existentes.get(jd);
+                if (jd === d) err.push('la persona no puede ser su propio jefe inmediato');
+                else if (jefe) { o.JefeId = jefe.id; o.JefeNombre = jefe.Title; }
+                else if (docsArchivo[jd]) o._jefePendiente = jd;
+                else err.push('jefe inmediato no registrado (' + o._JefeDoc + ')');
+              }
+              delete o._NIT; delete o._JefeDoc;
               Object.keys(o).forEach(function (k) { if (o[k] === '') delete o[k]; });
               var ex = existentes.get(d);
               return { n: i + 2, data: o, err: err, existente: ex };
@@ -1622,7 +1679,8 @@
               h('div', { class: 'row gap wrap' }, AP.pill(nuevos + ' nuevas', 'ok'), AP.pill(act + ' a actualizar', 'brand'), malos.length ? AP.pill(malos.length + ' con errores (se omiten)', 'deny') : null),
               malos.length ? h('div', { class: 'log' }, malos.slice(0, 50).map(function (x) { return h('div', { class: 'txt-deny' }, 'Fila ' + x.n + ': revisar ' + x.err.join(', ')); })) : null,
               simpleTable([['Fila', function (x) { return String(x.n); }], ['Nombre', function (x) { return x.data.Title; }], ['Documento', function (x) { return x.data.NumDoc; }],
-                ['Tipo', function (x) { return x.data.Tipo + (x.data.TipoPersonal ? ' · ' + x.data.TipoPersonal : ''); }], ['Estado', function (x) { return x.data.Estado; }], ['Acción', function (x) { return x.err.length ? AP.pill('Error', 'deny') : x.existente ? AP.pill('Actualizar', 'brand') : AP.pill('Crear', 'ok'); }]],
+                ['Tipo', function (x) { return x.data.Tipo + (x.data.TipoPersonal ? ' · ' + x.data.TipoPersonal : ''); }], ['Empresa', function (x) { return x.data.Empresa || ''; }], ['Cargo', function (x) { return x.data.Cargo || ''; }],
+                ['Jefe inmediato', function (x) { return x.data.JefeNombre || (x.data._jefePendiente ? 'En este archivo' : ''); }], ['Estado', function (x) { return x.data.Estado; }], ['Acción', function (x) { return x.err.length ? AP.pill('Error', 'deny') : x.existente ? AP.pill('Actualizar', 'brand') : AP.pill('Crear', 'ok'); }]],
               filas.slice(0, 200)),
               h('button', { class: 'btn primary', type: 'button', disabled: !(nuevos + act), onclick: importar }, AP.icon('upload', 18), 'Importar ' + (nuevos + act) + ' personas'));
           } catch (e) { prev.replaceChildren(h('div', { class: 'banner deny' }, AP.icon('alert', 18), h('span', null, e.message))); }
@@ -1632,19 +1690,26 @@
           var bar = h('progress', { max: ok.length, value: 0 });
           var info = h('p');
           prev.replaceChildren(bar, info);
-          var c = 0, u = 0, fallos = [];
+          var c = 0, u = 0, fallos = [], idsPorDoc = {}, pendJefe = [];
+          // Primero las filas sin jefe pendiente (así los jefes que vienen en el mismo archivo ya existen)
+          ok.sort(function (a, b) { return (a.data._jefePendiente ? 1 : 0) - (b.data._jefePendiente ? 1 : 0); });
           for (var i = 0; i < ok.length; i++) {
             var x = ok[i];
+            var dat = Object.assign({}, x.data), jp = dat._jefePendiente;
+            delete dat._jefePendiente;
+            if (jp) { var jid = idsPorDoc[jp]; if (jid) { dat.JefeId = jid.id; dat.JefeNombre = jid.Title; } else pendJefe.push('Fila ' + x.n); }
             try {
-              if (x.existente) { await AP.B.update('AP_Personas', x.existente.id, x.data); u++; }
+              if (x.existente) { await AP.B.update('AP_Personas', x.existente.id, dat); u++; idsPorDoc[U.normDoc(dat.NumDoc)] = { id: x.existente.id, Title: dat.Title }; }
               else {
-                var d = Object.assign({ Token: U.newToken() }, x.data);
+                var d = Object.assign({ Token: U.newToken() }, dat);
                 if (d.AutorizaDatos) { d.FechaAutorizacion = U.ymd(); d.VersionAutorizacion = AP.CFG.versionAutorizacion; }
-                await AP.B.create('AP_Personas', d); c++;
+                var nr = await AP.B.create('AP_Personas', d); c++;
+                idsPorDoc[U.normDoc(d.NumDoc)] = { id: nr.id, Title: d.Title };
               }
             } catch (e) { fallos.push('Fila ' + x.n + ': ' + e.message); }
             bar.value = i + 1; info.textContent = (i + 1) + ' de ' + ok.length;
           }
+          if (pendJefe.length) fallos.push('Sin jefe inmediato (su jefe no se pudo crear): ' + pendJefe.join(', '));
           await AP.Audit.log('Carga masiva de personas', (inp.files[0] || {}).name || '', c + ' creadas, ' + u + ' actualizadas, ' + fallos.length + ' con error');
           prev.replaceChildren(h('div', { class: 'banner ' + (fallos.length ? 'warn' : 'info') }, AP.icon('check', 18), h('span', null, c + ' personas creadas y ' + u + ' actualizadas.' + (fallos.length ? ' ' + fallos.length + ' con error.' : ''))),
             fallos.length ? h('div', { class: 'log' }, fallos.map(function (f) { return h('div', null, f); })) : null,

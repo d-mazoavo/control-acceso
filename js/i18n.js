@@ -23,6 +23,7 @@
     'Rondas de seguridad': 'Security rounds', 'Estadísticas e indicadores': 'Statistics and indicators',
     'Programación de planta': 'Plant shift scheduling', 'Talento Humano — personal': 'Human Resources — staff',
     'Manual de uso de la aplicación': 'Application user manual',
+    'Empresas': 'Companies', 'Cargos': 'Job positions', 'Empresas (personas jurídicas)': 'Companies (legal entities)', 'Mi personal y programación': 'My staff and scheduling',
     // Portería y rondas
     'Leer código QR': 'Scan QR code', 'Ingreso y salida: siempre con lectura del QR': 'Entry and exit: always scan the QR',
     'Buscar': 'Search', 'Por documento o nombre': 'By ID number or name', 'Registro manual': 'Manual entry',

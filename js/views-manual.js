@@ -54,12 +54,13 @@
         !todo ? h('p', { class: 'banner info' }, AP.icon('user', 18), h('span', null, 'Se muestran las secciones generales y las de su perfil (' + AP.Session.rol + ').')) : null,
         h('section', { class: 'card stack sm' }, h('strong', null, 'Contenido'),
           h('nav', { class: 'manual-toc' }, secs.map(function (s, i) { return h('a', { href: '#/manual-uso', onclick: function (e) { e.preventDefault(); var el = document.getElementById('m-' + s.id); if (el) el.scrollIntoView({ behavior: 'smooth' }); } }, (i + 1) + '. ' + s.titulo); }))),
-        secs.map(function (s, i) {
+        // Las secciones van dentro de un contenedor (replaceChildren no acepta listas: las convertiría en texto)
+        h('div', { class: 'manual-cuerpo' }, secs.map(function (s, i) {
           return h('section', { id: 'm-' + s.id },
             h('h2', null, (i + 1) + '. ' + s.titulo),
             s.roles && s.roles.indexOf('todos') < 0 ? h('div', null, s.roles.map(function (r) { return AP.pill(r, r === AP.Session.rol ? 'ok' : 'muted'); })) : null,
             (s.bloques || []).map(bloqueHtml));
-        }),
+        })),
         todo && (m.cambios || []).length ? h('section', null, h('h2', null, 'Historial de versiones del manual'),
           h('div', { class: 'tbl-scroll' }, h('table', { class: 'tbl' }, h('thead', null, h('tr', null, ['Versión', 'Fecha', 'Descripción del cambio'].map(function (c) { return h('th', null, c); }))),
             h('tbody', null, m.cambios.map(function (c) { return h('tr', null, h('td', null, c.version), h('td', null, U.fDate(U.fromLocal(c.fecha, '12:00'))), h('td', null, c.descripcion)); }))))) : null,

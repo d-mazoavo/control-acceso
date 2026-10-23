@@ -117,6 +117,13 @@
         await P.cerrarTurno('Cierre de sesión ordenado por el administrador', 'Aplicado en el celular. ' + (v.CierreSesionMotivo || 'Cierre ordenado desde la consola') + (v.CierreSesionPor ? ' (' + v.CierreSesionPor + ')' : '') + '.');
         return { msg: 'El Director de Seguridad Integral cerró su turno y su sesión desde la consola.', salir: true, enviar: true };
       }
+      // El Director cambió el perfil del usuario (p. ej., de vigilante a rondero): se cierra el turno y la sesión para que
+      // vuelva a ingresar con el panel y las actividades del nuevo perfil
+      if (v && v.Rol && AP.ROLES[v.Rol] && v.Rol !== AP.Session.rol) {
+        var antes = AP.Session.rol;
+        await P.cerrarTurno('Cierre de turno por cambio de perfil', 'El Director cambió el perfil de ' + antes + ' a ' + v.Rol + '.');
+        return { msg: 'El Director de Seguridad Integral cambió su perfil de ' + antes + ' a ' + v.Rol + '. Su turno se cerró: vuelva a ingresar para usar el panel de su nuevo perfil.', salir: true, enviar: true };
+      }
       if (v && Number(v.PinVersion || 0) !== Number(t.pinVersion || 0)) {
         await P.cerrarTurno('Cierre por restablecimiento del PIN', 'El administrador restableció la contraseña durante el turno.');
         return { msg: 'El turno se cerró: el administrador restableció su PIN.', salir: true };

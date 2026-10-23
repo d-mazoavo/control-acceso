@@ -39,17 +39,24 @@
   H.jsonDe = jsonDe;
   H.lunes = function (ymd) { var d = dow(ymd); return addYmd(ymd, d === 0 ? -6 : 1 - d); };
   H.addYmd = addYmd;
-  var cachePlanta = { src: null, idx: null };
+  // Cada semana puede tener varios registros (uno por jefe inmediato): se combinan. La programación de un jefe solo se
+  // aplica a las personas que lo tienen como jefe inmediato en su ficha (un jefe no puede programar a personal ajeno).
+  var cachePlanta = { src: null, tok: null, idx: null };
+  H.aplicaA = function (w, x) {
+    if (!w.JefeId) return true;
+    var per = AP.Sync.byToken && AP.Sync.byToken.get(x.t);
+    return !(per && per.tipo === 'persona' && (per.rec.JefeId || '') !== w.JefeId);
+  };
   function indicePlanta() {
     var src = AP.Sync.planta || [];
-    if (cachePlanta.src === src && cachePlanta.idx) return cachePlanta.idx;
+    if (cachePlanta.src === src && cachePlanta.tok === AP.Sync.byToken && cachePlanta.idx) return cachePlanta.idx;
     var idx = {};   // semana → { token → { d, turnos } }
-    src.forEach(function (w) {
-      var datos = jsonDe(w.Datos, {}), turnos = jsonDe(w.Turnos, {}), porTok = {};
-      Object.keys(datos).forEach(function (pid) { var x = datos[pid]; if (x && x.t) porTok[x.t] = { d: x.d || {}, turnos: turnos }; });
-      idx[w.Semana] = porTok;
+    // Primero los registros sin jefe (versión anterior o del Director): la programación del jefe inmediato prevalece
+    src.slice().sort(function (a, b) { return (a.JefeId ? 1 : 0) - (b.JefeId ? 1 : 0); }).forEach(function (w) {
+      var datos = jsonDe(w.Datos, {}), turnos = jsonDe(w.Turnos, {}), porTok = idx[w.Semana] = idx[w.Semana] || {};
+      Object.keys(datos).forEach(function (pid) { var x = datos[pid]; if (x && x.t && H.aplicaA(w, x)) porTok[x.t] = { d: x.d || {}, turnos: turnos }; });
     });
-    cachePlanta = { src: src, idx: idx };
+    cachePlanta = { src: src, tok: AP.Sync.byToken, idx: idx };
     return idx;
   }
   // Asignación de planta de la persona en una fecha: null = la semana no la incluye (rige su horario general);
@@ -147,6 +154,23 @@
     var t = (j.rec.Turno ? j.rec.Turno + ' · ' : '') + j.rec.HoraEntrada + ' a ' + j.rec.HoraSalida;
     return esLibre(j.rec) ? t + ' (acceso libre)' : t;
   }
+
+  // ¿La persona registrada ya tiene autorizado el ingreso con su credencial en ese día y hora? (se usa al registrar una
+  // visita: si ya lo tiene, la visita no se registra y la persona entra leyendo su propio QR)
+  H.cobertura = function (p, ini) {
+    var token = p.Token, ymd = U.ymd(ini), t = ini.getTime();
+    if (p.Estado !== 'Habilitado') return { cubre: false, inhabilitado: true };
+    if (p.VigenciaHasta && p.VigenciaHasta < ymd) return { cubre: false, vencida: true };
+    var aus = H.ausenciaVigente(token, ini);
+    if (aus) return { cubre: false, ausencia: aus };
+    var perm = H.permisosVigentes(token, ini, TIPOS_ENTRADA)[0];
+    if (perm) return { cubre: true, desc: 'permiso «' + perm.Tipo + '» vigente hasta el ' + U.fDateTime(H.finPermiso(perm)) };
+    if (!H.tieneHorario(token, ini)) return { cubre: true, permanente: true, desc: 'acceso con su credencial, sin restricción de horario' };
+    var ant = cfg().minutosAntelacionTurno * 60000;
+    var j = H.instancias(token, ini).filter(function (i) { return t >= i.start.getTime() - ant && t <= i.end.getTime(); })[0];
+    if (j) return { cubre: true, libre: esLibre(j.rec), desc: (esLibre(j.rec) ? 'ingreso libre' : 'turno') + ' ' + descJornada(j) + ' del ' + U.fDate(j.start) };
+    return { cubre: false };
+  };
 
   // Evalúa el INGRESO de una persona con horario. Devuelve null si no hay horarios registrados (sin regla adicional).
   // ult = último movimiento permitido de la persona.

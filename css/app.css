@@ -592,3 +592,17 @@ details.card > summary { margin: -2px 0; }
 .manual .m-rol { display: inline-block; margin: 0 4px 4px 0; }
 .manual .m-fin { text-align: center; font-weight: 700; color: var(--muted); margin-top: 24px; border-top: 1px solid var(--line); padding-top: 10px; }
 @media (max-width: 640px) { .manual-head { grid-template-columns: 64px 1fr; } .manual-head > div:last-child { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--line); } .manual-head img { width: 48px; height: 48px; } }
+
+/* Filtro automático en todas las listas */
+.autofiltro { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); max-width: 520px; }
+.autofiltro svg { color: var(--muted); flex: none; }
+.autofiltro input { flex: 1; min-width: 0; border: 0; background: transparent; padding: 4px 0; font: inherit; outline: none; }
+.autofiltro small { white-space: nowrap; }
+.af-oculto { display: none !important; }
+
+/* Empresas, cargos y fichas de consulta */
+.logo-emp { width: 40px; height: 40px; object-fit: contain; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+.logo-emp.big { width: 140px; height: 140px; }
+.ficha-ro .kv-grid { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+@media (max-width: 700px) { .ficha-ro .kv-grid { grid-template-columns: 1fr; } }
+.chk-dias { display: flex; flex-wrap: wrap; gap: 6px 14px; }

@@ -583,6 +583,8 @@
         }
         if ((esVisita || esManual) && sent === 'Salida') f.CarneDevuelto = devuelto.querySelector('input').checked;
         if (!esVisita && !esManual && rec.TipoPersonal) f.TipoPersonal = rec.TipoPersonal;
+        // Jefe inmediato de la persona: su Jefe de Producción consulta estos registros
+        if (!esVisita && !esManual && rec.JefeId) f.JefeId = rec.JefeId;
         var conAlerta = sent === 'Salida' && r.alertaSalida && resultado === 'Permitido';
         if (conAlerta) f.Novedad = ['Alerta de salida del Director', f.Novedad].filter(Boolean).join(' | ');
         if (mx) Object.assign(f, mx);
@@ -804,6 +806,18 @@
       if (!anf.vinculado() || !a.AnfitrionId) { AP.toast('Seleccione de la lista el colaborador que visita: búsquelo por nombre, cargo o área y tóquelo. No se acepta texto escrito a mano.', 'warn', 7000); try { anf.querySelector('input.anf-buscar').focus(); } catch (e) { /* */ } return; }
       if (d.Motivo.length < 4) return AP.toast('Escriba el motivo de la visita.', 'warn');
       if (!autorizaSol.querySelector('input').checked) return AP.toast('Sin la autorización del visitante para el tratamiento de sus datos no es posible registrar la solicitud.', 'warn', 7000);
+      // Una persona registrada no se tramita como visitante: ingresa con su credencial (la lectura del QR aplica su
+      // horario, su ingreso libre o envía la solicitud al Director). Así no se eluden horarios, ausencias ni inhabilitaciones.
+      var reg = AP.Sync.personas.find(function (x) { return U.normDoc(x.NumDoc) === U.normDoc(d.NumDoc); });
+      if (reg) {
+        var cob = AP.Horario.cobertura(reg, new Date());
+        AP.modal({ title: 'No se registra como visitante', body: h('div', { class: 'stack' },
+          h('p', { class: 'banner ' + (cob.cubre ? 'info' : 'deny') }, AP.icon(cob.cubre ? 'check' : 'alert', 18), h('span', null,
+            reg.Title + ' está registrado(a) en la aplicación' + (cob.cubre ? ' y ya tiene autorizado el ingreso ahora: ' + cob.desc + '.' : cob.inhabilitado ? ' y figura INHABILITADO(A). No puede ingresar como visitante: comuníquese con el Director de Seguridad Integral.' : '.'))),
+          h('p', null, 'Lea su credencial QR (o búsquelo en «Buscar» por su documento). Si no está en su horario, la aplicación envía la solicitud al Director de Seguridad Integral.')),
+          actions: [{ label: 'Cerrar' }, { label: 'Usar su ficha', kind: 'primary', onClick: function (close) { close(); var ev = AP.Access.evaluate(reg.Token); ev.origen = 'Documento'; AP.State.result = ev; AP.State.fromScan = false; AP.go('/resultado'); } }] });
+        return;
+      }
       var previa = visitaVigente(U.normDoc(d.NumDoc));
       if (previa) { AP.toast(previa.Estado === 'Aprobada' ? 'Esta persona ya tiene una visita aprobada: lea su código QR.' : 'Esta persona ya tiene una solicitud esperando aprobación.', 'info', 6000); AP.go('/espera?id=' + encodeURIComponent(previa.id)); return; }
       var ahora = new Date(), u = user();

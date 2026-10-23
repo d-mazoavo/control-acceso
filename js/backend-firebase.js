@@ -25,7 +25,7 @@
   // Colecciones cuyo identificador es el IdLocal generado en el celular: un reintento nunca duplica el registro.
   var POR_IDLOCAL = { AP_Movimientos: 1, AP_Inspecciones: 1, AP_Turnos: 1, AP_Verificaciones: 1, AP_Rondas: 1 };
   // Campos pesados que se guardan aparte para no descargarlos en cada sincronización.
-  var PESADOS = { AP_Personas: ['Foto'], AP_Visitas: ['Foto'] };
+  var PESADOS = { AP_Personas: ['Foto'], AP_Visitas: ['Foto'], AP_Empresas: ['Logo'] };
 
   var app = null, auth = null, db = null, cfg = null;
   var usuarioAuth = null;   // usuario de Firebase Authentication
@@ -321,6 +321,8 @@
       if (!usuarioAuth || !cuenta) return null;
       return {
         uid: usuarioAuth.uid, upn: cuenta.usuario, usuario: cuenta.usuario, rol: cuenta.rol, vigilanteId: cuenta.vigilanteId,
+        // Persona registrada a la que corresponde el usuario (el Jefe de Producción ve a quienes lo tienen como jefe inmediato)
+        personaId: cuenta.personaId || (perfil && perfil.PersonaId) || '',
         nombre: (perfil && perfil.Title) || cuenta.usuario, perfil: perfil
       };
     },
@@ -436,7 +438,7 @@
     },
 
     // Consulta filtrada directa al servidor, sin copia local: la usan los perfiles que solo pueden leer una parte de
-    // una colección (Jefe de Producción: operarios; Talento Humano: personal propio). filtros = [[campo, op, valor], ...]
+    // una colección (Jefe de Producción: su personal a cargo; Talento Humano: personal propio). filtros = [[campo, op, valor], ...]
     consulta: async function (list, filtros, opt) {
       opt = opt || {};
       var q = db.collection(list);
@@ -552,7 +554,7 @@
     },
 
     // Borrado físico: solo el Administrador puede borrar documentos de colecciones permitidas
-    COLECCIONES_BORRABLES: { AP_Personas: 1, AP_Visitas: 1, AP_Movimientos: 1, AP_Turnos: 1, AP_Permisos: 1, AP_Horarios: 1, AP_Ausencias: 1, AP_ProgPlanta: 1, AP_TurnosPlanta: 1 },
+    COLECCIONES_BORRABLES: { AP_Personas: 1, AP_Visitas: 1, AP_Movimientos: 1, AP_Turnos: 1, AP_Permisos: 1, AP_Horarios: 1, AP_Ausencias: 1, AP_ProgPlanta: 1, AP_TurnosPlanta: 1, AP_Empresas: 1, AP_Cargos: 1 },
     borrarFisico: async function (list, id) {
       if (!cuenta || cuenta.rol !== 'Administrador') throw err('api', 'Solo el Administrador puede borrar registros.');
       if (!AP.B.COLECCIONES_BORRABLES[list]) throw err('api', 'No está permitido borrar registros de esta colección.');
@@ -655,7 +657,7 @@
       await op(function () {
         var b = db.batch();
         b.set(ref, Object.assign({}, rec, sello(true)));
-        b.set(db.doc('cuentas/' + ident.uid), { vigilanteId: ref.id, usuario: u, rol: rec.Rol, activo: true, temporalHasta: venceTemporal(), _mod: ts(), _modPor: usuarioAuth.uid });
+        b.set(db.doc('cuentas/' + ident.uid), { vigilanteId: ref.id, usuario: u, rol: rec.Rol, personaId: rec.PersonaId || '', activo: true, temporalHasta: venceTemporal(), _mod: ts(), _modPor: usuarioAuth.uid });
         b.set(db.doc('login/' + u), { email: emailDe(u, ident.version), _mod: ts() });
         marcar(b, ['AP_Vigilantes']);
         return b.commit();
@@ -668,11 +670,15 @@
     editarUsuario: async function (v, datos) {
       var o = limpiar('AP_Vigilantes', datos, true);
       delete o.Usuario; delete o.Uid; delete o.Activo; delete o.PinVersion; delete o.PinTemporal;
-      var uids = o.Rol ? await FB._cuentasActivas(v.id) : [];
+      // El rol y la persona vinculada se copian a la cuenta de acceso (las reglas del servidor los leen de allí)
+      var cta = {};
+      if (o.Rol) cta.rol = o.Rol;
+      if ('PersonaId' in o) cta.personaId = o.PersonaId || '';
+      var uids = Object.keys(cta).length ? await FB._cuentasActivas(v.id) : [];
       await op(function () {
         var b = db.batch();
         b.update(db.doc('AP_Vigilantes/' + v.id), Object.assign({}, o, sello(false)));
-        uids.forEach(function (uid) { b.update(db.doc('cuentas/' + uid), { rol: o.Rol, _mod: ts(), _modPor: usuarioAuth.uid }); });
+        uids.forEach(function (uid) { b.update(db.doc('cuentas/' + uid), Object.assign({}, cta, { _mod: ts(), _modPor: usuarioAuth.uid })); });
         marcar(b, ['AP_Vigilantes']);
         return b.commit();
       });
@@ -693,7 +699,7 @@
       await op(function () {
         var b = db.batch();
         b.update(db.doc('AP_Vigilantes/' + v.id), Object.assign({}, upd, sello(false)));
-        b.set(db.doc('cuentas/' + ident.uid), { vigilanteId: v.id, usuario: v.Usuario, rol: v.Rol, activo: true, temporalHasta: venceTemporal(), _mod: ts(), _modPor: usuarioAuth.uid });
+        b.set(db.doc('cuentas/' + ident.uid), { vigilanteId: v.id, usuario: v.Usuario, rol: v.Rol, personaId: v.PersonaId || '', activo: true, temporalHasta: venceTemporal(), _mod: ts(), _modPor: usuarioAuth.uid });
         anteriores.concat(v.Uid ? [v.Uid] : []).forEach(function (uid) {
           if (uid !== ident.uid) b.set(db.doc('cuentas/' + uid), { activo: false, reemplazadaPor: ident.uid, _mod: ts(), _modPor: usuarioAuth.uid }, { merge: true });
         });

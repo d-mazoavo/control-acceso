@@ -96,6 +96,8 @@
     pin: 'M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21zM12 12.5a3 3 0 1 0 0-6a3 3 0 0 0 0 6z',
     route: 'M6 19a2 2 0 1 0 0-.01M18 5a2 2 0 1 0 0-.01M6 17V9a3 3 0 0 1 3-3h1M18 7v8a3 3 0 0 1-3 3h-1M10 6l2-2M10 6l2 2M14 18l-2-2M14 18l-2 2',
     word: 'M6 3h8l4 4v14H6zM14 3v4h4M8.5 11l1.2 6l1.8-4.5l1.8 4.5l1.2-6',
+    building: 'M4 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16M16 9h2a2 2 0 0 1 2 2v10M2 21h20M8 7h4M8 11h4M8 15h4',
+    briefcase: 'M3 8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M3 13h18',
     trend: 'M3 17l6-6l4 4l8-8M14 7h7v7',
     whatsapp: 'M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z'
   };
@@ -555,4 +557,108 @@
       i.click();
     });
   };
+
+  // ---------- Selección de una persona registrada (usuarios, jefe inmediato, permisos y ausencias) ----------
+  // opt: { fuente: async () => personas, filtro: fn(p) → bool, valor: persona previa, onSelect: fn(p|null),
+  //        placeholder, quitar: texto del botón para dejar sin persona, detalle: fn(p) → texto, vacio: texto sin resultados }
+  AP.personaPicker = function (opt) {
+    opt = opt || {};
+    var sel = opt.valor || null;
+    var buscar = h('input', { type: 'search', autocomplete: 'off', placeholder: opt.placeholder || 'Nombre, documento, cargo o área', 'aria-label': opt.placeholder || 'Buscar persona registrada' });
+    var res = h('div', { class: 'list anf-res' });
+    var vista = h('div', { class: 'stack sm' });
+    var box = h('div', { class: 'anf-pick' }, vista);
+    var cache = null;
+    function det(p) { return opt.detalle ? opt.detalle(p) : [p.NumDoc, p.Cargo, p.Area, p.Tipo !== 'Personal propio' ? p.Empresa : ''].filter(Boolean).join(' · '); }
+    async function personas() {
+      if (!cache) cache = ((await opt.fuente()) || []).filter(function (p) { return p && p.Title && (!opt.filtro || opt.filtro(p)); })
+        .sort(function (a, b) { return U.fold(a.Title) < U.fold(b.Title) ? -1 : 1; });
+      return cache;
+    }
+    var filtrar = U.debounce(async function () {
+      var t = U.fold(buscar.value), d = U.normDoc(buscar.value);
+      if (t.length < 2) { res.replaceChildren(); return; }
+      try {
+        var l = (await personas()).filter(function (p) {
+          return U.fold([p.Title, p.Cargo, p.Area, p.Empresa].join(' ')).indexOf(t) >= 0 || (d.length >= 3 && U.normDoc(p.NumDoc).indexOf(d) >= 0);
+        }).slice(0, 8);
+        if (!l.length) { res.replaceChildren(h('p', { class: 'muted small' }, opt.vacio || 'No aparece entre las personas registradas. Regístrela primero en Personas.')); return; }
+        res.replaceChildren.apply(res, l.map(function (p) {
+          return h('button', { class: 'list-item', type: 'button', onclick: function () { sel = p; pintar(); if (opt.onSelect) opt.onSelect(p); } },
+            AP.icon('user', 20), h('div', null, h('strong', null, p.Title), h('small', null, det(p))));
+        }));
+      } catch (e) { res.replaceChildren(h('p', { class: 'note' }, 'No fue posible consultar las personas: ' + e.message)); }
+    }, 200);
+    buscar.addEventListener('input', filtrar);
+    function pintar() {
+      if (sel) {
+        vista.replaceChildren(h('div', { class: 'sel-persona' }, AP.icon('user', 22),
+          h('div', null, h('strong', null, sel.Title), h('small', { class: 'block muted' }, det(sel))),
+          opt.fijo ? null : h('button', { class: 'btn small', type: 'button', onclick: function () { sel = null; buscar.value = ''; res.replaceChildren(); pintar(); if (opt.onSelect) opt.onSelect(null); setTimeout(function () { try { buscar.focus(); } catch (e) { /* */ } }, 30); } }, opt.quitar || 'Cambiar')));
+      } else vista.replaceChildren(buscar, res);
+    }
+    pintar();
+    box.valor = function () { return sel; };
+    box.fijar = function (p) { sel = p || null; pintar(); };
+    return box;
+  };
+
+  // ---------- Filtro en todas las listas ----------
+  // Toda tabla y toda lista de la aplicación que no tenga ya su propio buscador recibe un filtro de texto: oculta las filas
+  // que no contienen todas las palabras escritas (sin tildes). No cambia los datos ni lo que se descarga en Excel.
+  function textoDe(el) { return U.fold(el.textContent || ''); }
+  function tieneBuscadorPrevio(el) {
+    var n = el, scope = el.closest('.modal-body, main, .c-content') || document.body;
+    for (var nivel = 0; n && n !== scope && nivel < 7; nivel++, n = n.parentElement) {
+      for (var s = n.previousElementSibling; s; s = s.previousElementSibling) {
+        if (s.classList && s.classList.contains('autofiltro')) continue;
+        if ((s.matches && s.matches('input[type=search]')) || (s.querySelector && s.querySelector('input[type=search]:not(.af-input)'))) return true;
+      }
+    }
+    return false;
+  }
+  function filasDe(el) {
+    if (el.tagName === 'TABLE') return Array.prototype.slice.call(el.tBodies[0] ? el.tBodies[0].rows : []).filter(function (tr) { return !(tr.cells.length === 1 && tr.cells[0].colSpan > 1); });
+    if (el.tagName === 'UL') return Array.prototype.slice.call(el.children);
+    return Array.prototype.slice.call(el.children).filter(function (c) { return c.classList.contains('list-item'); });
+  }
+  function ponerFiltro(el) {
+    el.dataset.af = '1';
+    if (el.closest('.anf-pick, .autofiltro, .no-filtro, .print-page, .manual') || el.classList.contains('anf-res')) return;
+    if (el.tagName === 'TABLE' && el.tBodies[0] && el.tBodies[0].querySelector('input, select, textarea')) return;
+    var filas = filasDe(el);
+    if (!filas.length || tieneBuscadorPrevio(el)) return;
+    var ancla = el.parentElement && el.parentElement.classList.contains('tbl-scroll') ? el.parentElement : el;
+    var padre = ancla.parentElement;
+    if (!padre) return;
+    var input = h('input', { type: 'search', class: 'af-input', placeholder: 'Filtrar esta lista', 'aria-label': 'Filtrar esta lista', autocomplete: 'off' });
+    var cuenta = h('small', { class: 'muted' });
+    var caja = h('div', { class: 'autofiltro' }, AP.icon('search', 16), input, cuenta);
+    function aplicar() {
+      var palabras = U.fold(input.value).split(/\s+/).filter(Boolean), n = 0, fs = filasDe(el);
+      fs.forEach(function (f) {
+        var t = textoDe(f), ok = palabras.every(function (p) { return t.indexOf(p) >= 0; });
+        f.classList.toggle('af-oculto', !ok);
+        if (ok) n++;
+      });
+      cuenta.textContent = palabras.length ? n + ' de ' + fs.length : '';
+      padre._afValor = input.value;
+    }
+    input.addEventListener('input', U.debounce(aplicar, 120));
+    padre.insertBefore(caja, ancla);
+    if (padre._afValor) { input.value = padre._afValor; aplicar(); }
+  }
+  var afPend = false;
+  function revisarListas() {
+    afPend = false;
+    document.querySelectorAll('table.tbl:not([data-af]), div.list:not([data-af]), ul.alerts:not([data-af])').forEach(function (el) {
+      try { ponerFiltro(el); } catch (e) { /* el filtro es auxiliar */ }
+    });
+  }
+  AP.revisarListas = revisarListas;
+  if (window.MutationObserver) {
+    var obs = new MutationObserver(function () { if (!afPend) { afPend = true; setTimeout(revisarListas, 60); } });
+    var iniciar = function () { obs.observe(document.body, { childList: true, subtree: true }); };
+    if (document.body) iniciar(); else document.addEventListener('DOMContentLoaded', iniciar);
+  }
 })();

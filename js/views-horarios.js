@@ -201,7 +201,8 @@
   });
 
   // =================== PERMISOS ===================
-  // opt.jefe: permiso del Jefe de Producción (solo operarios, lista ya filtrada en opt.personas)
+  // opt.jefe: permiso del Jefe de Producción (solo su personal, lista ya filtrada en opt.personas)
+  // opt.th: permiso registrado por Talento Humano (solo personal propio, lista ya filtrada en opt.personas)
   async function crearPermiso(opt) {
     opt = opt || {};
     var per = opt.personas || await personasHabilitadas();
@@ -220,10 +221,11 @@
             Detalle: AP.textarea('Detalle', opt.detalle || '', { rows: 2, placeholder: 'Motivo general (p. ej., cita, diligencia personal, permiso autorizado). Sin datos de salud.' })
           };
           var cargo = (AP.Session.user.perfil && AP.Session.user.perfil.Cargo) || (AP.Session.rol === 'Administrador' ? 'Director de Seguridad Integral' : AP.Session.rol);
+          var propio = opt.jefe || opt.th;
           var autoriza = AP.autorizaPicker({
-            fuente: function () { return Promise.resolve(opt.todas || (opt.jefe ? per : AP.B.listAll('AP_Personas', { exclude: ['Foto', 'Observaciones'] }))); },
-            valor: opt.autorizaYo || opt.jefe ? { AutorizadoPor: AP.Session.user.nombre + ' — ' + cargo, AutorizadoPorCargo: cargo } : {},
-            yo: !!opt.jefe
+            fuente: function () { return Promise.resolve(opt.todas || (propio ? per : AP.B.listAll('AP_Personas', { exclude: ['Foto', 'Observaciones'] }))); },
+            valor: opt.autorizaYo || propio ? { AutorizadoPor: AP.Session.user.nombre + ' — ' + cargo, AutorizadoPorCargo: cargo } : {},
+            yo: !!propio
           });
           // Salida anticipada: la persona no regresa, así que no se pide hora final (vale hasta el fin del día)
           var hastaCampo = AP.field('Vigente hasta *', f.Hasta);
@@ -248,16 +250,17 @@
             guardar.disabled = true;
             try {
               var rec = await AP.B.create('AP_Permisos', Object.assign({ Title: p.Title, Token: p.Token, NumDoc: p.NumDoc, Tipo: f.Tipo.value, Desde: a.toISOString(), Hasta: b.toISOString(),
-                Estado: 'Vigente', Detalle: f.Detalle.value.trim(), PersonaId: p.id || undefined, TipoPersonal: p.TipoPersonal || undefined, Area: p.Area || undefined }, au));
+                Estado: 'Vigente', Detalle: f.Detalle.value.trim(), PersonaId: p.id || undefined, TipoPersonal: p.TipoPersonal || undefined, Area: p.Area || undefined,
+                PersonaTipo: p.Tipo || undefined, JefeId: p.JefeId || undefined }, au));
               await AP.Audit.log('Registro de permiso', p.Title + ' — ' + f.Tipo.value, (sinFin ? 'Desde ' + U.fDateTime(a) + ' (sin hora final)' : U.fDateTime(a) + ' a ' + U.fDateTime(b)) + '; autoriza: ' + au.AutorizadoPor + (au.AutorizadoPorDoc ? ' (doc. ' + au.AutorizadoPorDoc + ')' : ''));
-              if ((opt.jefe || opt.planta) && AP.Planta) await AP.Planta.registrarCambio('Permiso', p.Title + ' — ' + f.Tipo.value, (sinFin ? 'Salida desde ' + U.fDateTime(a) : U.fDateTime(a) + ' a ' + U.fDateTime(b)) + '. ' + f.Detalle.value.trim(), 1, 0);
+              if ((opt.jefe || opt.planta || opt.th) && AP.Planta) await AP.Planta.registrarCambio('Permiso', p.Title + ' — ' + f.Tipo.value, (sinFin ? 'Salida desde ' + U.fDateTime(a) : U.fDateTime(a) + ' a ' + U.fDateTime(b)) + '. ' + f.Detalle.value.trim(), 1, 0, '', '', p.JefeId || '');
               hecho = rec; close(); AP.toast('Permiso registrado. Los celulares de portería lo reciben en su próxima actualización.'); AP.Sync.run();
             } catch (e) { AP.toast(e.message, 'error'); } finally { guardar.disabled = false; }
           } }, AP.icon('check', 18), 'Registrar permiso');
           return h('div', { class: 'stack' }, dl,
             h('div', { class: 'form-grid' }, AP.field('Persona *', pers, null, 'span2'), AP.field('Tipo *', f.Tipo, null, 'span2'),
               AP.field('Vigente desde *', f.Desde), hastaCampo, ayudaSin,
-              AP.field('Autorizado por *', autoriza, opt.jefe ? 'Por defecto, usted. Puede elegir a otro autorizador de la lista.' : 'Búsquelo en la lista de personas registradas (jefe inmediato, Talento Humano, etc.).', 'span2'),
+              AP.field('Autorizado por *', autoriza, propio ? 'Por defecto, usted. Puede elegir a otro autorizador de la lista.' : 'Búsquelo en la lista de personas registradas (jefe inmediato, Talento Humano, etc.).', 'span2'),
               AP.field('Detalle', f.Detalle, null, 'span2')),
             h('p', { class: 'help' }, 'Ingreso tardío: acepta el ingreso aunque pase la hora. Salida anticipada: la salida se muestra como AUTORIZADA desde la hora indicada (sin hora final). Salida temporal: AUTORIZADA dentro del lapso y debe regresar. Ingreso y salida fuera de horario: ambas. ' +
               'No registre diagnósticos ni datos de salud: son datos sensibles (art. 5 Ley 1581 de 2012); basta indicar que el permiso fue autorizado.'),
@@ -603,10 +606,15 @@
             try {
               if (ap) {
                 var desde = new Date(Math.min(new Date(x.FechaSolicitud).getTime(), Date.now()) - 5 * 60000);
+                var hitSol = AP.Sync.byToken && AP.Sync.byToken.get(x.Token);
+                var perSol = hitSol && hitSol.tipo === 'persona' ? hitSol.rec : {};
                 var perm = await AP.B.create('AP_Permisos', {
                   Title: x.Title, Token: x.Token, NumDoc: x.NumDoc, Tipo: TIPO_PERMISO[x.Tipo] || 'Ingreso tardío', Desde: desde.toISOString(), Hasta: b.toISOString(), Estado: 'Vigente',
                   Detalle: 'Aprobación de solicitud de portería (' + (x.Novedad || x.Tipo) + '). ' + j,
-                  AutorizadoPor: yo.nombre + ' — ' + cargoDirector(), AutorizadoPorDoc: (yo.perfil && yo.perfil.NumDoc) || '', AutorizadoPorCargo: cargoDirector(), SolicitudId: x.id
+                  AutorizadoPor: yo.nombre + ' — ' + cargoDirector(), AutorizadoPorDoc: (yo.perfil && yo.perfil.NumDoc) || '', AutorizadoPorCargo: cargoDirector(), SolicitudId: x.id,
+                  // Persona del permiso: Talento Humano y su jefe inmediato lo consultan
+                  PersonaId: perSol.id || undefined, PersonaTipo: perSol.Tipo || x.PersonaTipo || undefined, JefeId: perSol.JefeId || undefined,
+                  TipoPersonal: perSol.TipoPersonal || undefined, Area: perSol.Area || undefined
                 });
                 cambios.PermisoId = perm.id; cambios.VigenteHasta = b.toISOString();
               }

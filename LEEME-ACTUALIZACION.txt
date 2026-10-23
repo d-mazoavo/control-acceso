@@ -1,54 +1,88 @@
-CONTROL DE ACCESO AVO PAK — ACTUALIZACIÓN DEL 22 DE OCTUBRE DE 2026 (versión 1.0.0)
-==================================================================================
+AVO PAK S.A.S. — CONTROL DE ACCESO
+Ajuste del 22 de octubre de 2026 (segunda entrega del día). La versión de la aplicación sigue siendo 1.0.0.
 
-Este paquete trae SOLO los archivos que cambiaron o son nuevos (25 archivos). No trae config.js ni textos.js:
-los que ya están en GitHub siguen sirviendo y NO se deben reemplazar.
+QUÉ TRAE
+1. Usuarios: se crean buscando a una persona ya registrada en Personas y asignándole el perfil y el usuario; nombre,
+   documento, empresa y cargo salen de su ficha. El ítem «Usuarios» solo lo ve el Director de Seguridad Integral.
+2. Empresas (personas jurídicas: nombre, NIT y logo) y Cargos (catálogo). Toda persona se vincula a una empresa creada.
+3. Jefe inmediato en la ficha de cada persona. El Jefe de Producción ve, consulta, filtra y programa solo a quienes lo
+   tienen como jefe inmediato: turnos con horario, asignación de personas a turnos por rango de fechas, programación
+   semanal, permisos, estadísticas, Excel por turnos y ficha de consulta de cada persona.
+4. Talento Humano: personal propio (solo consulta, sin modificar datos), permisos, vacaciones y ausencias (durante la
+   ausencia no se permite el ingreso: el vigilante envía la solicitud al Director), estado en planta de operarios y
+   personal operativo según portería, programación de los Jefes de Producción, horas según portería y estadísticas.
+5. Filtro de texto en todas las listas y tablas (consola, portería y ventanas).
+6. Visitas: las visitas por llegar desaparecen del panel al ingresar el visitante; no se registra una visita para una
+   persona que ya tiene autorizado el ingreso ese día y a esa hora (ingreso libre, turno, permiso o acceso sin horario).
+7. Cambio de perfil (por ejemplo, de vigilante a rondero): el celular cierra el turno y la sesión y, al volver a
+   ingresar, muestra el panel del nuevo perfil.
+8. Corrección: el manual de uso en pantalla no mostraba el contenido de las secciones (solo el índice). Ya se muestra.
 
-Las reglas de Firebase vienen APARTE, en el archivo «reglas-firestore-NO-SUBIR-A-GITHUB.txt».
-Ese archivo NUNCA se sube a GitHub (contiene el código de instalación).
+ARCHIVOS
+- Carpeta control-acceso: 22 archivos para GitHub (21 reemplazan a los existentes y 1 es nuevo: js/views-maestros.js).
+- reglas-firestore-NO-SUBIR-A-GITHUB.txt: reglas de seguridad de Firebase. NO se sube a GitHub (contiene el código de
+  instalación).
+- Manual_Control_de_Acceso_v1.0.0_rev02.docx: manual actualizado (revisión 02).
 
+PASO 1. REGLAS DE FIREBASE (primero que todo)
+1. Entre a https://console.firebase.google.com con la cuenta propietaria del proyecto avopak-acceso-bf73e.
+2. Firestore Database → pestaña «Reglas».
+3. Seleccione todo el texto (Ctrl+A), bórrelo, pegue todo el contenido de reglas-firestore-NO-SUBIR-A-GITHUB.txt y
+   oprima «Publicar».
 
-PASO 1 — SUBIR LOS ARCHIVOS A GITHUB
-1. Descomprima este ZIP en el computador.
-2. Abra https://github.com/d-mazoavo/control-acceso
-3. Arriba a la derecha, botón «Add file» → «Upload files».
-4. Abra la carpeta descomprimida «control-acceso» y ARRASTRE a la página, de una sola vez:
-   - la CARPETA «js» (la carpeta completa, no los archivos sueltos),
-   - la CARPETA «css» (la carpeta completa),
-   - el archivo «index.html»,
-   - el archivo «sw.js».
-   No arrastre este archivo LEEME. No suba nada a la raíz fuera de esos cuatro.
-5. Espere a que GitHub termine de cargar la lista de archivos (debe decir js/..., css/app.css, index.html, sw.js).
-6. Abajo, botón verde «Commit changes».
+PASO 2. GITHUB
+1. Descomprima el ZIP en su computador.
+2. Entre a https://github.com/d-mazoavo/control-acceso → «Add file» → «Upload files».
+3. Abra la carpeta control-acceso que descomprimió, seleccione TODO su contenido (las carpetas css y js, y los archivos
+   index.html, sw.js y LEEME-ACTUALIZACION.txt) y arrástrelo a la página de GitHub. Las carpetas conservan su ruta.
+4. Espere a que termine de cargar y oprima «Commit changes».
+5. Espere 1 a 2 minutos a que GitHub Pages publique.
 
+PASO 3. ACTUALIZAR LA APLICACIÓN EN CADA EQUIPO
+- Computador: abra https://d-mazoavo.github.io/control-acceso/ y oprima Ctrl+F5 (o Ctrl+Mayús+R).
+- Celulares: cierre la aplicación por completo y ábrala de nuevo (si aparece el aviso de nueva versión, ciérrela y
+  ábrala otra vez).
+- En el menú del Director deben aparecer «Empresas» y «Cargos».
 
-PASO 2 — PUBLICAR LAS REGLAS EN FIREBASE
-1. Abra https://console.firebase.google.com con la cuenta propietaria del proyecto y entre al proyecto de la aplicación.
-2. Menú de la izquierda: «Firestore Database» → pestaña «Reglas».
-3. Haga clic dentro del texto de las reglas, oprima Ctrl+A (seleccionar todo) y Suprimir.
-4. Abra «reglas-firestore-NO-SUBIR-A-GITHUB.txt» con el Bloc de notas, Ctrl+A, Ctrl+C, y pegue (Ctrl+V) en Firebase.
-5. Botón «Publicar».
+PASO 4. ÍNDICES DE LA BASE DE DATOS (una sola vez)
+1. Consola → «Instalación» → sección «2a. Índices de la base de datos» → «Verificar índices».
+2. En cada fila con el botón «Crear índice», oprímalo: se abre Firebase con el índice ya llenado; oprima «Crear» (o
+   «Guardar»). Son hasta seis. Tardan unos minutos; luego vuelva a «Verificar índices» hasta que todos digan «Listo».
+3. Los índices de la entrega anterior por «TipoPersonal» ya no se usan; puede borrarlos en Firebase (Firestore
+   Database → Índices) o dejarlos.
 
+PASO 5. EMPRESAS Y CARGOS
+1. «Empresas» → «Nueva empresa»: registre primero Avo Pak S.A.S. (nombre, NIT y logo) y luego cada contratista,
+   transportadora o empresa de la que haya personas registradas.
+2. Para las personas registradas antes de esta entrega: abra cada empresa y oprima «Vincular personas con este nombre»
+   (vincula a quienes tienen escrito exactamente ese nombre de empresa). Las que no queden vinculadas se ven en Personas
+   con el filtro «Sin empresa vinculada»; edítelas y elija la empresa.
+3. «Cargos» → «Nuevo cargo»: registre los cargos (con área y clase de personal). En cada cargo puede usar «Vincular
+   personas con este cargo escrito».
 
-PASO 3 — CREAR LOS 3 ÍNDICES (una sola vez)
-Las pantallas del Jefe de Producción y de Talento Humano solo consultan a los operarios y al personal propio.
-Esas consultas filtradas necesitan 3 índices en Firebase.
-1. Abra la aplicación con su usuario de Director → menú «Instalación».
-2. En «2a. Índices de la base de datos», botón «Verificar índices».
-3. En cada fila que muestre el botón «Crear índice», haga clic: se abre Firebase con el índice ya llenado.
-   Allí oprima «Crear» (o «Guardar»). Repita con las demás filas.
-4. Espere unos minutos y vuelva a oprimir «Verificar índices» hasta que las 3 filas digan «Listo».
-(Si prefiere crearlos a mano, en Firestore Database → Índices → crear índice compuesto, con ámbito «Colección»:
-   AP_Movimientos: TipoPersonal ascendente + FechaHora ascendente
-   AP_Movimientos: Categoria ascendente + FechaHora ascendente
-   AP_Permisos:    TipoPersonal ascendente + Hasta ascendente)
+PASO 6. JEFE INMEDIATO
+- En Personas, abra la ficha de cada persona del personal de producción y en «Jefe inmediato» busque y elija a su jefe
+  (debe estar registrado en Personas como personal propio). Guarde.
+- Para muchas personas: «Carga masiva» con la plantilla nueva, columna «Documento jefe inmediato».
 
+PASO 7. USUARIOS VINCULADOS A SU PERSONA
+- Usuarios → abra cada usuario existente → «Editar datos» → «Persona registrada»: búsquela y selecciónela → «Guardar».
+- Es OBLIGATORIO para cada Jefe de Producción: sin ese vínculo no ve a su personal. Después de vincularlo, el jefe debe
+  cerrar sesión y volver a ingresar.
+- Los usuarios nuevos se crean con «Agregar usuario» buscando a la persona ya registrada.
 
-PASO 4 — DEJAR LISTA LA INFORMACIÓN
-1. Personas → filtro «Personal propio sin clase» → abra a cada trabajador y elija la «Clase de personal»
-   (Operario, Administrativo, Calidad…). Solo los «Operario» le aparecen al Jefe de Producción.
-   También puede hacerlo por «Carga masiva» con la columna «Clase de personal» (la plantilla nueva ya la trae).
-2. Usuarios → «Agregar usuario» → rol «Jefe de Producción», «Talento Humano» o «Gobierno Corporativo».
-3. Rondas → «Puntos de control y metas» → abra cada punto y fije «Revistas exigidas por turno» y
-   «Tiempo mínimo entre revistas».
-4. En cada celular y computador: cierre la aplicación y vuelva a abrirla (o recargue) para tomar la actualización.
+PASO 8. VERIFICACIÓN RÁPIDA (5 minutos)
+1. Con el usuario del Jefe de Producción: debe ver en «Mi personal» solo a quienes lo tienen como jefe inmediato.
+2. Con el usuario de Talento Humano: debe ver el personal propio y no poder modificarlo.
+3. En Visitas → «Nueva visita», con la cédula de un contratista que tenga ingreso libre hoy: la aplicación debe avisar y
+   no registrar la visita.
+
+NOTAS
+- Talento Humano ve a las personas registradas con tipo «Personal propio». Si el «Personal de finca» también debe verlo
+  Talento Humano, avise: es un ajuste menor.
+- Las fotografías no se muestran al Jefe de Producción ni a Talento Humano: se autorizaron solo para el cotejo visual en
+  portería (principio de finalidad, art. 4 de la Ley 1581 de 2012).
+- El Jefe de Producción solo ve los ingresos y salidas registrados desde que la persona tiene asignado su jefe
+  inmediato. El Director, Gobierno Corporativo y Talento Humano ven todo el historial.
+- Si ya había semanas programadas con la entrega anterior, quedan en el grupo «Personal propio sin jefe inmediato» (en
+  Planta, como Director). Si el jefe programa la misma semana, prevalece su programación.

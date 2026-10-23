@@ -131,6 +131,8 @@
     ['/consola/panel', 'chart', 'Panel', 'lectura'],
     ['/consola/estadisticas', 'trend', 'Estadísticas', 'estadisticas'],
     ['/consola/personas', 'users', 'Personas', 'lectura'],
+    ['/consola/empresas', 'building', 'Empresas', 'admin'],
+    ['/consola/cargos', 'briefcase', 'Cargos', 'admin'],
     ['/consola/visitas', 'user', 'Visitas', 'lectura'],
     ['/consola/solicitudes', 'inbox', 'Solicitudes de ingreso', 'ver'],
     ['/consola/historial', 'history', 'Ingresos y salidas', 'lectura'],
@@ -140,7 +142,8 @@
     ['/consola/horarios', 'clock', 'Horarios', 'ver'],
     ['/consola/permisos', 'key', 'Permisos', 'ver'],
     ['/consola/novedades', 'alert', 'Novedades', 'ver'],
-    ['/consola/vigilantes', 'badge', 'Usuarios', 'ver'],
+    // Usuarios: solo el Director de Seguridad Integral
+    ['/consola/vigilantes', 'badge', 'Usuarios', 'admin'],
     ['/consola/elementos', 'package', 'Elementos', 'ver'],
     ['/consola/rondas', 'route', 'Rondas', 'ver'],
     ['/consola/programacion', 'calendar', 'Programación', 'ver'],
@@ -435,9 +438,16 @@
     }
   }
   var saliendo = false;
+  // Cambio de perfil ordenado por el Director (p. ej., de vigilante a rondero): la sesión se cierra para que la persona
+  // vuelva a ingresar con el panel y las actividades de su nuevo perfil (el servidor ya aplica el nuevo rol).
+  function cambioDePerfil() {
+    var yo = (AP.Sync.vigilantes || []).find(function (x) { return String(x.id) === String(Session.user.vigilanteId); });
+    if (!yo || !yo.Rol || !AP.ROLES[yo.Rol] || yo.Rol === Session.rol) return null;
+    return { msg: 'El Director de Seguridad Integral cambió su perfil de ' + Session.rol + ' a ' + yo.Rol + '. Vuelva a ingresar para usar el panel de su nuevo perfil.', salir: true, enviar: true };
+  }
   async function vigilarTurno() {
     if (!Session.user || saliendo) return;
-    var r = Session.turno ? await AP.Pin.vigilar() : (AP.B.inactivo ? { msg: 'Su usuario fue dado de baja o su contraseña fue restablecida.', salir: true } : null);
+    var r = Session.turno ? await AP.Pin.vigilar() : (AP.B.inactivo ? { msg: 'Su usuario fue dado de baja o su contraseña fue restablecida.', salir: true } : cambioDePerfil());
     if (!r) return;
     AP.toast(r.msg, 'warn', 9000);
     if (r.salir) {

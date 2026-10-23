@@ -22,14 +22,14 @@
   var EVENTO_KIND = {
     'Inicio de turno': 'ok', 'Fin de turno': 'brand', 'Cierre automático de turno': 'warn', 'Cierre por baja de la credencial': 'warn',
     'Cierre por restablecimiento del PIN': 'warn', 'Cierre de turno por cambio de usuario': 'warn',
-    'Cierre de turno por el administrador': 'deny', 'Cierre de sesión ordenado por el administrador': 'warn'
+    'Cierre de turno por el administrador': 'deny', 'Cierre de sesión ordenado por el administrador': 'warn', 'Cierre de turno por cambio de perfil': 'warn'
   };
   var DESCRIPCION_ROL = {
     Administrador: 'Consola completa (único perfil que crea, modifica y borra): usuarios, horarios, permisos, novedades, bitácora, estadísticas y portería.',
     Analista: 'Solo consulta y descarga: panel, personas, visitas, ingresos y salidas e inspecciones. No modifica ni borra.',
     'Gobierno Corporativo': 'Gerencia u órgano de gobierno: consulta y descarga toda la información y las estadísticas. No modifica ni borra.',
-    'Jefe de Producción': 'Programa por semana los turnos de los operarios y sus permisos; ve su estado en planta. No borra; cada cambio queda registrado.',
-    'Talento Humano': 'Registra vacaciones, permisos de día completo y licencias; consulta el estado y las horas en planta del personal propio. No borra.',
+    'Jefe de Producción': 'Ve, consulta y programa al personal que lo tiene como jefe inmediato: turnos, programación semanal, permisos, estado en planta y estadísticas. No borra; cada cambio queda registrado.',
+    'Talento Humano': 'Consulta el personal propio sin modificarlo; registra permisos, vacaciones y licencias; ve el estado en planta, la programación, las horas según portería y las estadísticas. No borra.',
     Supervisor: 'Portería por turnos e historial de ingresos y salidas.',
     Vigilante: 'Solo portería, por turnos.',
     Rondero: 'Solo rondas, por turnos: marca los puntos de control con su QR y reporta novedades con fotografía. No ve personas ni movimientos.'
@@ -38,9 +38,10 @@
   AP.route('/consola/usuarios', function () { AP.go('/consola/vigilantes'); });
 
   AP.route('/consola/vigilantes', function (qs) {
-    if (!AP.Session.can('ver')) { AP.go('/'); return; }
+    // Solo el Director de Seguridad Integral ve y administra los usuarios
+    if (!AP.Session.can('admin')) { AP.go('/'); return; }
     var ED = AP.Session.can('editar');
-    var datos = { vig: [], turnos: [] };
+    var datos = { vig: [], turnos: [], personas: [] };
     var filtro = qs.f || 'Activos';
     var q = h('input', { type: 'search', placeholder: 'Buscar por nombre, usuario, documento, empresa o rol', class: 'grow' });
     var qev = AP.buscador('Buscar evento, nombre, usuario o dispositivo', function () { pintarEventos(); });
@@ -58,11 +59,14 @@
       try {
         var r = await Promise.all([
           AP.B.listAll('AP_Vigilantes'),
-          AP.B.listRange('AP_Turnos', 'FechaHora', U.addDays(new Date(), -60), null)]);
+          AP.B.listRange('AP_Turnos', 'FechaHora', U.addDays(new Date(), -60), null),
+          AP.B.listAll('AP_Personas', { exclude: ['Foto'] }).catch(function () { return []; })]);
         datos.vig = r[0];
         datos.turnos = r[1].sort(function (a, b) { return a.FechaHora < b.FechaHora ? 1 : -1; });
+        datos.personas = r[2];
         content.replaceChildren(
           h('div', { class: 'banner info' }, AP.icon('shield', 18), h('span', null,
+            'Cada usuario se crea a partir de una persona ya registrada en Personas: se busca a la persona y se le asigna el perfil (rol) y el usuario; nombre, documento, empresa y cargo salen de su ficha. ' +
             'Todos ingresan solo con usuario y PIN o contraseña; nadie usa correo. Al crear un usuario o restablecer su clave se genera un PIN temporal que se muestra una sola vez; ' +
             'en su primer ingreso la persona define su propia clave, que nadie más conoce. Las altas y bajas del personal del contratista se tramitan a solicitud escrita del supervisor designado por el contratista.')),
           abiertosBox,
@@ -146,10 +150,11 @@
         return h('a', { class: 'chip ' + (c[0] === filtro ? 'on' : ''), href: '#/consola/vigilantes?f=' + encodeURIComponent(c[0]) }, c[0] + ' (' + c[1] + ')');
       }));
       var rows = usuariosFiltrados();
-      tablaBox.replaceChildren(tabla([
+      var sinVinc = datos.vig.filter(function (v) { return v.Activo !== false && !v.PersonaId && !esYo(v); }).length;
+      tablaBox.replaceChildren(sinVinc ? h('p', { class: 'banner warn' }, AP.icon('alert', 18), h('span', null, sinVinc + ' usuario(s) activo(s) sin persona vinculada. Ábralos y use «Editar datos» para vincularlos con su ficha de Personas (el Jefe de Producción no ve a su personal mientras su usuario no esté vinculado).')) : null, tabla([
         ['Usuario', function (v) { return h('code', null, v.Usuario); }], ['Nombre', function (v) { return v.Title; }],
         ['Documento', function (v) { return [v.TipoDoc, v.NumDoc].filter(Boolean).join(' '); }], ['Empresa', function (v) { return v.Empresa; }],
-        ['Rol', function (v) { return v.Rol; }], ['Clave', estadoPin],
+        ['Rol', function (v) { return v.Rol; }], ['Persona', function (v) { return personaDe(v) ? AP.pill('Vinculada', 'ok') : esYo(v) ? '' : AP.pill('Sin vincular', 'warn'); }], ['Clave', estadoPin],
         ['Estado', function (v) { return v.Activo === false ? AP.pill('De baja', 'deny') : AP.pill('Activo', 'ok'); }],
         ['Último turno', ultimoTurno],
         ['', function (v) { return h('button', { class: 'btn small', type: 'button', onclick: function () { detalle(v); } }, 'Ver'); }]
@@ -166,7 +171,8 @@
           var activo = v.Activo !== false;
           return h('div', { class: 'stack' },
             h('div', { class: 'kv-grid' },
-              kv('Usuario', v.Usuario), kv('Rol', v.Rol), kv('Documento', [v.TipoDoc, v.NumDoc].filter(Boolean).join(' ')), kv('Empresa', v.Empresa),
+              kv('Usuario', v.Usuario), kv('Rol', v.Rol), kv('Persona registrada', personaDe(v) ? personaDe(v).Title + ' (' + (personaDe(v).Tipo || '') + ', ' + (personaDe(v).Estado || '') + ')' : 'Sin vincular'),
+              kv('Documento', [v.TipoDoc, v.NumDoc].filter(Boolean).join(' ')), kv('Empresa', v.Empresa),
               kv('Cargo', v.Cargo), kv('Teléfono', v.Telefono),
               kv('Estado', activo ? 'Activo' : 'De baja desde ' + U.fDateTime(v.FechaBaja)),
               kv('Clave', !activo ? 'Sin uso' : v.PinTemporal ? 'Temporal, asignada el ' + U.fDateTime(v.PinFecha) + ' por ' + (v.PinPor || '—') : 'Personal, definida por el usuario el ' + U.fDateTime(v.PinPersonalDesde || v.PinFecha)),
@@ -238,33 +244,52 @@
       });
     }
 
-    function formDatos(d0, nuevo) {
+    function personaDe(v) { return v && v.PersonaId ? datos.personas.find(function (p) { return p.id === v.PersonaId; }) || null : null; }
+    // Datos del usuario que salen de la ficha de la persona registrada
+    function datosDePersona(p) {
+      return { Title: p.Title, TipoDoc: p.TipoDoc || 'CC', NumDoc: p.NumDoc || '', Empresa: p.Empresa || '', Cargo: p.Cargo || '', Telefono: p.Telefono || '', PersonaId: p.id };
+    }
+    function fichaPersona(p) {
+      return h('div', { class: 'kv-grid' }, kv('Nombre', p.Title), kv('Documento', [p.TipoDoc, p.NumDoc].filter(Boolean).join(' ')), kv('Tipo', p.Tipo),
+        kv('Empresa', p.Empresa), kv('Cargo', p.Cargo), kv('Área', p.Area), kv('Teléfono', p.Telefono), kv('Estado', p.Estado));
+    }
+    // Formulario: la persona se busca entre las registradas; el Director asigna el perfil (rol) y el usuario
+    function formUsuario(d0, nuevo) {
+      var yo = !nuevo && esYo(d0);
       var usuario = AP.input('Usuario', d0.Usuario, { autocapitalize: 'none', disabled: !nuevo, placeholder: 'p. ej., jperez' });
-      var doc = AP.input('NumDoc', d0.NumDoc, { inputmode: 'text' });
-      var rol = AP.select('Rol', AP.CAT.roles, d0.Rol || 'Vigilante', { disabled: !nuevo && esYo(d0) });
+      var rol = AP.select('Rol', AP.CAT.roles, d0.Rol || 'Vigilante', { disabled: yo });
       var ayudaRol = h('small', { class: 'muted' }, DESCRIPCION_ROL[d0.Rol || 'Vigilante']);
       rol.addEventListener('change', function () { ayudaRol.textContent = DESCRIPCION_ROL[rol.value] || ''; });
       var tocado = false;
       usuario.addEventListener('input', function () { tocado = true; });
-      doc.addEventListener('input', function () { if (nuevo && !tocado) usuario.value = U.normDoc(doc.value).toLowerCase(); });
-      return h('div', { class: 'form-grid' },
-        AP.field('Nombre completo *', AP.input('Title', d0.Title), null, 'span2'),
-        AP.field('Tipo de documento', AP.select('TipoDoc', AP.CAT.tiposDoc, d0.TipoDoc || 'CC')),
-        AP.field('Número de documento *', doc),
+      var ficha = h('div', { class: 'field span2 ficha-ro' });
+      var picker = AP.personaPicker({
+        fuente: function () { return Promise.resolve(datos.personas); },
+        valor: personaDe(d0),
+        placeholder: 'Busque a la persona registrada: nombre, documento, cargo o empresa',
+        vacio: 'No aparece entre las personas registradas. Regístrela primero en Personas (con su empresa y cargo) y vuelva aquí.',
+        detalle: function (p) { return [p.TipoDoc + ' ' + (p.NumDoc || ''), p.Tipo, p.Empresa, p.Cargo, p.Estado !== 'Habilitado' ? 'INHABILITADO' : ''].filter(Boolean).join(' · '); },
+        onSelect: function (p) {
+          ficha.replaceChildren(p ? fichaPersona(p) : (nuevo ? null : h('p', { class: 'muted small' }, 'Sin persona vinculada: se conservan los datos actuales del usuario.')));
+          if (p && nuevo && !tocado) usuario.value = U.normDoc(p.NumDoc).toLowerCase();
+        }
+      });
+      if (personaDe(d0)) ficha.replaceChildren(fichaPersona(personaDe(d0)));
+      else if (!nuevo) ficha.replaceChildren(h('p', { class: 'banner warn' }, AP.icon('alert', 18), h('span', null, 'Este usuario aún no está vinculado a una persona registrada. Búsquela arriba y selecciónela: su nombre, documento, empresa y cargo se tomarán de su ficha en Personas.')));
+      var form = h('div', { class: 'form-grid' },
+        AP.field('Persona registrada *', picker, yo ? 'Su propio usuario: puede vincularlo a su ficha de Personas, si está registrado.' : 'La persona debe existir en Personas. El usuario hereda su nombre, documento, empresa y cargo.', 'span2'),
+        ficha,
         AP.field('Usuario para ingresar *', usuario, nuevo ? 'Letras minúsculas, números, punto o guion. No se puede cambiar después.' : 'El usuario no se modifica.'),
-        h('div', { class: 'field' }, AP.field('Rol', rol), ayudaRol),
-        AP.field('Empresa *', AP.input('Empresa', d0.Empresa, { placeholder: 'Avo Pak S.A.S. o empresa contratista' })),
-        AP.field('Cargo', AP.input('Cargo', d0.Cargo, { placeholder: 'Guarda de seguridad' })),
-        AP.field('Teléfono', AP.input('Telefono', d0.Telefono, { inputmode: 'tel' })),
+        h('div', { class: 'field' }, AP.field('Perfil (rol) *', rol), ayudaRol),
         nuevo ? AP.field('Solicitado por *', AP.input('SolicitadoPor', d0.SolicitadoPor, { placeholder: 'Supervisor del contratista o jefe de área' })) : null,
         nuevo ? AP.field('Soporte de la solicitud', AP.input('Soporte', d0.Soporte, { placeholder: 'Correo o comunicación, con fecha' })) : null,
         AP.field('Observaciones', AP.textarea('Observaciones', d0.Observaciones), null, 'span2'));
+      form.persona = function () { return picker.valor(); };
+      return form;
     }
-    function validar(d, nuevo) {
-      if (!d.Title || d.Title.length < 5) return 'Escriba el nombre completo.';
-      if (!U.normDoc(d.NumDoc)) return 'Escriba el número de documento.';
-      if (!d.Empresa) return 'Escriba la empresa.';
-      if (AP.CAT.roles.indexOf(d.Rol) < 0) return 'Seleccione el rol.';
+    function validar(d, nuevo, v) {
+      if (nuevo && !d.PersonaId) return 'Busque y seleccione la persona registrada a la que corresponde el usuario.';
+      if (!v || !esYo(v)) { if (AP.CAT.roles.indexOf(d.Rol) < 0) return 'Seleccione el perfil (rol).'; }
       if (nuevo) {
         if (!/^[a-z0-9._-]{3,30}$/.test(d.Usuario)) return 'El usuario debe tener de 3 a 30 caracteres: letras minúsculas sin tildes, números, punto o guion.';
         if (datos.vig.some(function (x) { return AP.Pin.norm(x.Usuario) === d.Usuario; })) return 'Ese usuario ya existe (puede estar de baja). Elija otro.';
@@ -273,25 +298,34 @@
       return null;
     }
     function adminsActivos() { return datos.vig.filter(function (x) { return x.Activo !== false && x.Rol === 'Administrador'; }); }
+    // Advertencias sobre la persona elegida (confirmación del Director)
+    async function confirmarPersona(p, rolNuevo, excluirId) {
+      var dup = datos.vig.find(function (x) { return x.Activo !== false && x.id !== excluirId && (x.PersonaId === p.id || U.normDoc(x.NumDoc) === U.normDoc(p.NumDoc)); });
+      if (dup && !(await AP.confirm('La persona ya tiene usuario', p.Title + ' ya tiene el usuario activo «' + dup.Usuario + '» (' + dup.Rol + '). ¿Continuar de todos modos?', 'Continuar'))) return false;
+      if (p.Estado !== 'Habilitado' && !(await AP.confirm('Persona inhabilitada', p.Title + ' figura INHABILITADA en Personas' + (p.MotivoEstado ? ' (' + p.MotivoEstado + ')' : '') + '. ¿Continuar?', 'Continuar'))) return false;
+      if ((rolNuevo === 'Jefe de Producción' || rolNuevo === 'Talento Humano') && p.Tipo !== 'Personal propio' && !(await AP.confirm('Perfil de personal propio', 'El perfil ' + rolNuevo + ' corresponde a un colaborador de ' + AP.CFG.empresa + ', y ' + p.Title + ' figura como «' + (p.Tipo || '') + '». ¿Continuar?', 'Continuar'))) return false;
+      return true;
+    }
 
     function crear() {
       AP.modal({
         title: 'Agregar usuario', size: 'wide',
         body: function (close) {
-          var form = formDatos({}, true);
+          var form = formUsuario({}, true);
           var guardar = h('button', { class: 'btn primary', type: 'button', onclick: async function () {
+            var p = form.persona();
             var d = AP.formData(form);
             d.Usuario = AP.Pin.norm(d.Usuario);
+            if (p) Object.assign(d, datosDePersona(p));
             var e = validar(d, true);
-            if (e) return AP.toast(e, 'warn');
-            var dup = datos.vig.find(function (x) { return x.Activo !== false && U.normDoc(x.NumDoc) === U.normDoc(d.NumDoc); });
-            if (dup && !(await AP.confirm('Documento ya registrado', 'El documento ya tiene el usuario activo "' + dup.Usuario + '". ¿Crear otro usuario para la misma persona?', 'Crear de todos modos'))) return;
+            if (e) return AP.toast(e, 'warn', 7000);
+            if (!(await confirmarPersona(p, d.Rol))) return;
             if (d.Rol === 'Administrador' && !(await AP.confirm('Rol de Administrador', 'El Administrador puede crear y dar de baja usuarios y ver toda la información. ¿Confirma este rol?', 'Confirmar'))) return;
             guardar.disabled = true; guardar.lastChild.textContent = 'Creando…';
             try {
               var pin = AP.Pin.temporal();
               var v = await AP.B.crearUsuario(d, pin);
-              await AP.Audit.log('Alta de usuario', d.Usuario + ' — ' + d.Title, 'Rol: ' + d.Rol + '; empresa: ' + d.Empresa + '; solicitado por: ' + d.SolicitadoPor + (d.Soporte ? ' (' + d.Soporte + ')' : ''));
+              await AP.Audit.log('Alta de usuario', d.Usuario + ' — ' + d.Title, 'Rol: ' + d.Rol + '; persona: ' + d.Title + ' (' + d.NumDoc + '); empresa: ' + d.Empresa + '; solicitado por: ' + d.SolicitadoPor + (d.Soporte ? ' (' + d.Soporte + ')' : ''));
               close();
               mostrarPin(v, pin, 'Usuario creado');
               cargar(); AP.Sync.run();
@@ -308,16 +342,21 @@
       AP.modal({
         title: 'Editar datos — ' + v.Usuario, size: 'wide',
         body: function (close) {
-          var form = formDatos(v, false);
+          var form = formUsuario(v, false);
           return h('div', { class: 'stack' }, form, h('div', { class: 'row end' }, h('button', { class: 'btn primary', type: 'button', onclick: async function () {
+            var p = form.persona();
             var d = AP.formData(form); delete d.Usuario;
             if (esYo(v)) d.Rol = 'Administrador';
-            var e = validar(d, false);
+            if (p) Object.assign(d, datosDePersona(p));
+            else { d.PersonaId = ''; }
+            var e = validar(d, false, v);
             if (e) return AP.toast(e, 'warn');
             if (v.Rol === 'Administrador' && d.Rol !== 'Administrador' && adminsActivos().length <= 1) return AP.toast('Debe quedar al menos un Administrador activo.', 'warn');
+            if (p && p.id !== v.PersonaId && !(await confirmarPersona(p, d.Rol, v.id))) return;
+            if (!esYo(v) && d.Rol !== v.Rol && AP.ROLES_TURNO.indexOf(v.Rol) >= 0 && !(await AP.confirm('Cambio de perfil', 'Al cambiar el perfil de ' + v.Rol + ' a ' + d.Rol + ', si ' + v.Title + ' tiene un turno abierto, su celular lo cerrará y le pedirá ingresar de nuevo con el panel del nuevo perfil.', 'Cambiar perfil'))) return;
             try {
               await AP.B.editarUsuario(v, d);
-              await AP.Audit.log('Modificación de usuario', v.Usuario + ' — ' + d.Title, 'Rol: ' + d.Rol + (d.Rol !== v.Rol ? ' (antes ' + v.Rol + ')' : '') + '; empresa: ' + d.Empresa);
+              await AP.Audit.log('Modificación de usuario', v.Usuario + ' — ' + (d.Title || v.Title), 'Rol: ' + d.Rol + (d.Rol !== v.Rol ? ' (antes ' + v.Rol + ')' : '') + '; persona: ' + (p ? p.Title + ' (' + p.NumDoc + ')' : 'sin vincular'));
               close(); AP.toast('Datos guardados.'); cargar(); AP.Sync.run();
             } catch (err) { AP.toast(err.message, 'error'); }
           } }, 'Guardar')));

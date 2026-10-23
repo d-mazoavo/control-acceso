@@ -118,7 +118,11 @@
       var ingresos = hoy.filter(function (m) { return m.Sentido === 'Ingreso' && m.Resultado === 'Permitido'; });
       var negados = hoy.filter(function (m) { return m.Resultado === 'Negado'; });
       var excep = hoy.filter(function (m) { return m.Excepcion; });
-      var visHoy = vis.filter(function (v) { return U.ymd(v.FechaInicio) === U.ymd() && v.Estado === 'Aprobada'; });
+      // Visitas aprobadas para hoy que aún no han llegado: al ingresar el visitante salen de esta cuenta (ya está dentro)
+      var ahoraP = new Date();
+      var visHoy = vis.filter(function (v) {
+        return v.Estado === 'Aprobada' && U.ymd(v.FechaInicio) <= U.ymd() && U.ymd(v.FechaFin) >= U.ymd() && new Date(v.FechaFin) > ahoraP && AP.Access.estadoVisita(v).clave === 'porLlegar';
+      }).sort(function (a, b) { return a.FechaInicio < b.FechaInicio ? -1 : 1; });
       var pend = vis.filter(function (v) { return v.Estado === 'Pendiente' && new Date(v.FechaFin) >= new Date(); });
       var nc = insp.filter(function (i) { return i.Resultado === 'No conforme'; });
       var porPersona = new Map(pers.map(function (p) { return [p.Token, p]; }));
@@ -253,15 +257,15 @@
               ['Vigilante', function (m) { return m.Vigilante; }]
             ], hoy.filter(function (m) { return m.Novedad; }), 'Sin novedades registradas hoy.');
           }),
-          kpi(visHoy.length, 'Visitas aprobadas hoy', 'user', '', null, function () {
-            modalLista('Visitas aprobadas hoy (' + visHoy.length + ')', [
+          kpi(visHoy.length, 'Visitas por llegar hoy', 'user', '', null, function () {
+            modalLista('Visitas por llegar hoy (' + visHoy.length + ')', [
               ['Visitante', function (v) { return v.Title; }],
               ['Empresa', function (v) { return v.Empresa; }],
               ['Hora inicio', function (v) { return U.fTime(v.FechaInicio); }],
               ['Hora fin', function (v) { return U.fTime(v.FechaFin); }],
               ['Anfitrión', function (v) { return v.Anfitrion; }],
               ['Área', function (v) { return v.Area; }]
-            ], visHoy, 'Sin visitas aprobadas para hoy.');
+            ], visHoy, 'No hay visitas aprobadas por llegar hoy. Las que ya ingresaron figuran en «Personas dentro ahora».');
           }),
           kpi(pend.length, AP.Session.can('editar') ? 'Visitas por aprobar' : 'Visitas pendientes de aprobación', 'inbox', pend.length ? 'warn' : '', '/consola/visitas?t=pendientes'),
           kpi(insp.length, 'Inspecciones hoy', 'truck', nc.length ? 'deny' : '', null, function () {
@@ -318,6 +322,9 @@
     var fTipo = AP.select('tipo', [['', 'Todos los tipos']].concat(AP.CAT.tiposPersona), '');
     var fEst = AP.select('estado', [['', 'Todos los estados'], 'Habilitado', 'Inhabilitado', ['vencido', 'Habilitación vencida'], ['alerta', 'Con alerta de salida']], '');
     var fTP = AP.select('tipoPersonal', [['', 'Toda clase de personal']].concat(AP.CAT.tiposPersonal, [['sin', 'Personal propio sin clase']]), '');
+    var fEmp = AP.select('empresa', [['', 'Todas las empresas']], '');
+    var fJefe = AP.select('jefe', [['', 'Cualquier jefe inmediato']], '');
+    var empresas = [], cargos = [];
     var tbl = null;
     var ED = AP.Session.can('editar');
     var actions = ED ? [
@@ -336,9 +343,31 @@
         else if (fEst.value && p.Estado !== fEst.value) return false;
         if (fTP.value === 'sin') { if (!(p.Tipo === 'Personal propio' && !p.TipoPersonal)) return false; }
         else if (fTP.value && p.TipoPersonal !== fTP.value) return false;
+        if (fEmp.value === 'sin') { if (p.EmpresaId) return false; }
+        else if (fEmp.value && p.EmpresaId !== fEmp.value) return false;
+        if (fJefe.value === 'sin') { if (p.JefeId) return false; }
+        else if (fJefe.value && p.JefeId !== fJefe.value) return false;
         if (!t) return true;
-        return U.fold(p.Title + ' ' + p.Empresa + ' ' + p.Cargo + ' ' + p.Area + ' ' + p.Placa).indexOf(t) >= 0 || (d && U.normDoc(p.NumDoc).indexOf(d) >= 0);
+        return U.fold(p.Title + ' ' + p.Empresa + ' ' + p.Cargo + ' ' + p.Area + ' ' + p.Placa + ' ' + jefeNombre(p)).indexOf(t) >= 0 || (d && U.normDoc(p.NumDoc).indexOf(d) >= 0);
       }).sort(function (a, b) { return U.fold(a.Title) < U.fold(b.Title) ? -1 : 1; });
+    }
+    // Nombre vigente del jefe inmediato (si cambió su nombre en su ficha, se muestra el actual)
+    function jefeNombre(p) {
+      if (!p.JefeId) return '';
+      var j = personas.find(function (x) { return x.id === p.JefeId; });
+      return j ? j.Title : (p.JefeNombre || '');
+    }
+    function opcionesFiltros() {
+      var emps = {};
+      personas.forEach(function (p) { if (p.EmpresaId) emps[p.EmpresaId] = (empresas.find(function (e) { return e.id === p.EmpresaId; }) || {}).Title || p.Empresa || p.EmpresaId; });
+      var jefes = {};
+      personas.forEach(function (p) { if (p.JefeId) jefes[p.JefeId] = jefeNombre(p) || p.JefeId; });
+      var orden = function (o) { return Object.keys(o).sort(function (a, b) { return U.fold(o[a]) < U.fold(o[b]) ? -1 : 1; }).map(function (k) { return [k, o[k]]; }); };
+      [[fEmp, 'Todas las empresas', 'Sin empresa vinculada', emps], [fJefe, 'Cualquier jefe inmediato', 'Sin jefe inmediato', jefes]].forEach(function (x) {
+        var v = x[0].value;
+        x[0].replaceChildren.apply(x[0], [['', x[1]], ['sin', x[2]]].concat(orden(x[3])).map(function (o) { return h('option', { value: o[0] }, o[1]); }));
+        x[0].value = v;
+      });
     }
 
     // Carga diferida de fotos de la página visible
@@ -362,7 +391,7 @@
         { label: '', cls: 'w-photo', render: function (p) { return h('img', { class: 'photo xs', src: fotoCache[p.id] || U.avatar(p.Title), alt: '', dataset: { pid: p.id } }); } },
         { label: 'Nombre', render: function (p) { return h('div', null, h('strong', null, p.Title), h('small', { class: 'block muted' }, (p.TipoDoc || '') + ' ' + (p.NumDoc || ''))); } },
         { label: 'Tipo', render: function (p) { return h('div', null, p.Tipo || '', p.TipoPersonal ? h('small', { class: 'block muted' }, p.TipoPersonal) : null); } },
-        { label: 'Empresa / cargo', render: function (p) { return h('div', null, p.Empresa || '', h('small', { class: 'block muted' }, [p.Cargo, p.Area].filter(Boolean).join(' · '))); } },
+        { label: 'Empresa / cargo', render: function (p) { return h('div', null, p.Empresa || '', !p.EmpresaId && p.Empresa ? h('small', { class: 'txt-warn' }, ' (sin vincular)') : null, h('small', { class: 'block muted' }, [p.Cargo, p.Area].filter(Boolean).join(' · ')), p.JefeId ? h('small', { class: 'block muted' }, 'Jefe: ' + jefeNombre(p)) : null); } },
         { label: 'Placa', key: 'Placa' },
         { label: 'Vigencia', render: function (p) { return p.VigenciaHasta ? h('span', { class: p.VigenciaHasta < hoy ? 'txt-deny' : '' }, p.VigenciaHasta) : '—'; } },
         { label: 'Estado', render: function (p) { return h('div', null, AP.estadoPill(p.Estado), p.AlertaSalida ? h('small', { class: 'block' }, AP.pill('Alerta de salida', 'warn')) : null); } },
@@ -401,11 +430,17 @@
     }
     AP.render.personasRepaint = function () { selInfo(); tbl && tbl.repaint(filtrar()); };
 
-    [q, fTipo, fEst, fTP].forEach(function (el) { el.addEventListener(el.tagName === 'INPUT' ? 'input' : 'change', U.debounce(function () { tbl.repaint(filtrar()); }, 150)); });
+    [q, fTipo, fEst, fTP, fEmp, fJefe].forEach(function (el) { el.addEventListener(el.tagName === 'INPUT' ? 'input' : 'change', U.debounce(function () { tbl.repaint(filtrar()); }, 150)); });
 
     load(content, async function () {
-      personas = await AP.B.listAll('AP_Personas', { exclude: ['Foto'] });
-      content.replaceChildren(h('div', { class: 'filters' }, q, fTipo, fTP, fEst), selBox, render());
+      var r = await Promise.all([AP.B.listAll('AP_Personas', { exclude: ['Foto'] }), AP.Maestros.empresas(true).catch(function () { return []; }), AP.Maestros.cargos(true).catch(function () { return []; })]);
+      personas = r[0]; empresas = r[1]; cargos = r[2];
+      opcionesFiltros();
+      var sinEmp = personas.filter(function (p) { return !p.EmpresaId; }).length;
+      content.replaceChildren(
+        ED && !empresas.length ? h('p', { class: 'banner warn' }, AP.icon('building', 18), h('span', null, 'Aún no hay empresas registradas. Para crear personas, registre primero las empresas (personas jurídicas) en ', h('a', { href: '#/consola/empresas' }, 'Empresas'), ' y los cargos en ', h('a', { href: '#/consola/cargos' }, 'Cargos'), '.')) : null,
+        ED && empresas.length && sinEmp ? h('p', { class: 'banner info' }, AP.icon('building', 18), h('span', null, sinEmp + ' persona(s) sin empresa vinculada (filtre por «Sin empresa vinculada»). Puede vincularlas desde la ficha de cada empresa con «Vincular personas con este nombre».')) : null,
+        h('div', { class: 'filters' }, q, fTipo, fTP, fEmp, fJefe, fEst), selBox, render());
       selInfo();
     });
 
@@ -460,7 +495,9 @@
 
     async function editar(p) {
       var nuevo = !p;
-      var full = p ? Object.assign({}, p) : { Tipo: 'Personal propio', TipoDoc: 'CC', Estado: 'Habilitado', Empresa: AP.CFG.empresa };
+      if (nuevo && ED && !empresas.length) return AP.toast('Registre primero la empresa (persona jurídica) en «Empresas»: toda persona se vincula a una empresa ya creada.', 'warn', 8000);
+      var propia = AP.Maestros.propia(empresas);
+      var full = p ? Object.assign({}, p) : { Tipo: 'Personal propio', TipoDoc: 'CC', Estado: 'Habilitado', EmpresaId: propia ? propia.id : '', Empresa: propia ? propia.Title : '' };
       if (p) {
         try { var ff = await AP.B.getFields('AP_Personas', [p.id], ['Foto', 'Observaciones']); Object.assign(full, ff[p.id] || {}); } catch (e) { /* sin foto */ }
       }
@@ -477,20 +514,47 @@
               try { foto = await U.personPhoto(f); img.src = foto; } catch (e) { AP.toast(e.message, 'error'); }
             } }, AP.icon('camera', 16), 'Tomar / cargar foto'),
             h('button', { class: 'btn small ghost', type: 'button', onclick: function () { foto = ''; img.src = U.avatar(full.Title || '?'); } }, 'Quitar'));
+          // Empresa y cargo: se eligen de las listas que administra el Director (Empresas y Cargos)
+          var optsEmp = [['', '— Seleccione la empresa —']].concat(empresas.filter(function (e) { return e.Activo !== false || e.id === full.EmpresaId; })
+            .map(function (e) { return [e.id, e.Title + (e.NIT ? ' — NIT ' + e.NIT : '') + (e.Activo === false ? ' (inactiva)' : '')]; }));
+          var legEmp = !full.EmpresaId && !!full.Empresa, legCar = !full.CargoId && !!full.Cargo;
+          if (legEmp) optsEmp.splice(1, 0, ['__legado', 'Sin vincular: «' + full.Empresa + '» (elija la empresa registrada)']);
+          var selEmp = AP.select('EmpresaId', optsEmp, legEmp ? '__legado' : (full.EmpresaId || ''));
+          var optsCar = [['', '— Sin cargo —']].concat(cargos.filter(function (c) { return c.Activo !== false || c.id === full.CargoId; })
+            .map(function (c) { return [c.id, c.Title + (c.Area ? ' · ' + c.Area : '') + (c.Activo === false ? ' (inactivo)' : '')]; }));
+          if (legCar) optsCar.splice(1, 0, ['__legado', 'Sin vincular: «' + full.Cargo + '» (elija el cargo del catálogo)']);
+          var selCar = AP.select('CargoId', optsCar, legCar ? '__legado' : (full.CargoId || ''));
+          var areaIn = I('Area', full.Area), claseSel = AP.select('TipoPersonal', [['', '— No aplica / sin clase —']].concat(AP.CAT.tiposPersonal), full.TipoPersonal || '');
+          selCar.addEventListener('change', function () {
+            var c = cargos.find(function (x) { return x.id === selCar.value; });
+            if (!c) return;
+            if (c.Area && !areaIn.value.trim()) areaIn.value = c.Area;
+            if (c.TipoPersonal && !claseSel.value) claseSel.value = c.TipoPersonal;
+          });
+          // Jefe inmediato: persona registrada del personal propio. El Jefe de Producción ve y programa a quienes lo tienen como jefe.
+          var jefe0 = full.JefeId ? personas.find(function (x) { return x.id === full.JefeId; }) || { id: full.JefeId, Title: full.JefeNombre || 'Jefe registrado' } : null;
+          var jefePick = AP.personaPicker({
+            fuente: function () { return Promise.resolve(personas); },
+            filtro: function (x) { return x.Tipo === 'Personal propio' && x.Estado === 'Habilitado' && (!p || x.id !== p.id); },
+            valor: jefe0, quitar: 'Cambiar o quitar', placeholder: 'Buscar al jefe inmediato (nombre, documento o cargo)', fijo: !ED,
+            vacio: 'No aparece en el personal propio habilitado.',
+            detalle: function (x) { var u = (AP.Sync.vigilantes || []).find(function (v) { return v.PersonaId === x.id && v.Activo !== false; }); return [x.Cargo, x.Area, u ? 'Usuario: ' + u.Rol : ''].filter(Boolean).join(' · '); }
+          });
           var form = h('div', { class: 'form-grid' },
             AP.field('Nombres y apellidos *', I('Title', full.Title)),
             AP.field('Tipo *', AP.select('Tipo', AP.CAT.tiposPersona, full.Tipo)),
             AP.field('Tipo de documento', AP.select('TipoDoc', AP.CAT.tiposDoc, full.TipoDoc)),
             AP.field('Número de documento *', I('NumDoc', full.NumDoc, { inputmode: 'numeric' })),
-            AP.field('Empresa', I('Empresa', full.Empresa)),
-            AP.field('Cargo / labor', I('Cargo', full.Cargo)),
-            AP.field('Área', I('Area', full.Area)),
+            AP.field('Empresa (persona jurídica) *', selEmp, ED ? h('span', null, 'Se administran en ', h('a', { href: '#/consola/empresas' }, 'Empresas'), '.') : null),
+            AP.field('Cargo', selCar, ED ? h('span', null, 'Se administran en ', h('a', { href: '#/consola/cargos' }, 'Cargos'), '.') : null),
+            AP.field('Área', areaIn),
             AP.field('Teléfono', I('Telefono', full.Telefono, { inputmode: 'tel' })),
             AP.field('Correo (para enviarle su QR)', I('Correo', full.Correo, { type: 'email' })),
             AP.field('Vigente hasta', I('VigenciaHasta', full.VigenciaHasta, { type: 'date' }), 'Contratistas: fecha hasta la cual está verificada la seguridad social.'),
             AP.field('Placa(s) de vehículo', I('Placa', full.Placa, { autocapitalize: 'characters' }), 'Separe varias con coma.'),
             AP.field('Tipo de vehículo', AP.select('VehiculoTipo', AP.CAT.vehiculos, full.VehiculoTipo)),
-            AP.field('Clase de personal', AP.select('TipoPersonal', [['', '— No aplica / sin clase —']].concat(AP.CAT.tiposPersonal), full.TipoPersonal || ''), 'Personal propio: los operarios los programa el Jefe de Producción.'),
+            AP.field('Clase de personal', claseSel, 'Personal propio. Talento Humano ve en planta a los operarios y al personal operativo.'),
+            AP.field('Jefe inmediato', jefePick, 'Personal propio: el Jefe de Producción ve, consulta y programa a las personas que lo tienen como jefe inmediato.', 'span2'),
             AP.field('Estado', AP.select('Estado', ['Habilitado', 'Inhabilitado'], full.Estado)),
             AP.field('Motivo del estado', I('MotivoEstado', full.MotivoEstado)),
             h('div', { class: 'field span2 stack sm' },
@@ -512,7 +576,19 @@
           var save = async function () {
             var d = AP.formData(form);
             if (d.Title.length < 5 || !d.NumDoc) return AP.toast('Nombre y número de documento son obligatorios.', 'warn');
-            if (d.Tipo !== 'Personal propio') d.TipoPersonal = '';
+            // Empresa, cargo y jefe inmediato vinculados (se guarda también el nombre, para consultas y registros)
+            var emp = empresas.find(function (e) { return e.id === d.EmpresaId; });
+            if (d.EmpresaId === '__legado') delete d.EmpresaId;   // conserva el nombre escrito antes (sin vínculo)
+            else if (!emp) return AP.toast('Seleccione la empresa (persona jurídica) a la que pertenece la persona. Si no está, créela en «Empresas».', 'warn', 8000);
+            else d.Empresa = emp.Title;
+            var car = cargos.find(function (c) { return c.id === d.CargoId; });
+            if (d.CargoId === '__legado') delete d.CargoId;
+            else if (car) d.Cargo = car.Title;
+            else { d.CargoId = ''; d.Cargo = ''; }
+            var jf = jefePick.valor();
+            d.JefeId = jf ? jf.id : ''; d.JefeNombre = jf ? jf.Title : '';
+            if (d.Tipo !== 'Personal propio') { d.TipoPersonal = ''; }
+            if (d.Tipo !== 'Personal propio' && d.JefeId && !(await AP.confirm('Jefe inmediato', 'El jefe inmediato aplica al personal propio. ' + d.Title + ' es «' + d.Tipo + '». ¿Guardar de todas formas?', 'Guardar'))) return;
             if (foto && !d.AutorizaFoto) return AP.toast('Para guardar la fotografía debe constar la autorización de su uso. Márquela o quite la foto.', 'warn', 7000);
             var dup = personas.find(function (x) { return U.normDoc(x.NumDoc) === U.normDoc(d.NumDoc) && (!p || x.id !== p.id); });
             if (dup) return AP.toast('Ya existe una persona con ese documento: ' + dup.Title, 'warn');
@@ -678,13 +754,16 @@
     function exportarPersonas(rows) {
       exportar('Personas', [
         ['Nombre', function (p) { return p.Title; }, 34], ['Tipo', function (p) { return p.Tipo; }, 18], ['Tipo doc.', function (p) { return p.TipoDoc; }, 8],
-        ['Documento', function (p) { return p.NumDoc; }, 16], ['Empresa', function (p) { return p.Empresa; }, 28], ['Cargo', function (p) { return p.Cargo; }, 22],
+        ['Documento', function (p) { return p.NumDoc; }, 16], ['Empresa', function (p) { return p.Empresa; }, 28],
+        ['NIT empresa', function (p) { var e = empresas.find(function (x) { return x.id === p.EmpresaId; }); return e ? e.NIT : (p.Empresa ? 'Sin vincular' : ''); }, 14],
+        ['Cargo', function (p) { return p.Cargo; }, 22],
         ['Área', function (p) { return p.Area; }, 18], ['Teléfono', function (p) { return p.Telefono; }, 14], ['Placa', function (p) { return p.Placa; }, 12],
-        ['Clase de personal', function (p) { return p.TipoPersonal; }, 16],
+        ['Clase de personal', function (p) { return p.TipoPersonal; }, 16], ['Jefe inmediato', jefeNombre, 28],
         ['Vigente hasta', function (p) { return p.VigenciaHasta; }, 13], ['Estado', function (p) { return p.Estado; }, 12], ['Motivo estado', function (p) { return p.MotivoEstado; }, 30],
         ['Alerta de salida', function (p) { return p.AlertaSalida ? 'Sí — ' + (p.MotivoAlertaSalida || '') : 'No'; }, 22],
         ['Autoriza datos', function (p) { return U.yesNo(p.AutorizaDatos); }, 10], ['Autoriza foto', function (p) { return U.yesNo(p.AutorizaFoto); }, 10]
-      ], rows, 'xlsx', [['Generado por', AP.Session.user.nombre + ' (' + AP.Session.user.upn + ')'], ['Fecha', U.fDateTime(new Date())], ['Filtro', q.value || 'ninguno']]);
+      ], rows, 'xlsx', [['Generado por', AP.Session.user.nombre + ' (' + AP.Session.user.upn + ')'], ['Fecha', U.fDateTime(new Date())],
+        ['Filtro', [q.value, fTipo.value, fTP.value, fEmp.value ? fEmp.options[fEmp.selectedIndex].text : '', fJefe.value ? fJefe.options[fJefe.selectedIndex].text : '', fEst.value].filter(Boolean).join(' · ') || 'ninguno']]);
     }
   });
 

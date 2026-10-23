@@ -67,12 +67,19 @@
 
   // ---------- Programación: turno de una persona en una fecha ----------
   // ctx = { semanas: { 'AAAA-MM-DD(lunes)': { token: { d: {fecha: código}, turnos } } }, horarios: [...] }
-  function indexarSemanas(docs) {
-    var idx = {};
-    (docs || []).forEach(function (w) {
-      var datos = AP.Horario.jsonDe(w.Datos, {}), turnos = AP.Horario.jsonDe(w.Turnos, {}), porTok = {};
-      Object.keys(datos).forEach(function (pid) { var x = datos[pid]; if (x && x.t) porTok[x.t] = { d: x.d || {}, turnos: turnos, pid: pid }; });
-      idx[w.Semana] = porTok;
+  // Una semana puede tener varios registros (uno por jefe inmediato): se combinan. Si se pasan las personas, la
+  // programación de un jefe solo se toma para quienes lo tienen como jefe inmediato (igual que en portería).
+  function indexarSemanas(docs, personas) {
+    var idx = {}, porToken = null;
+    if (personas) { porToken = {}; personas.forEach(function (p) { if (p.Token) porToken[p.Token] = p; }); }
+    (docs || []).slice().sort(function (a, b) { return (a.JefeId ? 1 : 0) - (b.JefeId ? 1 : 0); }).forEach(function (w) {
+      var datos = AP.Horario.jsonDe(w.Datos, {}), turnos = AP.Horario.jsonDe(w.Turnos, {}), porTok = idx[w.Semana] = idx[w.Semana] || {};
+      Object.keys(datos).forEach(function (pid) {
+        var x = datos[pid];
+        if (!x || !x.t) return;
+        if (w.JefeId && porToken && porToken[x.t] && (porToken[x.t].JefeId || '') !== w.JefeId) return;
+        porTok[x.t] = { d: x.d || {}, turnos: turnos, pid: pid, jefe: w.JefeId || '' };
+      });
     });
     return idx;
   }
