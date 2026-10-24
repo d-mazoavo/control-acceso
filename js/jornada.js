@@ -203,7 +203,67 @@
     return { k: 'sin', txt: 'Sin turno hoy', kind: 'muted', turno: '' };
   }
 
+  // ---------- Consultas sin índices compuestos ----------
+  // Firebase solo exige índices creados a mano cuando una consulta combina igualdad con rango u orden. Por eso los
+  // perfiles con lectura parcial (Jefe de Producción, Talento Humano) consultan los ingresos y salidas día por día
+  // (campo Dia, solo igualdades) y los permisos y cambios mes por mes (campo Mes). Los registros anteriores a la
+  // actualización no tienen esos campos: hasta CORTE se intenta además la consulta anterior y, si falta su índice, se
+  // continúa con lo disponible y se avisa.
+  var CORTE = '2026-11-15';
+  function meses(desdeYmd, hastaYmd) {
+    var out = [], m = desdeYmd.slice(0, 7), fin = hastaYmd.slice(0, 7);
+    while (m <= fin && out.length < 36) { out.push(m); var y = Number(m.slice(0, 4)), mm = Number(m.slice(5, 7)) + 1; if (mm > 12) { mm = 1; y++; } m = y + '-' + String(mm).padStart(2, '0'); }
+    return out;
+  }
+  // o: { scope, filtros: [[campo, '==', valor]], legado: fn(desde, hasta) → filtros, desde, hasta (AAAA-MM-DD), progreso }
+  async function movsPorDia(o) {
+    var guard = (await AP.Store.get('th:movs')) || {};
+    if (guard.v !== 2 || guard.scope !== o.scope) guard = { v: 2, scope: o.scope, dias: {} };
+    var cache = guard.dias, limite = addYmd(U.ymd(), -1), out = [], dias = [], y = o.desde, sinLegado = false, avisoLegado = false;
+    while (y <= o.hasta) { dias.push(y); y = addYmd(y, 1); }
+    for (var i = 0; i < dias.length; i++) {
+      var d = dias[i];
+      if (cache[d] && d < limite) { out = out.concat(cache[d]); continue; }
+      if (o.progreso) o.progreso(i + 1, dias.length);
+      var r = await AP.B.consulta('AP_Movimientos', o.filtros.concat([['Dia', '==', d]]));
+      var completo = true;
+      if (d <= CORTE && o.legado && !sinLegado) {
+        try {
+          var r2 = await AP.B.consulta('AP_Movimientos', o.legado(U.fromLocal(d, '00:00'), new Date(U.fromLocal(d, '23:59').getTime() + 59999)));
+          var vistos = {};
+          r.forEach(function (m) { vistos[m.IdLocal || m.id] = 1; });
+          r2.forEach(function (m) { if (!vistos[m.IdLocal || m.id]) r.push(m); });
+        } catch (e) {
+          if (e.offline || e.authRequired) throw e;
+          sinLegado = true; avisoLegado = true; completo = false;
+        }
+      } else if (d <= CORTE && o.legado && sinLegado) completo = false;
+      if (d < limite && completo) cache[d] = r;
+      out = out.concat(r);
+    }
+    var corte = addYmd(U.ymd(), -70);
+    Object.keys(cache).forEach(function (k) { if (k < corte) delete cache[k]; });
+    try { await AP.Store.set('th:movs', guard); } catch (e) { /* la copia es opcional */ }
+    out.avisoLegado = avisoLegado;
+    return out;
+  }
+  // Consulta por meses (permisos y registro de cambios): filtros de igualdad + Mes == AAAA-MM.
+  // legado: filtros solo de igualdad para los registros anteriores a la actualización (sin campo Mes); se consultan
+  // mientras el periodo pedido empiece antes de CORTE.
+  async function porMeses(lista, filtros, desdeYmd, hastaYmd, legado) {
+    var out = [], vistos = {};
+    var poner = function (r) { if (!vistos[r.id]) { vistos[r.id] = 1; out.push(r); } };
+    var ms = meses(desdeYmd, hastaYmd);
+    for (var i = 0; i < ms.length; i++) (await AP.B.consulta(lista, filtros.concat([['Mes', '==', ms[i]]]))).forEach(poner);
+    if (legado && desdeYmd <= CORTE) {
+      try { (await AP.B.consulta(lista, legado, { probar: true })).forEach(function (r) { if (!r.Mes) poner(r); }); }
+      catch (e) { if (e.offline || e.authRequired) throw e; out.avisoLegado = true; }
+    }
+    return out;
+  }
+
   AP.Jornada = {
+    CORTE: CORTE, meses: meses, movsPorDia: movsPorDia, porMeses: porMeses,
     addYmd: addYmd, dow: dow, lunes: lunes, toMin: toMin, festivos: festivos, festivo: festivo, domOFest: domOFest, pascua: pascua,
     clasificar: clasificar, indexarSemanas: indexarSemanas, turnoDe: turnoDe, rangoTurno: rangoTurno, horasTurno: horasTurno,
     agrupar: agrupar, movsDe: movsDe, intervalos: intervalos, compendio: compendio, estadoAhora: estadoAhora, clave: clave

@@ -256,7 +256,7 @@
           var l = filtradosR();
           if (!l.length) return AP.toast('No hay registros para descargar con el filtro actual.', 'warn');
           AP.exportar('Registro_de_visitas', COLS_REG, l, 'xlsx', [['Documento', 'Registro de ingresos y salidas de visitantes — ' + AP.CFG.porteria],
-            ['Periodo', desdeR.value + ' a ' + hastaR.value], ['Filtros', [fTipoR.options[fTipoR.selectedIndex].text, fEstR.value, qr.value].filter(Boolean).join(' · ')],
+            ['Periodo', desdeR.value + ' a ' + hastaR.value], ['Filtros', [AP.textoOpcion(fTipoR), fEstR.value, qr.value].filter(Boolean).join(' · ')],
             ['Generado por', AP.Session.user.nombre + ' (' + AP.Session.user.upn + ')'], ['Fecha', U.fDateTime(new Date())], ['Fuente', 'Base de datos Firebase — colección AP_Movimientos']]);
         })),
         regBox);
@@ -926,16 +926,13 @@
       'Cuando un usuario se da de baja o se le restablece el PIN, su sesión anterior deja de tener acceso de inmediato.',
       'Si vuelve a publicar las reglas, use siempre la última versión entregada.'
     ];
-    // Índices compuestos que necesitan las consultas filtradas del Jefe de Producción y de Talento Humano
-    var indicesBox = h('div', { class: 'stack sm' }, h('p', { class: 'muted small' }, 'Oprima «Verificar índices» después de publicar las reglas de esta actualización.'));
+    // Desde el ajuste del 23-oct-2026 el Jefe de Producción y Talento Humano consultan solo con igualdades (sin índices
+    // compuestos). Estos dos índices son opcionales: solo permiten que vean los ingresos y salidas registrados antes.
+    var indicesBox = h('div', { class: 'stack sm' }, h('p', { class: 'muted small' }, 'Oprima «Verificar índices» para ver su estado.'));
     var ayer = new Date(Date.now() - 864e5);
     var INDICES = [
-      ['Ingresos y salidas del personal a cargo (Jefe de Producción)', 'AP_Movimientos', 'JefeId + FechaHora', [['JefeId', '==', 'indice'], ['FechaHora', '>=', ayer]]],
-      ['Permisos del personal a cargo (Jefe de Producción)', 'AP_Permisos', 'JefeId + Hasta', [['JefeId', '==', 'indice'], ['Hasta', '>=', ayer]]],
-      ['Registro de cambios del personal a cargo (Jefe de Producción)', 'AP_CambiosPlanta', 'JefeId + FechaHora', [['JefeId', '==', 'indice'], ['FechaHora', '>=', ayer]]],
-      ['Programación semanal del personal a cargo (Jefe de Producción)', 'AP_ProgPlanta', 'JefeId + Semana', [['JefeId', '==', 'indice'], ['Semana', '==', '2026-01-05']]],
-      ['Ingresos y salidas del personal propio (Talento Humano)', 'AP_Movimientos', 'Categoria + FechaHora', [['Categoria', 'in', ['Personal propio', 'Personal propio sin carné']], ['FechaHora', '>=', ayer]]],
-      ['Permisos del personal propio (Talento Humano)', 'AP_Permisos', 'PersonaTipo + Hasta', [['PersonaTipo', '==', 'Personal propio'], ['Hasta', '>=', ayer]]]
+      ['Ingresos y salidas anteriores a la actualización (Jefe de Producción)', 'AP_Movimientos', 'JefeId + FechaHora', [['JefeId', '==', 'indice'], ['FechaHora', '>=', ayer]]],
+      ['Ingresos y salidas anteriores a la actualización (Talento Humano)', 'AP_Movimientos', 'Categoria + FechaHora', [['Categoria', 'in', ['Personal propio', 'Personal propio sin carné']], ['FechaHora', '>=', ayer]]]
     ];
     async function verificarIndices() {
       indicesBox.replaceChildren(AP.spinner('Verificando…'));
@@ -957,7 +954,7 @@
       h('section', { class: 'card stack' }, h('h3', null, '2. Seguridad en el servidor'),
         h('ol', { class: 'steps' }, reglas.map(function (p) { return h('li', null, p); }))),
       h('section', { class: 'card stack' }, h('h3', null, '2a. Índices de la base de datos'),
-        h('p', { class: 'small' }, 'El Jefe de Producción solo consulta a su personal a cargo y Talento Humano solo al personal propio. Esas consultas filtradas pueden necesitar hasta seis índices en Firebase, que se crean una sola vez (los de la actualización anterior por «TipoPersonal» ya no se usan y pueden borrarse).'),
+        h('p', { class: 'small' }, 'Opcional. El Jefe de Producción y Talento Humano ya no necesitan índices compuestos: sus consultas funcionan sin crearlos. Estos dos índices solo permiten que vean los ingresos y salidas registrados antes de la actualización de octubre de 2026; si no se crean, esas pantallas funcionan igual y muestran un aviso. Los índices creados en entregas anteriores pueden dejarse o borrarse.'),
         indicesBox, h('div', { class: 'row gap wrap' }, h('button', { class: 'btn', type: 'button', onclick: verificarIndices }, AP.icon('search', 18), 'Verificar índices'))),
       h('section', { class: 'card stack' }, h('h3', null, '3. Este dispositivo'),
         h('div', { class: 'kv' }, h('span', null, 'Identificador'), h('strong', null, U.deviceId())),
@@ -984,9 +981,10 @@
     'autoriza datos': 'AutorizaDatos', 'autoriza foto': 'AutorizaFoto', 'observaciones': 'Observaciones',
     'clase de personal': 'TipoPersonal', 'tipo de personal': 'TipoPersonal', 'clase': 'TipoPersonal',
     'nit': '_NIT', 'nit empresa': '_NIT', 'nit de la empresa': '_NIT',
-    'documento jefe inmediato': '_JefeDoc', 'documento del jefe inmediato': '_JefeDoc', 'cedula jefe inmediato': '_JefeDoc', 'jefe inmediato documento': '_JefeDoc'
+    'documento jefe inmediato': '_JefeDoc', 'documento del jefe inmediato': '_JefeDoc', 'cedula jefe inmediato': '_JefeDoc', 'jefe inmediato documento': '_JefeDoc',
+    'numero de uniforme': 'NumUniforme', 'uniforme': 'NumUniforme', 'no de uniforme': 'NumUniforme', 'n de uniforme': 'NumUniforme'
   };
-  var PLANTILLA = ['Nombre completo', 'Tipo', 'Tipo de documento', 'Número de documento', 'Teléfono', 'Correo', 'Empresa', 'NIT empresa', 'Cargo', 'Área', 'Estado', 'Vigente hasta', 'Placa', 'Tipo de vehículo', 'Autoriza datos', 'Autoriza foto', 'Observaciones', 'Clase de personal', 'Documento jefe inmediato'];
+  var PLANTILLA = ['Nombre completo', 'Tipo', 'Tipo de documento', 'Número de documento', 'Teléfono', 'Correo', 'Empresa', 'NIT empresa', 'Cargo', 'Área', 'Estado', 'Vigente hasta', 'Placa', 'Tipo de vehículo', 'Autoriza datos', 'Autoriza foto', 'Observaciones', 'Clase de personal', 'Documento jefe inmediato', 'Número de uniforme'];
 
   // =================== ELEMENTOS (exclusivo del Director de Seguridad Integral) ===================
   // El Director registra qué elementos ingresa o retira cada persona registrada. Si salen y deben volver (préstamo,
@@ -1579,14 +1577,15 @@
   });
 
   AP.plantillaPersonas = async function () {
-    var ejemplo = ['Nombre Apellido Apellido', 'Contratista', 'CC', '1234567890', '3000000000', 'correo@empresa.com', 'Empresa contratista S.A.S.', '900123456-7', 'Técnico', 'Mantenimiento', 'Habilitado', '2026-12-31', 'ABC123', 'Camioneta', 'Sí', 'Sí', '', '', ''];
+    var ejemplo = ['Nombre Apellido Apellido', 'Contratista', 'CC', '1234567890', '3000000000', 'correo@empresa.com', 'Empresa contratista S.A.S.', '900123456-7', 'Técnico', 'Mantenimiento', 'Habilitado', '2026-12-31', 'ABC123', 'Camioneta', 'Sí', 'Sí', '', '', '', ''];
     var guia = [
       ['Tipo', AP.CAT.tiposPersona.join(' | ')], ['Tipo de documento', AP.CAT.tiposDoc.join(' | ')], ['Estado', 'Habilitado | Inhabilitado'],
       ['Vigente hasta', 'AAAA-MM-DD (opcional). Contratistas: fecha de la seguridad social verificada.'], ['Autoriza datos / Autoriza foto', 'Sí | No — debe existir el soporte firmado.'],
       ['Clase de personal', 'Solo personal propio: ' + AP.CAT.tiposPersonal.join(' | ') + '.'],
       ['Empresa / NIT empresa', 'Obligatorio: la empresa debe estar creada en «Empresas». Se busca por NIT (o por el nombre exacto). Personal propio sin empresa: se vincula a ' + AP.CFG.empresa + ' si está creada.'],
       ['Cargo', 'Opcional: debe existir en «Cargos» con el mismo nombre. Si está vacío, la persona queda sin cargo.'],
-      ['Documento jefe inmediato', 'Opcional, solo personal propio: número de documento del jefe inmediato, que debe estar registrado como persona. El Jefe de Producción ve y programa a quienes lo tienen como jefe inmediato.'],
+      ['Documento jefe inmediato', 'Opcional, para cualquier tipo de persona: número de documento del jefe inmediato, que debe estar registrado como persona. El Jefe de Producción ve y programa a quienes lo tienen como jefe inmediato.'],
+      ['Número de uniforme', 'Opcional.'],
       ['Regla', 'Si el número de documento ya existe, la fila actualiza a esa persona; si no, se crea con una credencial QR nueva.']
     ];
     if (window.writeXlsxFile) {
@@ -1698,6 +1697,9 @@
             var dat = Object.assign({}, x.data), jp = dat._jefePendiente;
             delete dat._jefePendiente;
             if (jp) { var jid = idsPorDoc[jp]; if (jid) { dat.JefeId = jid.id; dat.JefeNombre = jid.Title; } else pendJefe.push('Fila ' + x.n); }
+            // Ámbito de Talento Humano: personal propio o con jefe inmediato asignado
+            var tipoF = dat.Tipo || (x.existente && x.existente.Tipo) || '', jefeF = dat.JefeId !== undefined ? dat.JefeId : (x.existente && x.existente.JefeId) || '';
+            dat.AmbitoTH = tipoF === 'Personal propio' || !!jefeF;
             try {
               if (x.existente) { await AP.B.update('AP_Personas', x.existente.id, dat); u++; idsPorDoc[U.normDoc(dat.NumDoc)] = { id: x.existente.id, Title: dat.Title }; }
               else {

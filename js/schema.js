@@ -19,7 +19,10 @@
         ['TipoPersonal', 'text', IDX], ['AlertaSalida', 'bool'], ['MotivoAlertaSalida', 'text'],
         // Empresa (persona jurídica registrada), cargo del catálogo y jefe inmediato (persona registrada). El Jefe de
         // Producción ve y programa a las personas que lo tienen como jefe inmediato.
-        ['EmpresaId', 'text', IDX], ['CargoId', 'text'], ['JefeId', 'text', IDX], ['JefeNombre', 'text']
+        ['EmpresaId', 'text', IDX], ['CargoId', 'text'], ['JefeId', 'text', IDX], ['JefeNombre', 'text'],
+        // Número de uniforme (lo asignan el Director, el jefe inmediato o Talento Humano) y ámbito de Talento Humano
+        // (personal propio o persona con jefe inmediato asignado)
+        ['NumUniforme', 'text'], ['AmbitoTH', 'bool', IDX]
       ]
     },
     // ---------- Datos maestros del Director: personas jurídicas y cargos ----------
@@ -64,7 +67,9 @@
         ['DesfaseReloj', 'number'], ['Porteria', 'text'], ['EntradaId', 'text'], ['InspeccionId', 'text'], ['Novedad', 'text', IDX], ['PermisoId', 'text'], ['HorarioInfo', 'text'], ['Hash', 'text'], ['Observaciones', 'note'],
         ['SolicitudId', 'text'], ['InduccionConfirmada', 'bool'], ['TipoPersonal', 'text', IDX],
         // Jefe inmediato de la persona al momento del registro (el Jefe de Producción consulta los de su personal)
-        ['JefeId', 'text', IDX]
+        ['JefeId', 'text', IDX],
+        // Día (AAAA-MM-DD, hora de Colombia) y ámbito de Talento Humano: permiten consultas sin índices compuestos
+        ['Dia', 'text', IDX], ['AmbitoTH', 'bool', IDX]
       ]
     },
     AP_Inspecciones: {
@@ -109,7 +114,9 @@
         ['Token', 'text', IDX], ['NumDoc', 'text', IDX], ['Area', 'text'], ['Turno', 'text'], ['Dias', 'text'],
         ['HoraEntrada', 'text'], ['HoraSalida', 'text'], ['VigenteDesde', 'text'], ['VigenteHasta', 'text'], ['Activo', 'bool'], ['Observaciones', 'note'],
         // Turno (control de puntualidad y de salida) o Libre (entra y sale las veces que necesite dentro del horario habilitado)
-        ['Modalidad', 'text']
+        ['Modalidad', 'text'],
+        // Horario fijo asignado por el jefe inmediato (p. ej., de 8 a 5) a una persona de su personal
+        ['PersonaId', 'text'], ['JefeId', 'text', IDX]
       ]
     },
     AP_Permisos: {
@@ -123,7 +130,9 @@
         // Persona del permiso (los permisos del Jefe de Producción se validan contra la ficha de la persona)
         ['PersonaId', 'text'], ['TipoPersonal', 'text', IDX], ['Area', 'text'], ['FechaAnulacion', 'datetime'],
         // Tipo de la persona (Talento Humano consulta los del personal propio) y su jefe inmediato (Jefe de Producción)
-        ['PersonaTipo', 'text', IDX], ['JefeId', 'text', IDX]
+        ['PersonaTipo', 'text', IDX], ['JefeId', 'text', IDX],
+        // Mes (AAAA-MM) de inicio del permiso y ámbito de Talento Humano: consultas sin índices compuestos
+        ['Mes', 'text', IDX], ['AmbitoTH', 'bool', IDX]
       ]
     },
     AP_Solicitudes: {
@@ -179,7 +188,7 @@
       titulo: 'Cambio',
       desc: 'Registro de los cambios a la programación de planta y a las ausencias (no se modifica ni se borra)',
       cols: [['Tipo', 'text', IDX], ['Semana', 'text'], ['Referencia', 'text'], ['FechaHora', 'datetime', IDX], ['Usuario', 'text'], ['UsuarioNombre', 'text'],
-        ['Rol', 'text'], ['Cambios', 'number'], ['MismoDia', 'number'], ['Detalle', 'note'], ['Motivo', 'note'], ['JefeId', 'text', IDX]]
+        ['Rol', 'text'], ['Cambios', 'number'], ['MismoDia', 'number'], ['Detalle', 'note'], ['Motivo', 'note'], ['JefeId', 'text', IDX], ['Mes', 'text', IDX]]
     },
     // ---------- Talento Humano: ausencias del personal (vacaciones, permisos de día completo, licencias) ----------
     AP_Ausencias: {

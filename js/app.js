@@ -142,15 +142,15 @@
     ['/consola/horarios', 'clock', 'Horarios', 'ver'],
     ['/consola/permisos', 'key', 'Permisos', 'ver'],
     ['/consola/novedades', 'alert', 'Novedades', 'ver'],
-    // Usuarios: solo el Director de Seguridad Integral
-    ['/consola/vigilantes', 'badge', 'Usuarios', 'admin'],
     ['/consola/elementos', 'package', 'Elementos', 'ver'],
     ['/consola/rondas', 'route', 'Rondas', 'ver'],
     ['/consola/programacion', 'calendar', 'Programación', 'ver'],
     ['/consola/bitacora', 'file', 'Bitácora', 'ver'],
     ['/consola/instalacion', 'settings', 'Instalación', 'admin'],
     ['/consola/notificaciones', 'bell', 'Notificaciones', 'admin'],
-    ['/manual-uso', 'file', 'Manual de uso', 'consola']
+    ['/manual-uso', 'file', 'Manual de uso', 'consola'],
+    // Usuarios: solo el Director de Seguridad Integral (último ítem del menú)
+    ['/consola/vigilantes', 'badge', 'Usuarios', 'admin']
   ];
   function navPermitido(n) {
     if (n[0] === '/consola/historial' && Session.can('historial')) return true;   // el supervisor consulta el historial
@@ -422,6 +422,8 @@
       AP.toast('Turno iniciado. ' + Session.user.nombre + ', sus registros quedan a su nombre.', 'info', 4500);
     }
     await vigilarTurno();
+    // Ajuste automático de datos de la actualización (solo la sesión del Director, en segundo plano)
+    if (Session.can('admin') && AP.Migracion) setTimeout(function () { AP.Migracion.run().catch(function () { /* se reintenta en el próximo ingreso */ }); }, 5000);
     if (!syncStarted) {
       syncStarted = true;
       AP.Sync.start();

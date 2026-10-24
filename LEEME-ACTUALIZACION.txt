@@ -1,88 +1,103 @@
 AVO PAK S.A.S. — CONTROL DE ACCESO
-Ajuste del 22 de octubre de 2026 (segunda entrega del día). La versión de la aplicación sigue siendo 1.0.0.
+Ajuste del 24 de octubre de 2026. La versión de la aplicación sigue siendo 1.0.0.
 
 QUÉ TRAE
-1. Usuarios: se crean buscando a una persona ya registrada en Personas y asignándole el perfil y el usuario; nombre,
-   documento, empresa y cargo salen de su ficha. El ítem «Usuarios» solo lo ve el Director de Seguridad Integral.
-2. Empresas (personas jurídicas: nombre, NIT y logo) y Cargos (catálogo). Toda persona se vincula a una empresa creada.
-3. Jefe inmediato en la ficha de cada persona. El Jefe de Producción ve, consulta, filtra y programa solo a quienes lo
-   tienen como jefe inmediato: turnos con horario, asignación de personas a turnos por rango de fechas, programación
-   semanal, permisos, estadísticas, Excel por turnos y ficha de consulta de cada persona.
-4. Talento Humano: personal propio (solo consulta, sin modificar datos), permisos, vacaciones y ausencias (durante la
-   ausencia no se permite el ingreso: el vigilante envía la solicitud al Director), estado en planta de operarios y
-   personal operativo según portería, programación de los Jefes de Producción, horas según portería y estadísticas.
-5. Filtro de texto en todas las listas y tablas (consola, portería y ventanas).
-6. Visitas: las visitas por llegar desaparecen del panel al ingresar el visitante; no se registra una visita para una
-   persona que ya tiene autorizado el ingreso ese día y a esa hora (ingreso libre, turno, permiso o acceso sin horario).
-7. Cambio de perfil (por ejemplo, de vigilante a rondero): el celular cierra el turno y la sesión y, al volver a
-   ingresar, muestra el panel del nuevo perfil.
-8. Corrección: el manual de uso en pantalla no mostraba el contenido de las secciones (solo el índice). Ya se muestra.
+1. Personas: la búsqueda encuentra solo a la persona por sus propios datos (nombre, documento, empresa, cargo, área, placa
+   y uniforme). Ya no trae al personal a cargo de quien se busca. Para ver el personal de un jefe use el filtro
+   «Cualquier jefe inmediato».
+2. Error «Falta crear un índice»: corregido. El Jefe de Producción (Mi personal, Permisos, Estadísticas, Registro de
+   cambios) y Talento Humano (Personal, Permisos, Estado en planta, Horas, Estadísticas) ya no usan consultas que exijan
+   índices en Firebase. Si una consulta secundaria falla (por ejemplo, sin conexión), el personal se muestra igual, con
+   un aviso.
+3. Jefe inmediato para cualquier persona, también para contratistas y conductores, sin confirmación adicional. Cuando
+   cambie el jefe en la ficha, los permisos y ausencias vigentes o futuros y los horarios fijos del jefe anterior pasan
+   automáticamente al nuevo jefe.
+4. El Jefe de Producción solo ve personal habilitado. Quien se inhabilita sale de todas sus listas. Lo que ya tenía
+   programado se conserva por si se vuelve a habilitar.
+5. Número de uniforme. Usted lo registra en la ficha de Personas. El jefe inmediato y Talento Humano lo cambian desde la
+   «Ficha» de cada persona o con el botón «Números de uniforme», que permite varios a la vez. El servidor solo les permite
+   cambiar ese dato. La carga masiva trae la columna «Número de uniforme».
+6. Talento Humano ve y registra permisos y ausencias del personal propio y de toda persona con jefe inmediato asignado,
+   aunque no esté a cargo del Jefe de Producción.
+7. Talento Humano, «Programación de turnos»:
+   - «Todo lo programado, por persona»: turnos, descansos, horarios fijos y ausencias, día por día, con Excel.
+   - «Semana por jefe inmediato»: la cuadrícula semanal de cada jefe.
+8. Planta, pestaña nueva «Horarios fijos». El jefe asigna a su personal un horario fijo (por ejemplo, lunes a viernes de
+   08:00 a 17:00). La portería le aplica el mismo control de puntualidad de los turnos. Los horarios no se borran: se
+   desactivan. Cada cambio queda en el registro de cambios.
+9. «Usuarios» quedó como último ítem del menú.
+10. Idioma: el selector ES / EN traduce toda la pantalla (menús, títulos, botones, formularios, tablas, ventanas, avisos,
+    mensajes y el manual).
+    Siguen en español:
+    - los datos que se registran (nombres, cargos, áreas, observaciones);
+    - los archivos que se descargan (Excel, Word, PDF) y las credenciales;
+    - los mensajes de WhatsApp y correo;
+    - los textos legales que se aceptan (aviso de privacidad, autorización de datos y condiciones de uso de la
+      credencial), porque la versión en español es la que tiene valor jurídico.
+11. Manual de uso: revisión 03.
 
 ARCHIVOS
-- Carpeta control-acceso: 22 archivos para GitHub (21 reemplazan a los existentes y 1 es nuevo: js/views-maestros.js).
-- reglas-firestore-NO-SUBIR-A-GITHUB.txt: reglas de seguridad de Firebase. NO se sube a GitHub (contiene el código de
-  instalación).
-- Manual_Control_de_Acceso_v1.0.0_rev02.docx: manual actualizado (revisión 02).
+- Carpeta control-acceso: 17 archivos para GitHub. Reemplazan a los existentes 16: index.html, sw.js,
+  LEEME-ACTUALIZACION.txt y 13 archivos de la carpeta js. Es nuevo 1: js/i18n-en.js (el diccionario de inglés).
+- reglas-firestore-NO-SUBIR-A-GITHUB.txt: reglas de seguridad de Firebase. NO se sube a GitHub, porque contiene el código
+  de instalación.
+- Manual_Control_de_Acceso_v1.0.0_rev03.docx: manual actualizado (revisión 03).
 
 PASO 1. REGLAS DE FIREBASE (primero que todo)
 1. Entre a https://console.firebase.google.com con la cuenta propietaria del proyecto avopak-acceso-bf73e.
 2. Firestore Database → pestaña «Reglas».
-3. Seleccione todo el texto (Ctrl+A), bórrelo, pegue todo el contenido de reglas-firestore-NO-SUBIR-A-GITHUB.txt y
-   oprima «Publicar».
+3. Seleccione todo el texto (Ctrl+A) y bórrelo.
+4. Pegue todo el contenido de reglas-firestore-NO-SUBIR-A-GITHUB.txt y oprima «Publicar».
 
 PASO 2. GITHUB
 1. Descomprima el ZIP en su computador.
 2. Entre a https://github.com/d-mazoavo/control-acceso → «Add file» → «Upload files».
-3. Abra la carpeta control-acceso que descomprimió, seleccione TODO su contenido (las carpetas css y js, y los archivos
-   index.html, sw.js y LEEME-ACTUALIZACION.txt) y arrástrelo a la página de GitHub. Las carpetas conservan su ruta.
-4. Espere a que termine de cargar y oprima «Commit changes».
-5. Espere 1 a 2 minutos a que GitHub Pages publique.
+3. Abra la carpeta control-acceso que descomprimió y seleccione TODO su contenido: la carpeta js y los archivos
+   index.html, sw.js y LEEME-ACTUALIZACION.txt.
+4. Arrástrelo a la página de GitHub. La carpeta js conserva su ruta.
+5. Espere a que termine de cargar y oprima «Commit changes».
+6. Espere 1 a 2 minutos a que GitHub Pages publique.
 
-PASO 3. ACTUALIZAR LA APLICACIÓN EN CADA EQUIPO
+PASO 3. ACTUALIZAR LA APLICACIÓN EN CADA EQUIPO (el mismo día)
 - Computador: abra https://d-mazoavo.github.io/control-acceso/ y oprima Ctrl+F5 (o Ctrl+Mayús+R).
-- Celulares: cierre la aplicación por completo y ábrala de nuevo (si aparece el aviso de nueva versión, ciérrela y
-  ábrala otra vez).
-- En el menú del Director deben aparecer «Empresas» y «Cargos».
+- Celulares de portería y de rondas: cierre la aplicación por completo y ábrala de nuevo. Si aparece el aviso de nueva
+  versión, ciérrela y ábrala otra vez.
+- IMPORTANTE: actualice TODOS los celulares de portería de inmediato. Desde esta versión cada ingreso y salida lleva el
+  día del registro, y así lo consultan el Jefe de Producción y Talento Humano. Un celular sin actualizar sigue
+  registrando bien en portería, pero esos registros no les aparecen al jefe ni a Talento Humano.
 
-PASO 4. ÍNDICES DE LA BASE DE DATOS (una sola vez)
-1. Consola → «Instalación» → sección «2a. Índices de la base de datos» → «Verificar índices».
-2. En cada fila con el botón «Crear índice», oprímalo: se abre Firebase con el índice ya llenado; oprima «Crear» (o
-   «Guardar»). Son hasta seis. Tardan unos minutos; luego vuelva a «Verificar índices» hasta que todos digan «Listo».
-3. Los índices de la entrega anterior por «TipoPersonal» ya no se usan; puede borrarlos en Firebase (Firestore
-   Database → Índices) o dejarlos.
+PASO 4. AJUSTE AUTOMÁTICO DE DATOS (una sola vez, 2 minutos)
+1. Ingrese con su usuario de Director a la consola desde el computador y deje la aplicación abierta unos 2 minutos.
+2. En segundo plano, la aplicación completa en las fichas el dato que permite a Talento Humano ver a las personas con
+   jefe inmediato. En los permisos, ausencias y horarios recientes completa el mes y el jefe vigente.
+3. Para comprobarlo: «Bitácora» → debe aparecer «Ajuste automático de datos». Si no aparece en 5 minutos, recargue la
+   página (Ctrl+F5) y espere de nuevo.
+Los ingresos y salidas no se modifican: son registros inalterables.
 
-PASO 5. EMPRESAS Y CARGOS
-1. «Empresas» → «Nueva empresa»: registre primero Avo Pak S.A.S. (nombre, NIT y logo) y luego cada contratista,
-   transportadora o empresa de la que haya personas registradas.
-2. Para las personas registradas antes de esta entrega: abra cada empresa y oprima «Vincular personas con este nombre»
-   (vincula a quienes tienen escrito exactamente ese nombre de empresa). Las que no queden vinculadas se ven en Personas
-   con el filtro «Sin empresa vinculada»; edítelas y elija la empresa.
-3. «Cargos» → «Nuevo cargo»: registre los cargos (con área y clase de personal). En cada cargo puede usar «Vincular
-   personas con este cargo escrito».
+PASO 5. VERIFICACIÓN RÁPIDA (5 minutos)
+1. Con el usuario del jefe de mantenimiento: «Mi personal», «Permisos», «Estadísticas» y «Registro de cambios» deben
+   cargar sin el aviso de índices.
+   Si aparece «Su usuario no está vinculado a una persona registrada»: Usuarios → abra su usuario → «Editar datos» →
+   «Persona registrada»: búsquela, selecciónela y guarde. Luego él debe cerrar sesión y volver a ingresar.
+2. Con el usuario de Talento Humano:
+   - «Permisos» carga sin error;
+   - «Registrar permiso» permite elegir personas que no están a cargo de Federico;
+   - «Programación de turnos» muestra «Todo lo programado, por persona».
+3. En Personas, busque «David Alejandro Mazo»: debe aparecer solo usted.
+4. Abajo en el menú, oprima «EN»: toda la pantalla queda en inglés. «ES» la devuelve al español.
 
-PASO 6. JEFE INMEDIATO
-- En Personas, abra la ficha de cada persona del personal de producción y en «Jefe inmediato» busque y elija a su jefe
-  (debe estar registrado en Personas como personal propio). Guarde.
-- Para muchas personas: «Carga masiva» con la plantilla nueva, columna «Documento jefe inmediato».
-
-PASO 7. USUARIOS VINCULADOS A SU PERSONA
-- Usuarios → abra cada usuario existente → «Editar datos» → «Persona registrada»: búsquela y selecciónela → «Guardar».
-- Es OBLIGATORIO para cada Jefe de Producción: sin ese vínculo no ve a su personal. Después de vincularlo, el jefe debe
-  cerrar sesión y volver a ingresar.
-- Los usuarios nuevos se crean con «Agregar usuario» buscando a la persona ya registrada.
-
-PASO 8. VERIFICACIÓN RÁPIDA (5 minutos)
-1. Con el usuario del Jefe de Producción: debe ver en «Mi personal» solo a quienes lo tienen como jefe inmediato.
-2. Con el usuario de Talento Humano: debe ver el personal propio y no poder modificarlo.
-3. En Visitas → «Nueva visita», con la cédula de un contratista que tenga ingreso libre hoy: la aplicación debe avisar y
-   no registrar la visita.
+PASO OPCIONAL. REGISTROS ANTERIORES A ESTA ACTUALIZACIÓN
+Los ingresos y salidas registrados ANTES de esta actualización no tienen el dato del día. El jefe y Talento Humano solo
+los ven si existe uno de dos índices opcionales; mientras no exista, esas pantallas funcionan igual y muestran un aviso.
+Para crearlos:
+1. Consola → «Instalación» → «2a. Índices de la base de datos» → «Verificar índices».
+2. En cada fila con «Crear índice», oprímalo: Firebase se abre con el índice ya llenado; oprima «Crear».
+3. Si ya los había creado con la entrega anterior, aparecerán como «Listo» y no hay nada que hacer.
+Los demás índices de entregas anteriores ya no se usan: puede dejarlos o borrarlos.
 
 NOTAS
-- Talento Humano ve a las personas registradas con tipo «Personal propio». Si el «Personal de finca» también debe verlo
-  Talento Humano, avise: es un ajuste menor.
-- Las fotografías no se muestran al Jefe de Producción ni a Talento Humano: se autorizaron solo para el cotejo visual en
-  portería (principio de finalidad, art. 4 de la Ley 1581 de 2012).
-- El Jefe de Producción solo ve los ingresos y salidas registrados desde que la persona tiene asignado su jefe
-  inmediato. El Director, Gobierno Corporativo y Talento Humano ven todo el historial.
-- Si ya había semanas programadas con la entrega anterior, quedan en el grupo «Personal propio sin jefe inmediato» (en
-  Planta, como Director). Si el jefe programa la misma semana, prevalece su programación.
+- Talento Humano ve también a las personas de otras empresas que tienen jefe inmediato, porque debe gestionar sus
+  permisos y ausencias. La fotografía sigue sin mostrarse al jefe ni a Talento Humano: se autorizó solo para el cotejo
+  visual en portería (principio de finalidad, art. 4 de la Ley 1581 de 2012).
+- El jefe solo puede asignar horarios fijos con control de puntualidad y solo a su personal; el acceso libre lo sigue
+  asignando únicamente usted, en «Horarios».

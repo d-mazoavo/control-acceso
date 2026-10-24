@@ -8,6 +8,8 @@
 
   var NOMBRE = { D: 'Día', N: 'Noche', X: 'Descanso' };
   var LETRA_DIA = ['D', 'L', 'M', 'M', 'J', 'V', 'S']; // getUTCDay: 0 = domingo
+  // Inicial del día en pantalla según el idioma elegido (el Excel conserva las iniciales en español)
+  function letraDia(w) { return AP.idioma && AP.idioma() === 'en' ? 'SMTWTFS'.charAt(w) : LETRA_DIA[w]; }
   var MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
   function diasMes(mes) { var p = mes.split('-'); return new Date(Date.UTC(+p[0], +p[1], 0)).getUTCDate(); }
   function dow(mes, d) { return new Date(mes + '-' + String(d).padStart(2, '0') + 'T12:00:00-05:00').getUTCDay(); }
@@ -203,7 +205,7 @@
       var cab = [h('th', { class: 'pg-nom' }, 'Persona')];
       for (var d = 1; d <= N; d++) {
         var w = dow(mes, d);
-        cab.push(h('th', { class: 'pg-d' + (w === 0 || w === 6 ? ' fds' : '') }, h('small', null, LETRA_DIA[w]), String(d)));
+        cab.push(h('th', { class: 'pg-d' + (w === 0 || w === 6 ? ' fds' : '') }, h('small', { translate: 'no' }, letraDia(w)), String(d)));
       }
       cab.push(h('th', null, 'D'), h('th', null, 'N'), h('th', null, 'X'), h('th', { title: 'Horas programadas en el mes' }, 'Horas'), h('th', { title: 'Máximo de horas programadas en una semana (lunes a domingo)' }, 'Máx. h/sem'));
       var cob = cobertura();
@@ -296,7 +298,7 @@
       var totalD = filas.reduce(function (a, f) { return a + totales(f).D; }, 0), totalN = filas.reduce(function (a, f) { return a + totales(f).N; }, 0);
       var tablaCob = h('details', null, h('summary', null, 'Ver la tabla de cubrimiento por día'),
         h('div', { class: 'tbl-scroll' }, h('table', { class: 'tbl' }, h('thead', null, h('tr', null, ['Día', 'De día', 'De noche', 'Descanso'].map(function (x) { return h('th', null, x); }))),
-          h('tbody', null, cob.map(function (c) { return h('tr', null, h('td', null, LETRA_DIA[dow(mes, c.dia)] + ' ' + c.dia), h('td', { class: c.faltaD ? 'txt-deny' : '' }, String(c.D)), h('td', { class: c.faltaN ? 'txt-deny' : '' }, String(c.N)), h('td', null, String(c.X))); })))));
+          h('tbody', null, cob.map(function (c) { return h('tr', null, h('td', { translate: 'no' }, letraDia(dow(mes, c.dia)) + ' ' + c.dia), h('td', { class: c.faltaD ? 'txt-deny' : '' }, String(c.D)), h('td', { class: c.faltaN ? 'txt-deny' : '' }, String(c.N)), h('td', null, String(c.X))); })))));
       resumenBox.replaceChildren(
         h('div', { class: 'kpis' },
           h('div', { class: 'kpi' }, AP.icon('users', 22), h('strong', null, String(filas.length)), h('span', null, 'Personas programables')),
