@@ -251,7 +251,9 @@
             try {
               var rec = await AP.B.create('AP_Permisos', Object.assign({ Title: p.Title, Token: p.Token, NumDoc: p.NumDoc, Tipo: f.Tipo.value, Desde: a.toISOString(), Hasta: b.toISOString(),
                 Estado: 'Vigente', Detalle: f.Detalle.value.trim(), PersonaId: p.id || undefined, TipoPersonal: p.TipoPersonal || undefined, Area: p.Area || undefined,
-                PersonaTipo: p.Tipo || undefined, JefeId: p.JefeId || undefined }, au));
+                PersonaTipo: p.Tipo || undefined, JefeId: p.JefeId || undefined,
+                // Mes de inicio y ámbito de Talento Humano: consultas sin índices compuestos
+                Mes: U.ymd(a).slice(0, 7), AmbitoTH: (p.Tipo === 'Personal propio' || !!p.JefeId) || undefined }, au));
               await AP.Audit.log('Registro de permiso', p.Title + ' — ' + f.Tipo.value, (sinFin ? 'Desde ' + U.fDateTime(a) + ' (sin hora final)' : U.fDateTime(a) + ' a ' + U.fDateTime(b)) + '; autoriza: ' + au.AutorizadoPor + (au.AutorizadoPorDoc ? ' (doc. ' + au.AutorizadoPorDoc + ')' : ''));
               if ((opt.jefe || opt.planta || opt.th) && AP.Planta) await AP.Planta.registrarCambio('Permiso', p.Title + ' — ' + f.Tipo.value, (sinFin ? 'Salida desde ' + U.fDateTime(a) : U.fDateTime(a) + ' a ' + U.fDateTime(b)) + '. ' + f.Detalle.value.trim(), 1, 0, '', '', p.JefeId || '');
               hecho = rec; close(); AP.toast('Permiso registrado. Los celulares de portería lo reciben en su próxima actualización.'); AP.Sync.run();
@@ -614,7 +616,8 @@
                   AutorizadoPor: yo.nombre + ' — ' + cargoDirector(), AutorizadoPorDoc: (yo.perfil && yo.perfil.NumDoc) || '', AutorizadoPorCargo: cargoDirector(), SolicitudId: x.id,
                   // Persona del permiso: Talento Humano y su jefe inmediato lo consultan
                   PersonaId: perSol.id || undefined, PersonaTipo: perSol.Tipo || x.PersonaTipo || undefined, JefeId: perSol.JefeId || undefined,
-                  TipoPersonal: perSol.TipoPersonal || undefined, Area: perSol.Area || undefined
+                  TipoPersonal: perSol.TipoPersonal || undefined, Area: perSol.Area || undefined,
+                  Mes: U.ymd(desde).slice(0, 7), AmbitoTH: ((perSol.Tipo || x.PersonaTipo) === 'Personal propio' || !!perSol.JefeId) || undefined
                 });
                 cambios.PermisoId = perm.id; cambios.VigenteHasta = b.toISOString();
               }

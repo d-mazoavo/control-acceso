@@ -11,8 +11,8 @@
   AP.MANUAL = {
     titulo: 'Instructivo de uso de la aplicación Control de Acceso',
     codigo: 'Por asignar (Dirección de Calidad)',
-    version: '02',
-    fecha: '2026-10-22',
+    version: '03',
+    fecha: '2026-10-24',
     appVersion: '1.0.0',
     secciones: [
       { id: 'objetivo', titulo: 'Objetivo', roles: ['todos'], bloques: [
@@ -31,7 +31,9 @@
           ['Permiso', 'Autorización registrada para ingresar tarde, salir antes, salir temporalmente o entrar y salir fuera de horario.'],
           ['Ausencia', 'Vacaciones, permiso de día completo, licencia u otra ausencia registrada por Talento Humano.'],
           ['Turno de planta', 'Turno con código, hora de entrada y hora de salida con el que el Jefe de Producción programa a su personal a cargo.'],
-          ['Jefe inmediato', 'Persona registrada (del personal propio) que figura como superior en la ficha de cada persona. El Jefe de Producción ve, consulta y programa solo a quienes lo tienen como jefe inmediato.'],
+          ['Jefe inmediato', 'Persona registrada (del personal propio) que figura como superior en la ficha de cada persona, sea esta personal propio, contratista u otro tipo. El Jefe de Producción ve, consulta y programa solo a quienes lo tienen como jefe inmediato y están habilitados.'],
+          ['Horario fijo', 'Horario de entrada y salida para los días de la semana (por ejemplo, lunes a viernes de 08:00 a 17:00) que el Director o el jefe inmediato asignan a una persona que no rota por turnos. La portería le aplica control de puntualidad.'],
+          ['Número de uniforme', 'Número del uniforme asignado a cada persona. Lo registran el Director, el jefe inmediato y Talento Humano.'],
           ['Empresa (persona jurídica)', 'Empresa registrada por el Director con nombre o razón social, NIT y logo. Toda persona natural se vincula a una empresa ya creada.'],
           ['Cargo', 'Cargo del catálogo que administra el Director. Al asignarlo a una persona propone su área y su clase de personal.'],
           ['Clase de personal', 'Clasificación del personal propio (operario, personal operativo, administrativo, calidad, mantenimiento, logística, seguridad u otro). Talento Humano ve en planta, por defecto, a los operarios y al personal operativo.'],
@@ -57,21 +59,22 @@
           ['Administrador (Director de Seguridad Integral)', 'Todo: crea, modifica y borra en la consola; administra empresas, cargos y usuarios (único perfil que ve «Usuarios»); aprueba visitas y solicitudes de ingreso; habilita e inhabilita personas; programa horarios y permisos; administra rondas, programación de planta y ausencias; consulta estadísticas; opera la portería.', '—'],
           ['Analista', 'Consulta y descarga: panel, personas, visitas, ingresos y salidas, inspecciones.', 'Crear, aprobar, modificar o borrar. Operar la portería.'],
           ['Gobierno Corporativo', 'Consulta y descarga la información, incluidas estadísticas, bitácora, planta y Talento Humano.', 'Crear, aprobar, modificar o borrar. Ver el ítem «Usuarios».'],
-          ['Jefe de Producción', 'Ve, consulta y filtra al personal que lo tiene como jefe inmediato; crea turnos con horario, asigna personas a los turnos, programa la semana, registra y anula permisos de su personal, consulta su estado en planta y sus estadísticas, y descarga la programación por turnos.', 'Ver visitantes, contratistas o personal de otros jefes. Modificar los datos de las personas. Borrar cualquier registro. Decidir solicitudes de ingreso.'],
-          ['Talento Humano', 'Consulta el personal propio y la ficha de cada persona; registra y anula permisos y ausencias (vacaciones, licencias); ve el estado en planta de los operarios y del personal operativo, la programación de los Jefes de Producción, las horas según portería y las estadísticas del personal.', 'Modificar los datos de las personas. Ver visitantes o contratistas. Borrar registros. Modificar la programación.'],
+          ['Jefe de Producción', 'Ve, consulta y filtra al personal habilitado que lo tiene como jefe inmediato; crea turnos con horario, asigna personas a los turnos, programa la semana, asigna horarios fijos, registra y anula permisos de su personal, actualiza el número de uniforme, consulta su estado en planta y sus estadísticas, y descarga la programación por turnos.', 'Ver visitantes o personal de otros jefes. Modificar los demás datos de las personas. Borrar cualquier registro. Decidir solicitudes de ingreso.'],
+          ['Talento Humano', 'Consulta el personal propio y a las personas con jefe inmediato asignado (aunque sean de otra empresa) y la ficha de cada una; registra y anula permisos y ausencias (vacaciones, licencias) de ese personal; actualiza el número de uniforme; ve el estado en planta, todo lo programado a cada persona por los Jefes de Producción, las horas según portería y las estadísticas del personal.', 'Modificar los demás datos de las personas. Ver visitantes. Borrar registros. Modificar la programación.'],
           ['Supervisor y Vigilante', 'Operan la portería por turnos: leen QR, registran ingresos y salidas, inspecciones, elementos, solicitudes al Director. El supervisor consulta además el historial.', 'Modificar o borrar registros. Autorizar lo que corresponde al Director.'],
           ['Rondero', 'Marca los puntos de control de la ronda y reporta novedades con fotografía; ve su avance y su cumplimiento.', 'Ver personas, visitas o movimientos.']
         ] } },
         { p: 'Los permisos se hacen cumplir en el servidor (reglas de seguridad de Firebase): aunque alguien intente una acción por fuera de su perfil, el servidor la rechaza.' }
       ] },
-      { id: 'ingreso', titulo: 'Ingreso a la aplicación, contraseña o PIN e idioma del menú', roles: ['todos'], bloques: [
+      { id: 'ingreso', titulo: 'Ingreso a la aplicación, contraseña o PIN e idioma', roles: ['todos'], bloques: [
         { ol: [
           'Abra la dirección de la aplicación en el navegador del celular o del computador (o el ícono instalado).',
           'Escriba su usuario y su contraseña o PIN. Nadie usa correo para ingresar.',
           'La primera vez, o después de un restablecimiento, la aplicación exige cambiar la clave temporal (vence a las {horasPin} horas). Vigilantes, supervisores y ronderos usan un PIN de 6 a 8 dígitos; los demás perfiles, una contraseña de al menos 10 caracteres con letras y números.',
           'Vigilantes, supervisores y ronderos abren su turno al ingresar y lo cierran con «Cerrar turno»: sus registros quedan a su nombre.',
           'Si el Director le cambia el perfil (por ejemplo, de vigilante a rondero), el celular cierra el turno y la sesión en su siguiente actualización; al volver a ingresar verá el panel y las actividades del nuevo perfil.',
-          'Para ver el menú en inglés, use el selector ES / EN (en la consola, abajo en el menú lateral; en el celular, al pie de la pantalla de inicio). La elección queda guardada en ese equipo. Los registros, documentos y mensajes siguen en español.'
+          'Para ver la aplicación en inglés, use el selector ES / EN (en la consola, abajo en el menú lateral; en el celular, al pie de la pantalla de inicio). Se traduce toda la pantalla: menús, títulos, botones, formularios, tablas, avisos y este manual. La elección queda guardada en ese equipo.',
+          'Siguen en español los datos registrados, los archivos que se descargan (Excel, Word, PDF), las credenciales, los mensajes de WhatsApp y correo, y los textos legales que se aceptan (aviso de privacidad, autorización de datos y condiciones de uso de la credencial), porque la versión en español es la que tiene valor jurídico.'
         ] },
         { nota: 'La contraseña o el PIN son personales e intransferibles. Quien los preste responde por los registros hechos a su nombre.' }
       ] },
@@ -133,9 +136,10 @@
         ] },
         { h: 'Personas' },
         { ul: [
-          'Registre a cada persona con su tipo (personal propio, personal de finca, contratista, conductor), su empresa (obligatoria, de la lista de Empresas), su cargo (de la lista de Cargos) y, si es personal propio, su clase de personal y su jefe inmediato.',
-          'El jefe inmediato se busca entre el personal propio habilitado. El Jefe de Producción ve y programa solo a quienes lo tienen como jefe inmediato; cámbielo en la ficha cuando la persona cambie de jefe.',
-          'La carga masiva por Excel incluye «NIT empresa», «Cargo» y «Documento jefe inmediato»: la empresa y el cargo deben existir; el jefe debe estar registrado o venir en el mismo archivo.',
+          'Registre a cada persona con su tipo (personal propio, personal de finca, contratista, conductor), su empresa (obligatoria, de la lista de Empresas), su cargo (de la lista de Cargos), su número de uniforme, su jefe inmediato y, si es personal propio, su clase de personal.',
+          'El jefe inmediato puede asignarse a cualquier persona (también a contratistas) y se busca entre el personal propio habilitado. El Jefe de Producción ve y programa solo a quienes lo tienen como jefe inmediato y están habilitados; Talento Humano incluye a esas personas en su consulta. Al cambiar el jefe en la ficha, los permisos y ausencias vigentes o futuros y los horarios fijos del jefe anterior pasan al nuevo jefe.',
+          'La búsqueda de Personas busca solo en los datos de cada persona (nombre, documento, empresa, cargo, área, placa y uniforme), no en el nombre de su jefe. Para ver al personal de un jefe use el filtro «jefe inmediato».',
+          'La carga masiva por Excel incluye «NIT empresa», «Cargo», «Documento jefe inmediato» y «Número de uniforme»: la empresa y el cargo deben existir; el jefe debe estar registrado o venir en el mismo archivo.',
           '«Inhabilitar» impide el ingreso de inmediato (con motivo, que ve el vigilante). La campana activa la «alerta de salida»: no impide la salida, pero el vigilante le avisa y la consola le muestra el aviso.',
           'Credenciales: imprimir carné, descargar la imagen, enviar por WhatsApp o correo, o regenerar (la anterior deja de funcionar). Carga masiva por Excel con la plantilla.'
         ] },
@@ -154,18 +158,22 @@
         { h: 'Elementos, usuarios, rondas y programación' },
         { ul: [
           'Elementos: registre lo que sale, ingresa o debe regresar; el vigilante lo verifica al leer el QR de la persona.',
-          'Usuarios (solo el Director lo ve): para crear un usuario, busque a la persona ya registrada en Personas y asígnele el perfil y el usuario; su nombre, documento, empresa y cargo salen de la ficha. Alta con PIN temporal (se muestra una sola vez), restablecimiento, baja y cierre de turnos abiertos. Los usuarios anteriores se vinculan con «Editar datos». Al cambiar el perfil de un usuario con turno abierto, su celular cierra el turno y le pide ingresar de nuevo.',
+          'Usuarios (solo el Director lo ve; es el último ítem del menú): para crear un usuario, busque a la persona ya registrada en Personas y asígnele el perfil y el usuario; su nombre, documento, empresa y cargo salen de la ficha. Alta con PIN temporal (se muestra una sola vez), restablecimiento, baja y cierre de turnos abiertos. Los usuarios anteriores se vinculan con «Editar datos». Al cambiar el perfil de un usuario con turno abierto, su celular cierra el turno y le pide ingresar de nuevo.',
           'Rondas: puntos de control con su QR y su meta (revistas por turno y tiempo mínimo entre revistas), marcaciones y cumplimiento por turno.',
           'Programación: programación mensual del servicio de vigilancia que remite el contratista, para verificar el cubrimiento.',
-          'Instalación: estado de la conexión y verificación de los índices de la base de datos que necesitan las consultas del Jefe de Producción y de Talento Humano.'
+          'Instalación: estado de la conexión. Las consultas del Jefe de Producción y de Talento Humano ya no necesitan índices compuestos; los dos índices de la sección «Índices de la base de datos» son opcionales y solo permiten que esos perfiles vean los ingresos y salidas registrados antes de la actualización de octubre de 2026.',
+          'Al ingresar, la sesión del Director completa en segundo plano, una vez al día, los datos que necesitan esas consultas (ámbito de Talento Humano, mes y jefe inmediato vigente de permisos, ausencias y horarios recientes). Los ingresos y salidas no se modifican.'
         ] }
       ] },
       { id: 'planta', titulo: 'Personal a cargo y programación de planta (Jefe de Producción)', roles: ['Jefe de Producción', 'Administrador', 'Gobierno Corporativo'], bloques: [
-        { p: 'El Jefe de Producción ve únicamente a las personas que lo tienen como jefe inmediato en su ficha. Su usuario debe estar vinculado a su propia ficha en Personas (lo hace el Director en Usuarios). El Director y Gobierno Corporativo eligen arriba el grupo de cada jefe.' },
+        { p: 'El Jefe de Producción ve únicamente a las personas habilitadas que lo tienen como jefe inmediato en su ficha (si el Director inhabilita a una persona, sale de sus listas). Su usuario debe estar vinculado a su propia ficha en Personas (lo hace el Director en Usuarios). El Director y Gobierno Corporativo eligen arriba el grupo de cada jefe.' },
         { h: 'Mi personal' },
-        { p: 'Muestra a cada persona a cargo con su turno de hoy y su estado según la portería (en planta, fuera, no ha llegado, ya salió, con ausencia), con filtros por área, cargo, estado y texto, y descarga en Excel. «Ficha» abre los datos de la persona (solo consulta), su programación de los próximos 7 días, sus permisos y sus ausencias.' },
+        { p: 'Muestra a cada persona a cargo con su número de uniforme, su turno de hoy y su estado según la portería (en planta, fuera, no ha llegado, ya salió, con ausencia), con filtros por área, cargo, estado y texto, y descarga en Excel. «Ficha» abre los datos de la persona (solo consulta), su programación de los próximos 7 días, sus permisos y sus ausencias, y permite cambiar su número de uniforme. «Números de uniforme» permite registrar o corregir varios a la vez.' },
+        { p: 'Si una consulta secundaria no responde (por ejemplo, sin conexión), el personal se muestra igual con un aviso. Los ingresos y salidas registrados antes de la actualización de octubre de 2026 pueden no aparecer: la pantalla lo advierte.' },
         { h: 'Turnos y asignación' },
         { p: 'Cree los turnos con un código de 1 a 3 caracteres y su hora de entrada y de salida (por ejemplo, T1 06:00–14:00, T2 14:00–22:00, T3 22:00–06:00). Si la hora de salida es menor que la de entrada, el turno termina al día siguiente. Un turno no se borra: se marca inactivo. Con «Asignar turno a personas» (o «Asignar personas» en cada turno) elija el turno, el rango de fechas, los días de la semana y las personas: la programación de cada semana se guarda sola y queda en el registro de cambios.' },
+        { h: 'Horarios fijos' },
+        { p: 'Para el personal que no rota por turnos (por ejemplo, de lunes a viernes de 08:00 a 17:00): «Horarios fijos» → «Asignar horario fijo», escriba el nombre del horario, la hora de entrada y de salida, los días y, si quiere, la vigencia, y elija las personas. La portería le aplica control de puntualidad igual que a los turnos. Los horarios no se borran: se desactivan. En las semanas en que la persona figure en la programación semanal, esa programación reemplaza el horario fijo. Cada cambio queda en el registro de cambios.' },
         { h: 'Programación semanal' },
         { ol: [
           'En «Programación semanal» elija la semana con las flechas o la fecha.',
@@ -191,9 +199,9 @@
       ] },
       { id: 'th', titulo: 'Talento Humano', roles: ['Talento Humano', 'Administrador', 'Gobierno Corporativo'], bloques: [
         { h: 'Personal' },
-        { p: 'Lista el personal propio de Avo Pak con filtros por clase, área, cargo, jefe inmediato y estado. «Ficha» muestra los datos de la persona (solo consulta), su programación de la semana, sus permisos y sus ausencias. Talento Humano no modifica los datos de las personas: los registra y corrige el Director de Seguridad Integral.' },
+        { p: 'Lista el personal propio de Avo Pak y a las personas de otras empresas que tienen jefe inmediato asignado, con filtros por clase, área, cargo, jefe inmediato y estado. «Ficha» muestra los datos de la persona (solo consulta), su programación de la semana, sus permisos y sus ausencias. Talento Humano no modifica los datos de las personas (los registra y corrige el Director de Seguridad Integral), salvo el número de uniforme: en la ficha o con «Números de uniforme».' },
         { h: 'Permisos' },
-        { p: 'Registre permisos por horas del personal propio (ingreso tardío, salida anticipada, salida temporal, ingreso y salida fuera de horario). La portería los aplica al leer el QR. Un permiso no se borra: se anula con motivo.' },
+        { p: 'Registre permisos por horas del personal propio y de las personas con jefe inmediato asignado, aunque no estén a cargo del Jefe de Producción (ingreso tardío, salida anticipada, salida temporal, ingreso y salida fuera de horario). La portería los aplica al leer el QR. Un permiso no se borra: se anula con motivo.' },
         { h: 'Vacaciones y ausencias' },
         { ol: [
           'En «Vacaciones y ausencias» oprima «Registrar ausencia», busque a la persona y elija el tipo.',
@@ -206,7 +214,10 @@
         { h: 'Estado en planta' },
         { p: 'Muestra, por defecto, a los operarios y al personal operativo: quién está en planta (adentro) y quién está fuera según los registros de portería, quién no ha llegado a su turno, quién salió, quién está programado más tarde y quién tiene ausencia, con filtros y descarga en Excel.' },
         { h: 'Programación de turnos' },
-        { p: 'Consulta, sin modificarla, la programación semanal que hace cada Jefe de Producción con su personal; permite descargar el Excel por turnos.' },
+        { ul: [
+          '«Todo lo programado, por persona»: para el periodo elegido (hasta 62 días) muestra a cada persona con los días con turno, los descansos, las horas programadas y los días sin programación; «Día por día» abre el detalle (turno u horario, hora, fuente y ausencia registrada). Filtre por jefe inmediato o por texto y descargue el Excel (resumen y detalle por día).',
+          '«Semana por jefe inmediato»: la cuadrícula semanal de cada Jefe de Producción, solo consulta, con el Excel por turnos.'
+        ] },
         { h: 'Horas según portería' },
         { ol: [
           'Elija el periodo (semana, quincena, mes o rango) y oprima «Calcular».',
@@ -264,7 +275,8 @@
     // Historial de versiones del manual (se muestra en la aplicación al Director, Analista y Gobierno Corporativo)
     cambios: [
       { version: '01', fecha: '2026-10-22', descripcion: 'Versión inicial del instructivo, acorde con la versión 1.0.0 de la aplicación: perfiles de solo consulta, Gobierno Corporativo, Jefe de Producción y Talento Humano; programación de planta; ausencias; horas en planta; salida anticipada sin hora final; alerta de salida; metas de ronda; estadísticas; idioma del menú.' },
-      { version: '02', fecha: '2026-10-22', descripcion: 'Empresas (personas jurídicas) y catálogo de cargos; jefe inmediato en la ficha de la persona; usuarios creados desde una persona registrada y visibles solo para el Director; panel del Jefe de Producción por personal a cargo (turnos, asignación, estadísticas, Excel por turnos, ficha de consulta); Talento Humano con personal, permisos, programación, estadísticas y horas según portería; filtro en todas las listas; visitas por llegar; bloqueo de visitas de personas con ingreso autorizado; cierre de sesión al cambiar el perfil.' }
+      { version: '02', fecha: '2026-10-22', descripcion: 'Empresas (personas jurídicas) y catálogo de cargos; jefe inmediato en la ficha de la persona; usuarios creados desde una persona registrada y visibles solo para el Director; panel del Jefe de Producción por personal a cargo (turnos, asignación, estadísticas, Excel por turnos, ficha de consulta); Talento Humano con personal, permisos, programación, estadísticas y horas según portería; filtro en todas las listas; visitas por llegar; bloqueo de visitas de personas con ingreso autorizado; cierre de sesión al cambiar el perfil.' },
+      { version: '03', fecha: '2026-10-24', descripcion: 'Consultas del Jefe de Producción y de Talento Humano sin índices compuestos; número de uniforme (Director, jefe inmediato y Talento Humano); jefe inmediato para cualquier tipo de persona; el Jefe de Producción solo ve personal habilitado; horarios fijos asignados por el jefe; Talento Humano con permisos y consulta de las personas con jefe inmediato y con todo lo programado por persona; búsqueda de Personas solo por los datos de la persona; «Usuarios» al final del menú; traducción completa de la pantalla al inglés.' }
     ]
   };
 })();

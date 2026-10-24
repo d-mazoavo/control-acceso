@@ -281,4 +281,53 @@
     }
     cargar();
   });
+
+  // ---------- Ajuste automático de datos (actualización de octubre de 2026) ----------
+  // Lo ejecuta en segundo plano la sesión del Director de Seguridad Integral, como máximo una vez al día. Completa en las
+  // fichas el ámbito de Talento Humano y, en los permisos, ausencias y horarios recientes, el mes, el ámbito y el jefe
+  // inmediato vigente, para que el Jefe de Producción y Talento Humano los consulten sin índices compuestos. No toca los
+  // registros de ingreso y salida (no se modifican por diseño).
+  AP.Migracion = {
+    run: async function () {
+      if (!AP.Session.can('admin') || navigator.onLine === false) return;
+      var U = AP.U, hoy = U.ymd(), clave = 'migracion:2026-10';
+      try { if ((await AP.Store.get(clave)) === hoy) return; } catch (e) { /* sin copia local: se ejecuta */ }
+      var n = 0, fallas = 0, ahoraIso = new Date().toISOString(), desde = U.addDays(new Date(), -60);
+      async function upd(lista, id, campos) {
+        try { await AP.B.update(lista, id, campos); n++; } catch (e) { fallas++; }
+        await U.sleep(120);
+      }
+      var per = await AP.B.listAll('AP_Personas', { exclude: ['Foto', 'Observaciones'] });
+      var porTok = {};
+      per.forEach(function (p) { if (p.Token) porTok[p.Token] = p; });
+      var amb = function (p) { return p.Tipo === 'Personal propio' || !!p.JefeId; };
+      for (var i = 0; i < per.length; i++) { if (!!per[i].AmbitoTH !== amb(per[i])) await upd('AP_Personas', per[i].id, { AmbitoTH: amb(per[i]) }); }
+      var perm = await AP.B.listRange('AP_Permisos', 'Hasta', desde, null);
+      for (var j = 0; j < perm.length; j++) {
+        var x = perm[j], p = porTok[x.Token], c = {};
+        if (!x.Mes && x.Desde) c.Mes = U.ymd(x.Desde).slice(0, 7);
+        if (p) {
+          if (!!x.AmbitoTH !== amb(p)) c.AmbitoTH = amb(p);
+          if (!x.PersonaId) c.PersonaId = p.id;
+          if (!x.PersonaTipo && p.Tipo) c.PersonaTipo = p.Tipo;
+          if (x.Estado !== 'Anulado' && x.Hasta >= ahoraIso && (x.JefeId || '') !== (p.JefeId || '')) c.JefeId = p.JefeId || '';
+        }
+        if (Object.keys(c).length) await upd('AP_Permisos', x.id, c);
+      }
+      var aus = await AP.B.listRange('AP_Ausencias', 'Hasta', desde, null);
+      for (var k = 0; k < aus.length; k++) {
+        var a = aus[k], pa = porTok[a.Token];
+        if (pa && a.Estado !== 'Anulada' && a.Hasta >= ahoraIso && (a.JefeId || '') !== (pa.JefeId || '')) await upd('AP_Ausencias', a.id, { JefeId: pa.JefeId || '' });
+      }
+      // Horarios fijos asignados por un jefe a una persona que cambió de jefe inmediato
+      var hor = await AP.B.listAll('AP_Horarios');
+      for (var m = 0; m < hor.length; m++) {
+        var hz = hor[m], ph = porTok[hz.Token];
+        if (hz.JefeId && ph && (ph.JefeId || '') !== hz.JefeId) await upd('AP_Horarios', hz.id, { JefeId: ph.JefeId || '', PersonaId: ph.id });
+      }
+      if (!fallas) { try { await AP.Store.set(clave, hoy); } catch (e) { /* se repite mañana */ } }
+      if (n) await AP.Audit.log('Ajuste automático de datos', 'Actualización de octubre de 2026', n + ' registro(s) completados (ámbito de Talento Humano, mes y jefe inmediato vigente)' + (fallas ? '; ' + fallas + ' pendiente(s) para el próximo ingreso' : '') + '.');
+      return { actualizados: n, fallas: fallas };
+    }
+  };
 })();

@@ -28,6 +28,8 @@
   function pct(a, b) { return b ? Math.round(a / b * 100) + ' %' : '—'; }
   function fDia(y) { return U.fDate(U.fromLocal(y, '12:00')); }
   function maxSemanal() { return Number(((AP.CFG || {}).jornada || {}).maximaSemanal) || 42; }
+  var AVISO_LEGADO = 'Los registros anteriores a la actualización de la aplicación (octubre de 2026) no se pudieron consultar con este perfil; los posteriores se muestran completos. ' +
+    'Si se necesitan, el Director de Seguridad Integral puede habilitarlos en «Instalación» → «Índices de la base de datos» (opcional).';
   var RE_SALUD = /(diagn[oó]stic|enfermedad|c[aá]ncer|embaraz|psiqui|psicol|terapia|cirug|incapacidad|v\.?i\.?h|medicament|tratamiento|m[eé]dic[oa]|\beps\b|\bips\b|hospital|cl[ií]nica|urgencias|odontol)/i;
 
   // ---------- Perfil de quien consulta ----------
@@ -38,6 +40,8 @@
   function completo() { return AP.Session.lectura(); }          // Director, Analista y Gobierno Corporativo
   function puedeEditar() { return AP.Session.can('editar') || esJefe(); }
 
+  function conAviso(l, de) { if (de && de.avisoLegado) l.avisoLegado = true; return l; }
+
   // ---------- Datos según el perfil (el Jefe solo puede leer a su personal) ----------
   var D = {
     // Todas las personas visibles para el perfil (para armar los grupos por jefe inmediato)
@@ -47,9 +51,10 @@
       return AP.B.listAll('AP_Personas', { exclude: ['Foto', 'Observaciones'] });
     },
     // Personal de un grupo: quienes tienen a g como jefe inmediato ('' = personal propio sin jefe inmediato)
+    // Al Jefe solo le aparecen las personas habilitadas: quien queda inhabilitado sale de sus listas
     personal: async function (g, todas) {
       var l;
-      if (esJefe()) l = await AP.B.consulta('AP_Personas', [['JefeId', '==', miPid()]], { exclude: ['Observaciones'] });
+      if (esJefe()) l = (await AP.B.consulta('AP_Personas', [['JefeId', '==', miPid()]], { exclude: ['Observaciones'] })).filter(function (p) { return p.Estado === 'Habilitado'; });
       else l = (todas || await D.personasTodas()).filter(function (p) { return g ? p.JefeId === g : (p.Tipo === 'Personal propio' && !p.JefeId); });
       return l.sort(porNombre);
     },
@@ -77,20 +82,30 @@
       if (esJefe()) return (await AP.B.consulta('AP_Ausencias', [['JefeId', '==', miPid()]], { probar: true })).filter(function (a) { return a.Hasta >= desde; });
       return AP.B.listRange('AP_Ausencias', 'Hasta', desde, null);
     },
-    movimientos: async function (a, b, personas) {
+    movimientos: async function (a, b, personas, progreso) {
       b = b || new Date(Date.now() + 864e5);
-      if (esJefe()) return AP.B.consulta('AP_Movimientos', [['JefeId', '==', miPid()], ['FechaHora', '>=', a], ['FechaHora', '<=', b]]);
+      // Día por día y solo con igualdades: no necesita índices compuestos en Firebase
+      if (esJefe()) return J().movsPorDia({ scope: 'jefe:' + miPid(), filtros: [['JefeId', '==', miPid()]], desde: U.ymd(a), hasta: U.ymd(b) > U.ymd() ? U.ymd() : U.ymd(b), progreso: progreso,
+        legado: function (x, y) { return [['JefeId', '==', miPid()], ['FechaHora', '>=', x], ['FechaHora', '<=', y]]; } });
       var toks = new Set(personas.map(function (p) { return p.Token; })), docs = new Set(personas.map(function (p) { return U.normDoc(p.NumDoc); }));
       return (await AP.B.listRange('AP_Movimientos', 'FechaHora', a, b)).filter(function (m) { return toks.has(m.Token) || (m.NumDoc && docs.has(U.normDoc(m.NumDoc))); });
     },
     permisos: async function (desde, personas) {
-      if (esJefe()) return AP.B.consulta('AP_Permisos', [['JefeId', '==', miPid()], ['Hasta', '>=', desde]]);
+      // Mes por mes (desde dos meses antes hasta tres después) y solo con igualdades
+      if (esJefe()) {
+        var d0 = U.ymd(U.addDays(U.toDate(desde), -62)), d1 = U.ymd(U.addDays(new Date(), 100)), lim = U.toDate(desde).toISOString();
+        var lp = await J().porMeses('AP_Permisos', [['JefeId', '==', miPid()]], d0, d1, [['JefeId', '==', miPid()]]);
+        return conAviso(lp.filter(function (p) { return p.Hasta >= lim; }), lp);
+      }
       var toks = new Set(personas.map(function (p) { return p.Token; }));
       return (await AP.B.listRange('AP_Permisos', 'Hasta', desde, null)).filter(function (p) { return toks.has(p.Token); });
     },
     cambios: async function (dias, g) {
       var desde = U.addDays(new Date(), -(dias || 90));
-      if (esJefe()) return AP.B.consulta('AP_CambiosPlanta', [['JefeId', '==', miPid()], ['FechaHora', '>=', desde]]);
+      if (esJefe()) {
+        var lc = await J().porMeses('AP_CambiosPlanta', [['JefeId', '==', miPid()]], U.ymd(desde), U.ymd(), [['JefeId', '==', miPid()]]);
+        return conAviso(lc.filter(function (c) { return c.FechaHora >= desde.toISOString(); }), lc);
+      }
       var l = await AP.B.listRange('AP_CambiosPlanta', 'FechaHora', desde, null);
       return g === undefined ? l : l.filter(function (c) { return (c.JefeId || '') === (g || ''); });
     }
@@ -110,14 +125,14 @@
 
   // ---------- Registro de cambios (no se modifica ni se borra) ----------
   AP.Planta = {
-    D: D,
+    D: D, AVISO_LEGADO: AVISO_LEGADO,
     registrarCambio: async function (tipo, referencia, detalle, n, mismoDia, semana, motivo, jefeId) {
       var u = AP.Session.user;
       var jid = esJefe() ? miPid() : (jefeId || '');
       await AP.B.create('AP_CambiosPlanta', {
         Title: tipo + ' — ' + referencia, Tipo: tipo, Semana: semana || '', Referencia: referencia, FechaHora: new Date().toISOString(),
         Usuario: u.upn, UsuarioNombre: u.nombre, Rol: AP.Session.rol, Cambios: n || 0, MismoDia: mismoDia || 0, Detalle: detalle || '', Motivo: motivo || '',
-        JefeId: jid || undefined
+        JefeId: jid || undefined, Mes: U.ymd().slice(0, 7)
       });
     }
   };
@@ -133,11 +148,21 @@
     });
     var aus = (info.ausencias || []).filter(function (a) { return a.Token === p.Token && a.Estado !== 'Anulada' && new Date(a.Hasta).getTime() >= ahora; });
     var per = (info.permisos || []).filter(function (x) { return x.Token === p.Token && x.Estado !== 'Anulado' && new Date(x.Hasta).getTime() >= ahora; });
+    var uni = puedeUniforme() ? AP.input('uni', p.NumUniforme || '', { maxlength: 20, placeholder: 'Sin número asignado' }) : null;
+    var uniBtn = uni ? h('button', { class: 'btn', type: 'button', onclick: async function () {
+      uniBtn.disabled = true;
+      try {
+        if (await guardarUniforme(p, uni.value)) { AP.toast('Número de uniforme guardado.'); if (info.despues) info.despues(); }
+        else AP.toast('El número de uniforme no cambió.', 'info');
+      } catch (e) { AP.toast('No se pudo guardar: ' + e.message, 'error', 9000); }
+      finally { uniBtn.disabled = false; }
+    } }, AP.icon('check', 18), 'Guardar número de uniforme') : null;
     AP.modal({ title: p.Title, size: 'wide', body: h('div', { class: 'stack ficha-ro' },
-      h('p', { class: 'muted small' }, 'Ficha de consulta. Los datos los registra y modifica únicamente el Director de Seguridad Integral.'),
+      h('p', { class: 'muted small' }, 'Ficha de consulta. Los datos los registra y modifica únicamente el Director de Seguridad Integral, salvo el número de uniforme, que también actualizan el jefe inmediato y Talento Humano.'),
       h('div', { class: 'kv-grid' }, kv('Documento', [p.TipoDoc, p.NumDoc].filter(Boolean).join(' ')), kv('Tipo', p.Tipo), kv('Empresa', p.Empresa), kv('Cargo', p.Cargo),
         kv('Área', p.Area), kv('Clase de personal', p.TipoPersonal), kv('Jefe inmediato', info.jefeNombre || p.JefeNombre), kv('Teléfono', p.Telefono),
-        kv('Habilitación', p.Estado + (p.VigenciaHasta ? ' hasta ' + p.VigenciaHasta : '')), info.estado ? kv('Ahora (según portería)', info.estado.txt) : null),
+        kv('Número de uniforme', p.NumUniforme), kv('Habilitación', p.Estado + (p.VigenciaHasta ? ' hasta ' + p.VigenciaHasta : '')), info.estado ? kv('Ahora (según portería)', info.estado.txt) : null),
+      uni ? h('div', { class: 'filters' }, AP.field('Número de uniforme', uni), uniBtn) : null,
       h('h3', null, 'Programación de los próximos 7 días'),
       tabla([['Día', function (x) { return DIAS_LARGOS[J().dow(x.y)] + ' ' + fDia(x.y) + (J().festivo(x.y) ? ' (festivo)' : ''); }],
         ['Turno', function (x) { return x.t ? (x.t.cod === 'D' ? 'Descanso' : x.t.e ? x.t.nombre + ' ' + x.t.e + '–' + x.t.s + (x.t.fuente === 'horario' ? ' (horario general)' : '') : 'Sin turno') : 'Sin turno'; }]], prox),
@@ -147,6 +172,56 @@
       h('h3', null, 'Ausencias registradas por Talento Humano'),
       aus.length ? tabla([['Tipo', function (a) { return a.Tipo; }], ['Desde', function (a) { return U.fDate(a.Desde); }], ['Hasta', function (a) { return U.fDate(a.Hasta); }]], aus)
         : h('p', { class: 'muted small' }, 'Sin ausencias vigentes ni próximas.')) });
+  };
+
+  // ---------- Número de uniforme: lo actualizan el Director, el jefe inmediato (de su personal) y Talento Humano ----------
+  function puedeUniforme() { return AP.Session.can('editar') || esJefe() || esTH(); }
+  async function guardarUniforme(p, v) {
+    v = String(v || '').trim().slice(0, 20);
+    var antes = p.NumUniforme || '';
+    if (v === antes) return false;
+    await AP.B.update('AP_Personas', p.id, { NumUniforme: v });
+    p.NumUniforme = v;
+    var det = (antes || 'sin número') + ' → ' + (v || 'sin número');
+    try { await AP.Planta.registrarCambio('Número de uniforme', p.Title, det, 1, 0, '', '', p.JefeId || ''); } catch (e) { /* el registro de cambios es complementario */ }
+    await AP.Audit.log('Número de uniforme', p.Title + ' — ' + (p.NumDoc || ''), det);
+    return true;
+  }
+  AP.Planta.puedeUniforme = puedeUniforme;
+  // Varios números de uniforme a la vez
+  AP.Planta.uniformes = function (personas, despues) {
+    var l = personas.filter(function (p) { return p.Estado === 'Habilitado'; }).slice().sort(porNombre);
+    if (!l.length) return AP.toast('No hay personas habilitadas en la lista.', 'warn');
+    AP.modal({ title: 'Números de uniforme', size: 'wide', body: function (close) {
+      var inputs = {};
+      var filtro = h('input', { type: 'search', class: 'af-input', placeholder: 'Filtrar por nombre, documento, cargo o número de uniforme' });
+      var cuerpo = h('tbody');
+      function pintar() {
+        var vis = l.filter(function (p) { return AP.coincide(p, filtro.value, ['Title', 'NumDoc', 'Cargo', 'Area', 'NumUniforme']); });
+        cuerpo.replaceChildren.apply(cuerpo, vis.length ? vis.map(function (p) {
+          var inp = inputs[p.id] = inputs[p.id] || AP.input('u_' + p.id, p.NumUniforme || '', { maxlength: 20, placeholder: 'Sin número', 'aria-label': 'Número de uniforme de ' + p.Title });
+          return h('tr', null, h('td', { 'data-label': 'Persona' }, h('strong', null, p.Title), h('small', { class: 'block muted' }, [p.NumDoc, p.Cargo, p.Area].filter(Boolean).join(' · '))),
+            h('td', { 'data-label': 'Número de uniforme' }, inp));
+        }) : [h('tr', null, h('td', { colspan: 2, class: 'center muted' }, 'Sin registros'))]);
+      }
+      filtro.addEventListener('input', U.debounce(pintar, 150)); pintar();
+      var prog = h('small', { class: 'muted' });
+      var btn = h('button', { class: 'btn primary', type: 'button', onclick: async function () {
+        var ch = l.filter(function (p) { return inputs[p.id] && inputs[p.id].value.trim() !== (p.NumUniforme || ''); });
+        if (!ch.length) return AP.toast('No hay cambios por guardar.', 'info');
+        btn.disabled = true;
+        var n = 0;
+        try {
+          for (var i = 0; i < ch.length; i++) { prog.textContent = 'Guardando ' + (i + 1) + ' de ' + ch.length + '…'; if (await guardarUniforme(ch[i], inputs[ch[i].id].value)) n++; }
+          close(); AP.toast(n + ' número(s) de uniforme guardado(s).');
+          if (despues) despues();
+        } catch (e) { AP.toast('No se pudo guardar (' + n + ' guardado(s) antes del error): ' + e.message, 'error', 9000); btn.disabled = false; }
+      } }, AP.icon('check', 18), 'Guardar');
+      return h('div', { class: 'stack' },
+        h('p', { class: 'muted small' }, 'Escriba o corrija el número de uniforme de cada persona y oprima «Guardar». Solo se guardan los que cambiaron; cada cambio queda en el registro de cambios y en la bitácora.'),
+        filtro, h('div', { class: 'tbl-scroll' }, h('table', { class: 'tbl no-filtro' }, h('thead', null, h('tr', null, h('th', null, 'Persona'), h('th', null, 'Número de uniforme'))), cuerpo)),
+        prog, h('div', { class: 'row gap wrap end' }, h('button', { class: 'btn', type: 'button', onclick: function () { close(); } }, 'Cancelar'), btn));
+    } });
   };
 
   // ---------- Tablero del estado del personal (también lo usa Talento Humano) ----------
@@ -161,7 +236,7 @@
     var fEst = AP.select('est', [['', 'Todos los estados'], ['dentro', 'En planta (adentro)'], ['fuera', 'Fuera de planta'], ['falta', 'No ha llegado'], ['noasistio', 'Sin ingreso en su turno'], ['programado', 'Programado más tarde'],
       ['salio', 'Ya salió'], ['ausente', 'Ausencia registrada'], ['descanso', 'Descanso'], ['sin', 'Sin turno hoy']], '');
     var fClase = opt.clases ? AP.select('clase', [['', 'Toda clase de personal'], ['operativas', 'Operarios y personal operativo']].concat(AP.CAT.tiposPersonal), opt.claseDef || '') : null;
-    var q = AP.buscador('Buscar nombre, documento, cargo o área', pintar);
+    var q = AP.buscador('Buscar nombre, documento, uniforme, cargo o área', pintar);
     var out = h('div', { class: 'stack' });
     [fArea, fCargo, fEst, fClase].filter(Boolean).forEach(function (s) { s.addEventListener('change', pintar); });
     function filtradas() {
@@ -172,7 +247,7 @@
         else if (fEst.value && f.e.k !== fEst.value) return false;
         if (fClase && fClase.value === 'operativas') { if (AP.CAT.clasesOperativas.indexOf(f.p.TipoPersonal) < 0) return false; }
         else if (fClase && fClase.value && f.p.TipoPersonal !== fClase.value) return false;
-        return AP.coincide(f.p, q.value, ['Title', 'NumDoc', 'Cargo', 'Area']);
+        return AP.coincide(f.p, q.value, ['Title', 'NumDoc', 'Cargo', 'Area', 'NumUniforme']);
       });
     }
     function pintar() {
@@ -183,7 +258,7 @@
           kpi(n('falta'), 'No han llegado a su turno', n('falta') ? 'deny' : ''), kpi(n('noasistio'), 'Sin ingreso en su turno de hoy', n('noasistio') ? 'warn' : ''),
           kpi(n('programado'), 'Programados más tarde'), kpi(n('ausente'), 'Con ausencia registrada'), kpi(n('salio'), 'Ya salieron')),
         tabla([
-          ['Persona', function (f) { return h('div', null, h('strong', null, f.p.Title), h('small', { class: 'block muted' }, [f.p.NumDoc, f.p.Cargo, f.p.Area, opt.clases ? f.p.TipoPersonal : ''].filter(Boolean).join(' · '))); }],
+          ['Persona', function (f) { return h('div', null, h('strong', null, f.p.Title), h('small', { class: 'block muted' }, [f.p.NumDoc, f.p.NumUniforme ? 'Uniforme ' + f.p.NumUniforme : '', f.p.Cargo, f.p.Area, opt.clases ? f.p.TipoPersonal : ''].filter(Boolean).join(' · '))); }],
           ['Turno de hoy', function (f) { return f.e.turno || '—'; }],
           ['Estado según portería', function (f) { return h('div', null, AP.pill(f.e.txt, f.e.kind), f.e.nov ? h('small', { class: 'block txt-warn' }, f.e.nov) : null); }],
           opt.onRow ? ['', function (f) { return h('button', { class: 'btn small', type: 'button', onclick: function () { opt.onRow(f); } }, AP.icon('eye', 16), 'Ficha'); }] : null
@@ -192,13 +267,14 @@
     box.replaceChildren(
       h('div', { class: 'banner info' }, AP.icon('clock', 18), h('span', null, 'Estado a las ' + U.fTime(new Date()) + ' según los registros de ingreso y salida de portería, la programación de turnos y las ausencias de Talento Humano. ' +
         '«En planta» = su último registro en portería es un ingreso. Los registros hechos sin conexión aparecen cuando el celular de portería los envía.')),
-      h('div', { class: 'filters' }, fClase, fArea, fCargo, fEst, q, AP.btnExcel(function () {
+      opt.aviso ? h('div', { class: 'banner warn' }, AP.icon('alert', 18), h('span', null, opt.aviso)) : null,
+      h('div', { class: 'filters' }, fClase, fArea, fCargo, fEst, q, opt.uniformes ? h('button', { class: 'btn', type: 'button', onclick: opt.uniformes }, AP.icon('edit', 18), 'Números de uniforme') : null, AP.btnExcel(function () {
         var l = filtradas();
         if (!l.length) return AP.toast('No hay personas con el filtro actual.', 'warn');
-        AP.exportar('Estado_del_personal', [['Persona', function (f) { return f.p.Title; }, 30], ['Documento', function (f) { return f.p.NumDoc; }, 15], ['Clase', function (f) { return f.p.TipoPersonal; }, 14],
+        AP.exportar('Estado_del_personal', [['Persona', function (f) { return f.p.Title; }, 30], ['Documento', function (f) { return f.p.NumDoc; }, 15], ['Número de uniforme', function (f) { return f.p.NumUniforme; }, 11], ['Clase', function (f) { return f.p.TipoPersonal; }, 14],
           ['Cargo', function (f) { return f.p.Cargo; }, 22], ['Área', function (f) { return f.p.Area; }, 18], ['Turno de hoy', function (f) { return f.e.turno; }, 22],
           ['Estado según portería', function (f) { return f.e.txt; }, 34], ['Novedad', function (f) { return f.e.nov; }, 30]], l, 'xlsx',
-          [['Corte', U.fDateTime(new Date())], ['Filtro', [fClase && fClase.options[fClase.selectedIndex].text, fArea.value, fCargo.value, fEst.value, q.value].filter(Boolean).join(' · ') || 'ninguno'],
+          [['Corte', U.fDateTime(new Date())], ['Filtro', [fClase && AP.textoOpcion(fClase), fArea.value, fCargo.value, fEst.value, q.value].filter(Boolean).join(' · ') || 'ninguno'],
             ['Fuente', 'Registros de ingreso y salida de portería, programación de turnos y ausencias de Talento Humano'], ['Generado por', AP.Session.user.nombre]]);
       })), out);
     pintar();
@@ -565,6 +641,7 @@
       var lst = [];
       var ids = new Set(Object.keys(actual).concat(Object.keys(guardado)));
       ids.forEach(function (pid) {
+        if (!ops.some(function (p) { return p.id === pid; })) return;   // personas que no están en la vista (p. ej., inhabilitadas): se conservan
         var a = guardado[pid] || {}, b = actual[pid] || {};
         fechas.forEach(function (y) { if ((a[y] || '') !== (b[y] || '')) lst.push({ pid: pid, y: y, antes: a[y] || '', despues: b[y] || '' }); });
       });
@@ -602,6 +679,13 @@
           return AP.toast('Otra persona guardó esta semana mientras usted la editaba (' + (srv && srv._modifiedBy ? srv._modifiedBy + ', ' : '') + U.fDateTime(srv && srv._modified) + '). Recargue la página y vuelva a aplicar sus cambios.', 'warn', 12000);
         }
         var datos = {}, usados = {};
+        // Se conserva lo programado a personas que no aparecen en la vista (por ejemplo, inhabilitadas)
+        var previo = AP.Horario.jsonDe(srv && srv.Datos, {});
+        Object.keys(previo).forEach(function (pid) {
+          if (ops.some(function (p) { return p.id === pid; })) return;
+          datos[pid] = previo[pid];
+          Object.keys(previo[pid].d || {}).forEach(function (y) { var c = previo[pid].d[y]; if (c && c !== 'D') usados[c] = 1; });
+        });
         ops.forEach(function (p) {
           var d = actual[p.id] || {}, dd = {};
           fechas.forEach(function (y) { if (d[y]) { dd[y] = d[y]; if (d[y] !== 'D') usados[d[y]] = 1; } });
@@ -642,7 +726,7 @@
     var ED = puedeEditar();
     var tab = qs.t || 'personal';
     var content = h('div', { class: 'stack' });
-    var TABS = [['personal', esJefe() ? 'Mi personal' : 'Personal del grupo'], ['semana', 'Programación semanal'], ['turnos', 'Turnos y asignación'], ['permisos', 'Permisos'], ['estadisticas', 'Estadísticas'], ['cambios', 'Registro de cambios']];
+    var TABS = [['personal', esJefe() ? 'Mi personal' : 'Personal del grupo'], ['semana', 'Programación semanal'], ['turnos', 'Turnos y asignación'], ['horarios', 'Horarios fijos'], ['permisos', 'Permisos'], ['estadisticas', 'Estadísticas'], ['cambios', 'Registro de cambios']];
     var box = h('div', { class: 'stack' }, AP.spinner('Cargando…'));
     var acciones = h('div', { class: 'row gap wrap' });
     var grupoBox = h('div');
@@ -681,6 +765,7 @@
         pintarTabs();
         if (tab === 'semana') semana();
         else if (tab === 'turnos') turnos();
+        else if (tab === 'horarios') horariosFijos();
         else if (tab === 'permisos') permisos();
         else if (tab === 'estadisticas') estadisticas();
         else if (tab === 'cambios') cambios();
@@ -694,14 +779,176 @@
         var hoy = U.ymd(), ayer = J().addYmd(hoy, -1);
         var per = await personal();
         if (!per.length) {
-          box.replaceChildren(AP.empty('users', 'No hay personal en este grupo', esJefe() ? 'Aquí aparecen las personas que lo tienen a usted como jefe inmediato. Pídale al Director de Seguridad Integral que lo asigne en la ficha de cada persona.' : 'Asigne el jefe inmediato en la ficha de cada persona (Personas).'));
+          box.replaceChildren(AP.empty('users', 'No hay personal en este grupo', esJefe() ? 'Aquí aparecen las personas habilitadas que lo tienen a usted como jefe inmediato. Pídale al Director de Seguridad Integral que lo asigne en la ficha de cada persona.' : 'Asigne el jefe inmediato en la ficha de cada persona (Personas).'));
           return;
         }
-        var r = await Promise.all([D.semanas(hoy, J().addYmd(hoy, 7), g), D.horarios().catch(function () { return []; }), D.ausencias().catch(function () { return []; }),
-          D.movimientos(U.fromLocal(ayer, '00:00'), null, per), D.permisos(U.addDays(new Date(), -1).toISOString(), per).catch(function () { return []; })]);
+        // Si una consulta secundaria falla, el personal se muestra igual, con el aviso correspondiente
+        var avisos = [];
+        var falla = function (txt) { return function (e) { avisos.push(txt + ' no se pudo consultar' + (e && e.offline ? ' (sin conexión)' : e && e.message ? ': ' + e.message : '') + '.'); return []; }; };
+        var r = await Promise.all([D.semanas(hoy, J().addYmd(hoy, 7), g).catch(falla('La programación semanal')), D.horarios().catch(falla('Los horarios')), D.ausencias().catch(falla('Las ausencias')),
+          D.movimientos(U.fromLocal(ayer, '00:00'), null, per).catch(falla('Los ingresos y salidas de portería')), D.permisos(U.addDays(new Date(), -1).toISOString(), per).catch(falla('Los permisos'))]);
+        if (r[3].avisoLegado || r[4].avisoLegado) avisos.push(AVISO_LEGADO);
         var ctx = { semanas: J().indexarSemanas(r[0], per), horarios: r[1] };
-        AP.Planta.tablero(box, per, ctx, r[3], r[2], { onRow: function (f) { AP.Planta.ficha(f.p, { estado: f.e, ctx: ctx, ausencias: r[2], permisos: r[4], jefeNombre: gNombre }); } });
+        AP.Planta.tablero(box, per, ctx, r[3], r[2], { aviso: avisos.join(' '),
+          uniformes: puedeUniforme() && (esJefe() || AP.Session.can('editar')) ? function () { AP.Planta.uniformes(per, miPersonal); } : null,
+          onRow: function (f) { AP.Planta.ficha(f.p, { estado: f.e, ctx: ctx, ausencias: r[2], permisos: r[4], jefeNombre: gNombre, despues: miPersonal }); } });
       } catch (e) { box.replaceChildren(errBox(e)); }
+    }
+
+    // ---------- Horarios fijos (p. ej., de 8 a 5) del personal que no rota por turnos ----------
+    // Se guardan como horario de la persona (AP_Horarios) con control de puntualidad; el jefe solo crea, modifica o
+    // desactiva los que él asignó a su personal. En las semanas en que la persona figure en la programación semanal,
+    // esa programación reemplaza el horario fijo.
+    async function horariosFijos() {
+      if (ED) acciones.replaceChildren(h('button', { class: 'btn primary', type: 'button', onclick: function () { editarH(null); } }, AP.icon('plus', 18), 'Asignar horario fijo'));
+      var per = [], filas = [];
+      var fEst = AP.select('est', [['act', 'Activos'], ['inact', 'Inactivos'], ['', 'Activos e inactivos']], 'act');
+      var q = AP.buscador('Buscar persona, documento u horario', pintar);
+      fEst.addEventListener('change', pintar);
+      var out = h('div', { class: 'stack' });
+      function mio(x) { return AP.Session.can('editar') || (esJefe() && x.JefeId && x.JefeId === miPid()); }
+      function quien(x) { return !x.JefeId ? 'Director de Seguridad Integral' : x.JefeId === g ? 'Jefe inmediato' : 'Otro jefe'; }
+      function horaTxt(x) { var a = J().toMin(x.HoraEntrada), b = J().toMin(x.HoraSalida); return x.HoraEntrada + ' – ' + x.HoraSalida + (b != null && a != null && b <= a ? ' (+1 día)' : ''); }
+      function vigTxt(x) { return (x.VigenteDesde ? fDia(x.VigenteDesde) : 'sin inicio') + ' → ' + (x.VigenteHasta ? fDia(x.VigenteHasta) : 'indefinida'); }
+      async function cargar() {
+        out.replaceChildren(AP.spinner('Consultando…'));
+        try {
+          var r = await Promise.all([personal(), D.horarios()]);
+          per = r[0];
+          var porTok = {}; per.forEach(function (p) { porTok[p.Token] = p; });
+          filas = r[1].filter(function (x) { return !x._borrado && porTok[x.Token]; }).map(function (x) { return { x: x, p: porTok[x.Token] }; });
+          pintar();
+        } catch (e) { out.replaceChildren(errBox(e)); }
+      }
+      function filtradas() {
+        return filas.filter(function (f) {
+          if (fEst.value === 'act' && f.x.Activo === false) return false;
+          if (fEst.value === 'inact' && f.x.Activo !== false) return false;
+          return AP.coincide(f.p, q.value, ['Title', 'NumDoc', 'Cargo', 'Area']) || AP.coincide(f.x, q.value, ['Turno', 'HoraEntrada', 'HoraSalida']);
+        }).sort(function (a, b) { return porNombre(a.p, b.p) || (a.x.HoraEntrada < b.x.HoraEntrada ? -1 : 1); });
+      }
+      function pintar() {
+        var l = filtradas();
+        var con = new Set(filas.filter(function (f) { return f.x.Activo !== false; }).map(function (f) { return f.p.id; }));
+        out.replaceChildren(
+          h('div', { class: 'kpis' }, kpi(per.filter(function (p) { return p.Estado === 'Habilitado'; }).length, 'Personas habilitadas'), kpi(con.size, 'Con horario fijo activo', 'brand'), kpi(l.length, 'Horarios en la vista')),
+          tabla([
+            ['Persona', function (f) { return h('div', null, h('strong', null, f.p.Title), h('small', { class: 'block muted' }, [f.p.NumDoc, f.p.Cargo, f.p.Area].filter(Boolean).join(' · '))); }],
+            ['Horario', function (f) { return h('div', null, h('strong', null, f.x.Turno || 'Horario'), h('small', { class: 'block muted' }, horaTxt(f.x))); }],
+            ['Días', function (f) { return AP.Horario.nombreDias(f.x.Dias); }],
+            ['Vigencia', function (f) { return vigTxt(f.x); }],
+            ['Asignado por', function (f) { return quien(f.x) + (AP.Horario.esLibre(f.x) ? ' · acceso libre' : ''); }],
+            ['Estado', function (f) { return AP.pill(f.x.Activo === false ? 'Inactivo' : 'Activo', f.x.Activo === false ? 'muted' : 'ok'); }],
+            ['', function (f) {
+              if (!ED || !mio(f.x)) return null;
+              return h('div', { class: 'row gap nowrap' }, h('button', { class: 'btn small', type: 'button', onclick: function () { editarH(f); } }, AP.icon('edit', 16), 'Editar'),
+                f.x.Activo === false ? null : h('button', { class: 'btn small danger-outline', type: 'button', onclick: function () { desactivarH(f); } }, 'Desactivar'));
+            }]
+          ], l));
+      }
+      async function desactivarH(f) {
+        if (!(await AP.confirm('Desactivar horario fijo', 'Se desactiva el horario «' + (f.x.Turno || 'Horario') + '» (' + horaTxt(f.x) + ') de ' + f.p.Title + '. Mientras no tenga otro horario ni turnos programados, la portería no le aplica control de puntualidad.', 'Desactivar', 'danger'))) return;
+        try {
+          await AP.B.update('AP_Horarios', f.x.id, { Activo: false });
+          var txt = (f.x.Turno || 'Horario') + ' ' + horaTxt(f.x) + ' · ' + AP.Horario.nombreDias(f.x.Dias);
+          await AP.Planta.registrarCambio('Desactivación de horario fijo', f.p.Title, txt, 1, 0, '', '', g);
+          await AP.Audit.log('Desactivación de horario fijo', f.p.Title + (gNombre ? ' — ' + gNombre : ''), txt);
+          AP.toast('Horario desactivado.'); cargar();
+        } catch (e) { AP.toast(e.message, 'error'); }
+      }
+      function editarH(f) {
+        var nuevo = !f, d0 = f ? f.x : { Turno: '', Dias: '1,2,3,4,5', HoraEntrada: '08:00', HoraSalida: '17:00' };
+        var hab = per.filter(function (p) { return p.Estado === 'Habilitado'; });
+        if (nuevo && !hab.length) return AP.toast('No hay personal habilitado en este grupo.', 'warn');
+        AP.modal({ title: nuevo ? 'Asignar horario fijo' : 'Horario fijo de ' + f.p.Title, size: 'wide', body: function (close) {
+          var elegidos = new Set();
+          var lista = h('div', { class: 'pick-list' });
+          var filtro = h('input', { type: 'search', class: 'af-input', placeholder: 'Filtrar por nombre, documento, cargo o área' });
+          var cuenta = h('small', { class: 'muted' }, '0 seleccionada(s)');
+          function visibles() { return hab.filter(function (p) { return AP.coincide(p, filtro.value, ['Title', 'NumDoc', 'Cargo', 'Area']); }); }
+          function pintarLista() {
+            lista.replaceChildren.apply(lista, visibles().map(function (p) {
+              var cb = h('input', { type: 'checkbox', checked: elegidos.has(p.id) });
+              cb.addEventListener('change', function () { if (cb.checked) elegidos.add(p.id); else elegidos.delete(p.id); cuenta.textContent = elegidos.size + ' seleccionada(s)'; });
+              return h('label', null, cb, h('span', null, p.Title + ' · ' + [p.NumDoc, p.Cargo, p.Area].filter(Boolean).join(' · ')));
+            }));
+            cuenta.textContent = elegidos.size + ' seleccionada(s)';
+          }
+          filtro.addEventListener('input', U.debounce(pintarLista, 150)); pintarLista();
+          var dias = new Set(String(d0.Dias || '').split(',').filter(Boolean));
+          var diasBox = h('div', { class: 'chk-dias' }, AP.CAT.dias.map(function (d) {
+            var cb = h('input', { type: 'checkbox', checked: dias.has(d[0]), dataset: { d: d[0] } });
+            cb.addEventListener('change', function () { if (cb.checked) dias.add(d[0]); else dias.delete(d[0]); });
+            return h('label', { class: 'check' }, cb, h('span', null, d[1]));
+          }));
+          function marcarDias(arr) { dias.clear(); arr.forEach(function (v) { dias.add(v); }); diasBox.querySelectorAll('input').forEach(function (i) { i.checked = dias.has(i.dataset.d); }); }
+          var fx = {
+            Turno: AP.input('Turno', d0.Turno || '', { maxlength: 60, placeholder: 'Ej.: Administrativo, Mantenimiento de 8 a 5' }),
+            HoraEntrada: AP.input('HoraEntrada', d0.HoraEntrada, { type: 'time' }), HoraSalida: AP.input('HoraSalida', d0.HoraSalida, { type: 'time' }),
+            VigenteDesde: AP.input('VigenteDesde', d0.VigenteDesde || '', { type: 'date' }), VigenteHasta: AP.input('VigenteHasta', d0.VigenteHasta || '', { type: 'date' }),
+            Observaciones: AP.textarea('Observaciones', d0.Observaciones || '', { rows: 2, placeholder: 'Opcional. No escriba información de salud.' })
+          };
+          var prog = h('small', { class: 'muted' });
+          var btn = h('button', { class: 'btn primary', type: 'button', onclick: async function () {
+            var v = {}; Object.keys(fx).forEach(function (k) { v[k] = fx[k].value.trim(); });
+            if (v.Turno.length < 3) return AP.toast('Escriba el nombre del horario (por ejemplo, «Administrativo»).', 'warn');
+            if (J().toMin(v.HoraEntrada) == null || J().toMin(v.HoraSalida) == null || v.HoraEntrada === v.HoraSalida) return AP.toast('Revise las horas de entrada y salida.', 'warn');
+            if (!dias.size) return AP.toast('Marque al menos un día de la semana.', 'warn');
+            if (v.VigenteDesde && v.VigenteHasta && v.VigenteHasta < v.VigenteDesde) return AP.toast('La vigencia termina antes de empezar.', 'warn');
+            if (RE_SALUD.test(v.Observaciones)) return AP.toast('Las observaciones parecen contener información de salud (dato sensible). Escriba solo el hecho general.', 'warn', 8000);
+            if (nuevo && !elegidos.size) return AP.toast('Seleccione al menos una persona.', 'warn');
+            var diasTxt = AP.CAT.dias.map(function (d) { return d[0]; }).filter(function (d) { return dias.has(d); }).join(',');
+            var reg = { Turno: v.Turno, HoraEntrada: v.HoraEntrada, HoraSalida: v.HoraSalida, Dias: diasTxt, VigenteDesde: v.VigenteDesde, VigenteHasta: v.VigenteHasta, Observaciones: v.Observaciones, Modalidad: 'Turno' };
+            var txt = v.Turno + ' ' + v.HoraEntrada + '–' + v.HoraSalida + ' · ' + AP.Horario.nombreDias(diasTxt) + (v.VigenteDesde || v.VigenteHasta ? ' · vigencia ' + (v.VigenteDesde || 'sin inicio') + ' a ' + (v.VigenteHasta || 'indefinida') : '');
+            btn.disabled = true;
+            try {
+              if (nuevo) {
+                var ids = Array.from(elegidos), nombres = [];
+                for (var i = 0; i < ids.length; i++) {
+                  var p = hab.find(function (z) { return z.id === ids[i]; });
+                  prog.textContent = 'Guardando ' + (i + 1) + ' de ' + ids.length + '…';
+                  await AP.B.create('AP_Horarios', Object.assign({ Title: p.Title, Token: p.Token, NumDoc: p.NumDoc || '', Area: p.Area || '', Activo: true, PersonaId: p.id, JefeId: g || undefined }, reg));
+                  nombres.push(p.Title);
+                }
+                await AP.Planta.registrarCambio('Horario fijo', txt, nombres.join('\n'), nombres.length, 0, '', '', g);
+                await AP.Audit.log('Asignación de horario fijo', nombres.length + ' persona(s)' + (gNombre ? ' — ' + gNombre : ''), txt);
+              } else {
+                var antes = (f.x.Turno || 'Horario') + ' ' + f.x.HoraEntrada + '–' + f.x.HoraSalida + ' · ' + AP.Horario.nombreDias(f.x.Dias);
+                await AP.B.update('AP_Horarios', f.x.id, Object.assign({ Title: f.p.Title, Token: f.p.Token, PersonaId: f.p.id, JefeId: f.x.JefeId || g || undefined, Activo: true }, reg));
+                await AP.Planta.registrarCambio('Modificación de horario fijo', f.p.Title, 'Antes: ' + antes + '. Ahora: ' + txt, 1, 0, '', '', g);
+                await AP.Audit.log('Modificación de horario fijo', f.p.Title + (gNombre ? ' — ' + gNombre : ''), 'Antes: ' + antes + '. Ahora: ' + txt);
+              }
+              close(); AP.toast('Horario guardado. Los celulares de portería lo reciben en su próxima actualización.', 'info', 6000); cargar();
+            } catch (e) { AP.toast('No se pudo guardar: ' + e.message, 'error', 9000); btn.disabled = false; }
+          } }, AP.icon('check', 18), 'Guardar');
+          return h('div', { class: 'stack' },
+            nuevo ? h('div', { class: 'stack sm' }, h('div', { class: 'row between wrap gap' }, h('strong', null, 'Personas'), cuenta), filtro, lista,
+              h('div', { class: 'row gap' }, h('button', { class: 'btn small', type: 'button', onclick: function () { visibles().forEach(function (p) { elegidos.add(p.id); }); pintarLista(); } }, 'Todas las visibles'),
+                h('button', { class: 'btn small ghost', type: 'button', onclick: function () { elegidos.clear(); pintarLista(); } }, 'Ninguna')))
+              : h('p', null, h('strong', null, f.p.Title), ' — ' + [f.p.NumDoc, f.p.Cargo].filter(Boolean).join(' · ')),
+            h('div', { class: 'form-grid' }, AP.field('Nombre del horario *', fx.Turno, null, 'span2'), AP.field('Hora de entrada *', fx.HoraEntrada),
+              AP.field('Hora de salida *', fx.HoraSalida, 'Si es menor que la de entrada, el horario termina al día siguiente.'),
+              AP.field('Días de la semana *', h('div', { class: 'stack sm' }, diasBox, h('div', { class: 'row gap wrap' },
+                h('button', { class: 'btn small', type: 'button', onclick: function () { marcarDias(['1', '2', '3', '4', '5']); } }, 'Lunes a viernes'),
+                h('button', { class: 'btn small', type: 'button', onclick: function () { marcarDias(['1', '2', '3', '4', '5', '6']); } }, 'Lunes a sábado'))), null, 'span2'),
+              AP.field('Vigente desde', fx.VigenteDesde, 'Opcional.'), AP.field('Vigente hasta', fx.VigenteHasta, 'Opcional.'), AP.field('Observaciones', fx.Observaciones, null, 'span2')),
+            h('p', { class: 'note small' }, 'La portería aplica a este horario las mismas reglas de puntualidad de los turnos. En las semanas en que la persona figure en la programación semanal, esa programación reemplaza el horario fijo.'),
+            prog, h('div', { class: 'row gap wrap end' }, h('button', { class: 'btn', type: 'button', onclick: function () { close(); } }, 'Cancelar'), btn));
+        } });
+      }
+      box.replaceChildren(
+        h('div', { class: 'banner info' }, AP.icon('clock', 18), h('span', null, 'Horario fijo para el personal que no rota por turnos (por ejemplo, lunes a viernes de 08:00 a 17:00). La portería le aplica control de puntualidad igual que a los turnos. ' +
+          'Los horarios no se borran: se desactivan, y cada cambio queda en el registro de cambios.')),
+        h('div', { class: 'filters' }, fEst, q, AP.btnExcel(function () {
+          var l = filtradas();
+          if (!l.length) return AP.toast('No hay horarios con el filtro actual.', 'warn');
+          AP.exportar('Horarios_fijos', [['Persona', function (f) { return f.p.Title; }, 30], ['Documento', function (f) { return f.p.NumDoc; }, 15], ['Cargo', function (f) { return f.p.Cargo; }, 22], ['Área', function (f) { return f.p.Area; }, 16],
+            ['Horario', function (f) { return f.x.Turno; }, 24], ['Entrada', function (f) { return f.x.HoraEntrada; }, 8], ['Salida', function (f) { return f.x.HoraSalida; }, 8], ['Días', function (f) { return AP.Horario.nombreDias(f.x.Dias); }, 26],
+            ['Vigente desde', function (f) { return f.x.VigenteDesde; }, 12], ['Vigente hasta', function (f) { return f.x.VigenteHasta; }, 12], ['Asignado por', function (f) { return quien(f.x); }, 22],
+            ['Estado', function (f) { return f.x.Activo === false ? 'Inactivo' : 'Activo'; }, 10]], l, 'xlsx',
+            [['Grupo', gNombre || 'Sin jefe inmediato'], ['Generado por', AP.Session.user.nombre], ['Fecha', U.fDateTime(new Date())], ['Fuente', 'Horarios de las personas (AP_Horarios)']]);
+        })), out);
+      cargar();
     }
 
     // ---------- Programación semanal ----------
@@ -737,8 +984,10 @@
         out.replaceChildren(AP.spinner('Consultando…'));
         try {
           ops = await personal();
-          datos = (await D.permisos(U.addDays(new Date(), -30).toISOString(), ops)).sort(function (a, b) { return a.Desde < b.Desde ? 1 : -1; });
+          var crudoP = await D.permisos(U.addDays(new Date(), -30).toISOString(), ops);
+          datos = crudoP.slice().sort(function (a, b) { return a.Desde < b.Desde ? 1 : -1; });
           ahora = Date.now(); pintar();
+          if (crudoP.avisoLegado) out.prepend(h('div', { class: 'banner warn' }, AP.icon('alert', 18), h('span', null, AVISO_LEGADO)));
         } catch (e) { out.replaceChildren(errBox(e)); }
       }
       async function registrar() {
@@ -876,6 +1125,7 @@
             D.permisos(U.fromLocal(a, '00:00').toISOString(), per).catch(function () { return []; })]);
           var ctx = { semanas: J().indexarSemanas(r[0], per), horarios: r[1] };
           res = J().compendio(per, r[3], a, b, ctx, r[2]);
+          res.avisoLegado = !!r[3].avisoLegado;
           rango = [a, b];
           permisosR = r[4].filter(function (x) { return U.ymd(x.Desde) >= a && U.ymd(x.Desde) <= b && x.Estado !== 'Anulado'; });
           // Asistencia por turno y por día (días ya transcurridos)
@@ -915,6 +1165,7 @@
         var topTarde = res.filter(function (x) { return x.tardes; }).sort(function (a, b) { return b.tardes - a.tardes; }).slice(0, 10);
         var serAsis = [{ k: 'F', n: 'Con ingreso' }, { k: 'D', n: 'Sin ingreso' }];
         out.replaceChildren(
+          res.avisoLegado ? h('div', { class: 'banner warn' }, AP.icon('alert', 18), h('span', null, AVISO_LEGADO)) : null,
           h('div', { class: 'kpis' }, kpi(res.length, 'Personas a cargo'), kpi(S('prog'), 'Turnos programados (días-persona)'), kpi(pct(S('asis'), S('prog')), 'Asistencia a turnos programados', 'brand'),
             kpi(S('falta'), 'Turnos sin ingreso registrado', S('falta') ? 'warn' : ''), kpi(tardes, 'Llegadas tarde', tardes ? 'warn' : ''), kpi(diasAus, 'Días de ausencia (Talento Humano)'),
             kpi(permisosR.length, 'Permisos en el periodo'), kpi(fh(T('total')), 'Horas en planta (portería)'), kpi(fh(progH), 'Horas programadas'), kpi(incompletos, 'Registros incompletos', incompletos ? 'warn' : '')),
@@ -987,9 +1238,11 @@
         }));
       }
       try {
-        datos = (await D.cambios(90, g)).sort(function (a, b) { return a.FechaHora < b.FechaHora ? 1 : -1; });
+        var crudo = await D.cambios(90, g);
+        datos = crudo.slice().sort(function (a, b) { return a.FechaHora < b.FechaHora ? 1 : -1; });
         Array.from(new Set(datos.map(function (c) { return c.Tipo; }).filter(Boolean))).sort().forEach(function (t) { fTipo.appendChild(h('option', { value: t }, t)); });
         box.replaceChildren(
+          crudo.avisoLegado ? h('div', { class: 'banner warn' }, AP.icon('alert', 18), h('span', null, AVISO_LEGADO)) : null,
           h('div', { class: 'banner info' }, AP.icon('shield', 18), h('span', null, 'Últimos 90 días. Cada cambio a la programación, a los turnos, a los permisos y a las ausencias de este grupo queda aquí con el usuario que lo hizo (verificado por el servidor) y la hora del servidor. Nadie puede modificarlo ni borrarlo.')),
           h('div', { class: 'filters' }, fTipo, fDia, q, AP.btnExcel(function () {
             var l = filtrados();

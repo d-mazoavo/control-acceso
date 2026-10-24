@@ -16,6 +16,9 @@
       IdLocal: U.uuid(), FechaHora: nowIso(), Vigilante: u.nombre, VigilanteCorreo: u.upn, VigilanteUsuario: u.usuario, TurnoId: u.turnoId, Dispositivo: U.deviceId(),
       SinConexion: !AP.Sync.state.online, DesfaseReloj: AP.Sync.state.skew, Porteria: AP.CFG.porteria
     }, f);
+    // Día del registro (hora de Colombia): el Jefe de Producción y Talento Humano consultan por día, sin índices compuestos
+    mov.Dia = U.ymd(mov.FechaHora);
+    if (mov.Categoria === 'Personal propio' || mov.Categoria === 'Personal propio sin carné') mov.AmbitoTH = true;
     Object.keys(mov).forEach(function (k) { if (mov[k] === undefined || mov[k] === '') delete mov[k]; });
     mov.Hash = await U.hashRecord(mov);
     await AP.Sync.enqueue('mov', mov);
@@ -585,6 +588,8 @@
         if (!esVisita && !esManual && rec.TipoPersonal) f.TipoPersonal = rec.TipoPersonal;
         // Jefe inmediato de la persona: su Jefe de Producción consulta estos registros
         if (!esVisita && !esManual && rec.JefeId) f.JefeId = rec.JefeId;
+        // Ámbito de Talento Humano: personal propio o persona con jefe inmediato asignado
+        if (!esVisita && !esManual && (rec.Tipo === 'Personal propio' || rec.JefeId)) f.AmbitoTH = true;
         var conAlerta = sent === 'Salida' && r.alertaSalida && resultado === 'Permitido';
         if (conAlerta) f.Novedad = ['Alerta de salida del Director', f.Novedad].filter(Boolean).join(' | ');
         if (mx) Object.assign(f, mx);
