@@ -461,7 +461,7 @@
     }
   });
   // =================== SOLICITUDES DE INGRESO (decide el Director) ===================
-  // Llegadas tardías, ingresos fuera de turno y contratistas en día no programado: el vigilante no puede autorizarlos;
+  // Llegadas tardías, ingresos fuera de turno y días no programados (cualquier persona): el vigilante no puede autorizarlos;
   // envía la solicitud y el Director la aprueba (se crea un permiso de corta duración) o la rechaza, con justificación.
   var TIPO_PERMISO = { 'Llegada tardía': 'Ingreso tardío', 'Fuera de turno': 'Ingreso y salida fuera de horario', 'Día no programado': 'Ingreso y salida fuera de horario', 'Ausencia registrada': 'Ingreso y salida fuera de horario' };
   function cargoDirector() { return (AP.Session.user.perfil && AP.Session.user.perfil.Cargo) || 'Director de Seguridad Integral'; }
@@ -519,7 +519,7 @@
         return h('a', { class: x[0] === tab ? 'on' : '', href: '#/consola/solicitudes?t=' + x[0] }, x[1]);
       }));
       content.replaceChildren(
-        h('div', { class: 'banner info' }, AP.icon('shield', 18), h('span', null, 'Aquí llegan, desde portería, las llegadas tardías (desde ' + AP.Horario.cfg().minutosPendiente + ' minutos), los ingresos fuera de turno, los contratistas que llegan en un día que no se les programó y quienes llegan durante una ausencia registrada por Talento Humano. ' +
+        h('div', { class: 'banner info' }, AP.icon('shield', 18), h('span', null, 'Aquí llegan, desde portería, las llegadas tardías (desde ' + AP.Horario.cfg().minutosPendiente + ' minutos), los ingresos fuera de turno, quienes llegan en un día sin turno programado o de descanso y quienes llegan durante una ausencia registrada por Talento Humano. ' +
           'El vigilante no puede autorizarlos: espera su decisión. Al aprobar se registra un permiso a su nombre; al rechazar, el vigilante registra el ingreso negado con su justificación.')),
         tabs,
         h('div', { class: 'filters' }, qs2, AP.btnExcel(function () {

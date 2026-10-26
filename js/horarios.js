@@ -192,14 +192,11 @@
       return { nivel: 'ok', etiqueta: 'INGRESO AUTORIZADO — ' + perm.Tipo.toUpperCase(), detalle: 'Permiso vigente hasta las ' + hm(perm.Hasta) + (perm.AutorizadoPor ? ' (autoriza ' + perm.AutorizadoPor + ')' : '') + '.', permisoId: perm.id || perm.IdLocal, horarioInfo: info };
     }
     if (!j) {
-      // Contratistas: en un día que no les fue programado el vigilante no puede autorizar; decide el Director
-      if (p.Tipo === 'Contratista') {
-        return { nivel: 'deny', sinExcepcion: true, aprobacionDirector: true, tipoSolicitud: 'Día no programado', novedad: 'Ingreso en día no programado',
-          etiqueta: 'DÍA NO PROGRAMADO — REQUIERE APROBACIÓN DEL DIRECTOR',
-          detalle: 'El contratista no tiene turno programado para hoy. El vigilante no puede autorizar el ingreso: envíe la solicitud al Director de Seguridad Integral, que decide.', horarioInfo: '' };
-      }
-      return { nivel: 'warn', registrable: true, novedad: 'Ingreso en día no programado', etiqueta: 'DÍA NO PROGRAMADO — INGRESO PENDIENTE',
-        detalle: 'No tiene turno programado para hoy. Puede registrarse el ingreso, que queda pendiente de verificación por el Director de Seguridad Integral.', horarioInfo: '' };
+      // Día sin turno programado o de descanso (personal propio, contratistas y demás): el vigilante no puede autorizar ni
+      // registrar el ingreso como pendiente; envía la solicitud y la persona espera la decisión del Director
+      return { nivel: 'deny', sinExcepcion: true, aprobacionDirector: true, tipoSolicitud: 'Día no programado', novedad: 'Ingreso en día no programado',
+        etiqueta: 'DÍA NO PROGRAMADO — REQUIERE APROBACIÓN DEL DIRECTOR',
+        detalle: 'No tiene turno programado para hoy. El vigilante no puede autorizar el ingreso: envíe la solicitud al Director de Seguridad Integral, que lo aprueba o lo rechaza. Mientras tanto, la persona no ingresa.', horarioInfo: '' };
     }
     // Acceso libre: dentro del horario habilitado entra cuantas veces necesite, sin medir llegada tarde.
     // Fuera de ese horario la llegada sí se controla: antes de la hora queda pendiente; después del cierre decide el Director.

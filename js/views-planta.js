@@ -497,7 +497,7 @@
       box.replaceChildren(
         !tps.length ? h('div', { class: 'banner warn' }, AP.icon('alert', 18), h('span', null, 'Aún no hay turnos. ' + (ED ? 'Créelos primero en la pestaña «Turnos y asignación» (por ejemplo: T1 06:00–14:00, T2 14:00–22:00, T3 22:00–06:00).' : ''))) : null,
         h('div', { class: 'banner info' }, AP.icon('calendar', 18), h('span', null, 'La portería aplica a esta programación las reglas de puntualidad: ingreso habilitado desde ' + AP.Horario.cfg().minutosAntelacionTurno + ' minutos antes del turno; con ' +
-          AP.Horario.cfg().minutosPendiente + ' minutos o más de retraso decide el Director. En un día sin turno o de descanso, el ingreso queda pendiente de verificación. ' +
+          AP.Horario.cfg().minutosPendiente + ' minutos o más de retraso decide el Director. En un día sin turno o de descanso, el ingreso lo decide el Director; si la persona debe venir, prográmele el turno con anticipación. ' +
           'Los cambios de un día ya iniciado exigen motivo y quedan en el registro de cambios.')),
         h('div', { class: 'filters' },
           h('button', { class: 'btn', type: 'button', 'aria-label': 'Semana anterior', onclick: function () { ir(J().addYmd(lun, -7)); } }, AP.icon('back', 18)),
