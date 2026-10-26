@@ -460,7 +460,7 @@
       } else if (r.nivel === 'ok') {
         AP.add(acciones, h('button', { class: 'btn big block go-in', type: 'button', onclick: function () { guardar('Ingreso', 'Permitido'); } }, AP.icon('check', 22), 'Registrar INGRESO'));
       } else if (r.aprobacionDirector && r.token && rec.id) {
-        // Llegada tardía, fuera de turno o contratista en día no programado: decide el Director
+        // Llegada tardía, fuera de turno, día no programado o ausencia registrada: decide el Director
         var abierta = AP.solicitudAbierta(r.token);
         if (abierta) {
           AP.add(acciones,

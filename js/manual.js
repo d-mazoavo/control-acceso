@@ -11,8 +11,8 @@
   AP.MANUAL = {
     titulo: 'Instructivo de uso de la aplicación Control de Acceso',
     codigo: 'Por asignar (Dirección de Calidad)',
-    version: '03',
-    fecha: '2026-10-24',
+    version: '04',
+    fecha: '2026-10-26',
     appVersion: '1.0.0',
     secciones: [
       { id: 'objetivo', titulo: 'Objetivo', roles: ['todos'], bloques: [
@@ -27,7 +27,7 @@
           ['Credencial o QR', 'Código personal e intransferible de cada persona habilitada o de cada visita aprobada. No contiene datos personales: es un identificador aleatorio.'],
           ['Movimiento', 'Registro de un ingreso, una salida o un ingreso negado. Queda firmado por el servidor con el usuario y la hora, y no se modifica.'],
           ['Novedad', 'Situación que queda señalada para verificación del Director: llegada tardía, ingreso sin QR, salida no autorizada, ingreso en día no programado, entre otras.'],
-          ['Solicitud de ingreso', 'Caso que el vigilante no puede autorizar (llegada tardía desde {pendiente} minutos, fuera de turno, contratista en día no programado, ausencia registrada por Talento Humano). Decide el Director desde la consola.'],
+          ['Solicitud de ingreso', 'Caso que el vigilante no puede autorizar (llegada tardía desde {pendiente} minutos, fuera de turno, día no programado o de descanso, ausencia registrada por Talento Humano). Decide el Director desde la consola.'],
           ['Permiso', 'Autorización registrada para ingresar tarde, salir antes, salir temporalmente o entrar y salir fuera de horario.'],
           ['Ausencia', 'Vacaciones, permiso de día completo, licencia u otra ausencia registrada por Talento Humano.'],
           ['Turno de planta', 'Turno con código, hora de entrada y hora de salida con el que el Jefe de Producción programa a su personal a cargo.'],
@@ -89,8 +89,8 @@
         { ul: [
           'El ingreso se habilita desde {antelacion} minutos antes de la hora de entrada. Antes de eso aparece MUY TEMPRANO y el ingreso queda pendiente.',
           'Entre 1 y {pendienteMenos1} minutos tarde: ingreso PENDIENTE de verificación.',
-          'Desde {pendiente} minutos tarde, fuera de turno, contratista en día no programado o persona con ausencia registrada por Talento Humano: el vigilante NO puede autorizar. Oprima «Enviar a aprobación del Director» y espere la decisión en la pantalla; puede avisarle por WhatsApp o llamarlo. Si el Director aprueba, oprima «Registrar INGRESO»; si rechaza, «Registrar ingreso negado».',
-          'Al operario lo rige la programación semanal del Jefe de Producción; a los demás, su horario general. En un día sin turno o de descanso el ingreso queda pendiente de verificación.',
+          'Desde {pendiente} minutos tarde, fuera de turno, en un día no programado o de descanso, o con ausencia registrada por Talento Humano: el vigilante NO puede autorizar ni registrar el ingreso como pendiente, y la persona no ingresa mientras el Director no decida. Oprima «Enviar a aprobación del Director» y espere la decisión en la pantalla; puede avisarle por WhatsApp o llamarlo. Si el Director aprueba, oprima «Registrar INGRESO»; si rechaza, «Registrar ingreso negado».',
+          'Al operario lo rige la programación semanal del Jefe de Producción; a los demás, su horario general. Esto aplica al personal propio, a los contratistas y a toda persona con horario: en un día sin turno o de descanso decide el Director.',
           'Ante una ausencia registrada, al vigilante solo se le muestra «ausencia registrada», sin el tipo (vacaciones, licencia, etc.).'
         ] },
         { h: 'Salidas' },
@@ -276,7 +276,8 @@
     cambios: [
       { version: '01', fecha: '2026-10-22', descripcion: 'Versión inicial del instructivo, acorde con la versión 1.0.0 de la aplicación: perfiles de solo consulta, Gobierno Corporativo, Jefe de Producción y Talento Humano; programación de planta; ausencias; horas en planta; salida anticipada sin hora final; alerta de salida; metas de ronda; estadísticas; idioma del menú.' },
       { version: '02', fecha: '2026-10-22', descripcion: 'Empresas (personas jurídicas) y catálogo de cargos; jefe inmediato en la ficha de la persona; usuarios creados desde una persona registrada y visibles solo para el Director; panel del Jefe de Producción por personal a cargo (turnos, asignación, estadísticas, Excel por turnos, ficha de consulta); Talento Humano con personal, permisos, programación, estadísticas y horas según portería; filtro en todas las listas; visitas por llegar; bloqueo de visitas de personas con ingreso autorizado; cierre de sesión al cambiar el perfil.' },
-      { version: '03', fecha: '2026-10-24', descripcion: 'Consultas del Jefe de Producción y de Talento Humano sin índices compuestos; número de uniforme (Director, jefe inmediato y Talento Humano); jefe inmediato para cualquier tipo de persona; el Jefe de Producción solo ve personal habilitado; horarios fijos asignados por el jefe; Talento Humano con permisos y consulta de las personas con jefe inmediato y con todo lo programado por persona; búsqueda de Personas solo por los datos de la persona; «Usuarios» al final del menú; traducción completa de la pantalla al inglés.' }
+      { version: '03', fecha: '2026-10-24', descripcion: 'Consultas del Jefe de Producción y de Talento Humano sin índices compuestos; número de uniforme (Director, jefe inmediato y Talento Humano); jefe inmediato para cualquier tipo de persona; el Jefe de Producción solo ve personal habilitado; horarios fijos asignados por el jefe; Talento Humano con permisos y consulta de las personas con jefe inmediato y con todo lo programado por persona; búsqueda de Personas solo por los datos de la persona; «Usuarios» al final del menú; traducción completa de la pantalla al inglés.' },
+      { version: '04', fecha: '2026-10-26', descripcion: 'El ingreso en un día no programado o de descanso, de cualquier persona con horario (personal propio, contratistas y demás), lo decide el Director de Seguridad Integral: el vigilante envía la solicitud y la persona no ingresa mientras no se apruebe. Se eliminó en ese caso la opción de registrar el ingreso pendiente de verificación.' }
     ]
   };
 })();
