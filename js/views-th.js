@@ -45,10 +45,17 @@
       var l;
       if (completo()) l = (await AP.B.listAll('AP_Personas', { exclude: ['Foto', 'Observaciones'] })).filter(enAmbito);
       else {
+        // Si las reglas de Firebase aún no están actualizadas, la consulta de personas con jefe inmediato se rechaza:
+        // se muestra el personal propio y se avisa (en lugar de dejar toda la pantalla sin información)
+        var sinAmbito = false;
         var r = await Promise.all([AP.B.consulta('AP_Personas', [['Tipo', '==', 'Personal propio']], { exclude: ['Observaciones'] }),
-          AP.B.consulta('AP_Personas', [['AmbitoTH', '==', true]], { exclude: ['Observaciones'] })]);
+          AP.B.consulta('AP_Personas', [['AmbitoTH', '==', true]], { exclude: ['Observaciones'] }).catch(function (e) {
+            if (e && (e.status === 403 || e.code === 'permission-denied')) { sinAmbito = true; return []; }
+            throw e;
+          })]);
         var vistos = {};
         l = r[0].concat(r[1]).filter(function (p) { if (vistos[p.id] || !enAmbito(p)) return false; vistos[p.id] = 1; return true; });
+        if (sinAmbito) l.avisoReglas = true;
       }
       return l.sort(porNombre);
     },
@@ -181,6 +188,7 @@
         var jefes = {}; per.forEach(function (p) { if (p.JefeId) jefes[p.JefeId] = jefeDe(p, per); });
         Object.keys(jefes).sort(function (a, b) { return U.fold(jefes[a]) < U.fold(jefes[b]) ? -1 : 1; }).forEach(function (k) { fJefe.appendChild(h('option', { value: k }, jefes[k])); });
         box.replaceChildren(
+          per.avisoReglas ? h('div', { class: 'banner warn' }, AP.icon('alert', 18), h('span', null, 'Solo se muestra el personal propio: las reglas de seguridad de Firebase no están actualizadas y no permiten consultar a las personas de otras empresas con jefe inmediato. Avise al Director de Seguridad Integral para que las publique.')) : null,
           h('div', { class: 'banner info' }, AP.icon('users', 18), h('span', null, 'Personal propio de ' + AP.CFG.empresa + ' y personas de otras empresas que tienen jefe inmediato asignado. Solo consulta: los datos de las personas los registra y modifica únicamente el Director de Seguridad Integral, salvo el número de uniforme. ' +
             'La fotografía no se muestra aquí: se autorizó solo para el cotejo visual en portería (principio de finalidad, art. 4 Ley 1581 de 2012).')),
           h('div', { class: 'filters' }, fClase, fArea, fCargo, fJefe, fEst, q, ED ? h('button', { class: 'btn', type: 'button', onclick: function () { AP.Planta.uniformes(filtrados(), pintar); } }, AP.icon('edit', 18), 'Números de uniforme') : null, AP.btnExcel(function () {

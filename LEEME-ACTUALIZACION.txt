@@ -1,41 +1,25 @@
 AVO PAK S.A.S. — CONTROL DE ACCESO
-Ajuste del 26 de octubre de 2026. La versión de la aplicación sigue siendo 1.0.0.
+Ajuste del 27 de octubre de 2026. La versión de la aplicación sigue siendo 1.0.0.
 
 QUÉ CAMBIA
-1. Día no programado o de descanso. El ingreso de una persona con horario o con programación de planta en un día en que
-   no tiene turno lo decide el Director de Seguridad Integral. Aplica al personal propio, a los contratistas y a toda
-   persona con horario.
-   - Al leer el QR aparece en rojo: «DÍA NO PROGRAMADO — REQUIERE APROBACIÓN DEL DIRECTOR».
-   - Se eliminó en este caso el botón «Registrar ingreso PENDIENTE de verificación». El vigilante tampoco puede
-     autorizarlo por excepción.
-   - El vigilante oprime «Enviar a aprobación del Director» y la persona espera. La pantalla se actualiza sola cuando
-     usted decida. El vigilante también puede avisarle por WhatsApp o llamarlo.
-   - Usted decide en Consola → «Solicitudes de ingreso».
-     Si aprueba: el vigilante oprime «Registrar INGRESO» y el ingreso queda con la constancia de su aprobación.
-     Si rechaza: el vigilante oprime «Registrar ingreso negado» y queda anotado su motivo.
-   - Si la persona se retira antes de la decisión, el vigilante registra el ingreso negado y la solicitud se cancela.
-   - Sin conexión, la solicitud no se puede enviar. El vigilante debe llamarlo, y mientras no haya aprobación la persona
-     no ingresa.
-   - Para evitar solicitudes innecesarias, el Jefe de Producción debe programar con anticipación el turno de quien deba
-     trabajar en un día que no tenía programado.
-2. Manual de uso: revisión 04.
+Talento Humano, pestaña «Personal»: si las reglas de Firebase no están actualizadas, la pantalla ya no queda en error
+(«Sin permiso para esta operación»). Muestra el personal propio con un aviso.
+
+LO QUE SIGUE PENDIENTE (REGLAS DE FIREBASE)
+Para que Talento Humano vea también a las personas de otras empresas que tienen jefe inmediato, y para que el Jefe de
+Producción y Talento Humano usen todas sus pantallas, deben estar publicadas las reglas de la entrega del 24 de octubre:
+1. Entre a https://console.firebase.google.com con la cuenta propietaria del proyecto avopak-acceso-bf73e.
+2. Firestore Database → pestaña «Reglas».
+3. Seleccione todo el texto (Ctrl+A) y bórrelo.
+4. Pegue todo el contenido de reglas-firestore-NO-SUBIR-A-GITHUB.txt (entrega del 24 de octubre) y oprima «Publicar».
+   Ese archivo NO se sube a GitHub, porque contiene el código de instalación.
+5. Cierre sesión y vuelva a ingresar con el usuario de Talento Humano y con el del Jefe de Producción.
+6. Ingrese usted como Director desde un computador y deje la aplicación abierta unos 2 minutos (ajuste automático de
+   datos). Se confirma en «Bitácora» → «Ajuste automático de datos».
 
 ARCHIVOS QUE CAMBIAN (para GitHub)
-index.html, sw.js, LEEME-ACTUALIZACION.txt y, en la carpeta js: horarios.js, views-porteria.js, views-horarios.js,
-views-planta.js, manual.js e i18n-en.js.
-Las reglas de Firebase NO cambian: no hay que publicar nada en Firebase.
+index.html, sw.js, LEEME-ACTUALIZACION.txt y, en la carpeta js: views-th.js e i18n-en.js.
 
-PASO 1. GITHUB
-Fusione la solicitud de cambios («pull request») en GitHub: ábrala → «Merge pull request» → «Confirm merge».
-Espere 1 a 2 minutos a que GitHub Pages publique.
-
-PASO 2. ACTUALIZAR LA APLICACIÓN EN CADA EQUIPO (el mismo día)
+ACTUALIZAR LA APLICACIÓN EN CADA EQUIPO
 - Computador: abra https://d-mazoavo.github.io/control-acceso/ y oprima Ctrl+F5 (o Ctrl+Mayús+R).
-- Celulares de portería: cierre la aplicación por completo y ábrala de nuevo. Si aparece el aviso de nueva versión,
-  ciérrela y ábrala otra vez.
-- IMPORTANTE: mientras un celular de portería no se actualice, seguirá mostrando el botón anterior. Actualice todos de
-  inmediato.
-
-PASO 3. VERIFICACIÓN (2 minutos)
-Lea el QR de una persona con horario que hoy no tenga turno. Debe aparecer en rojo «DÍA NO PROGRAMADO — REQUIERE
-APROBACIÓN DEL DIRECTOR», con el botón «Enviar a aprobación del Director» y sin el botón «Registrar ingreso PENDIENTE».
+- Celulares: cierre la aplicación por completo y ábrala de nuevo.
