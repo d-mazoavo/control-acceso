@@ -18,11 +18,15 @@ QUÉ CAMBIA
      no ingresa.
    - Para evitar solicitudes innecesarias, el Jefe de Producción debe programar con anticipación el turno de quien deba
      trabajar en un día que no tenía programado.
-2. Manual de uso: revisión 04.
+2. Talento Humano, pestaña «Personal»: si las reglas de Firebase no están actualizadas, ya no queda en error («Sin permiso
+   para esta operación»). Muestra el personal propio con un aviso. Para ver también a las personas de otras empresas con
+   jefe inmediato hay que publicar las reglas de Firebase de la entrega del 24 de octubre
+   (reglas-firestore-NO-SUBIR-A-GITHUB.txt).
+3. Manual de uso: revisión 04.
 
 ARCHIVOS QUE CAMBIAN (para GitHub)
 index.html, sw.js, LEEME-ACTUALIZACION.txt y, en la carpeta js: horarios.js, views-porteria.js, views-horarios.js,
-views-planta.js, manual.js e i18n-en.js.
+views-planta.js, views-th.js, manual.js e i18n-en.js.
 Las reglas de Firebase NO cambian: no hay que publicar nada en Firebase.
 
 PASO 1. GITHUB
