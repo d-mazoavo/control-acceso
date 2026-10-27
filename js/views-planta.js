@@ -12,7 +12,9 @@
   var DIAS_LARGOS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
   function errBox(e) {
     var link = e && e.indiceUrl ? h('a', { class: 'btn', href: e.indiceUrl, target: '_blank', rel: 'noopener' }, AP.icon('settings', 18), 'Crear el índice en Firebase (Director)') : null;
-    return AP.empty(e && e.offline ? 'offline' : 'alert', e && e.offline ? 'Sin conexión con el servidor' : 'No fue posible cargar la información', e && e.message, link);
+    var sinPermiso = e && (e.status === 403 || e.code === 'permission-denied');
+    return AP.empty(e && e.offline ? 'offline' : 'alert', e && e.offline ? 'Sin conexión con el servidor' : 'No fue posible cargar la información',
+      sinPermiso ? 'Sin permiso para esta operación. Es probable que las reglas de seguridad de Firebase no estén actualizadas: avise al Director de Seguridad Integral para que publique las reglas de la entrega del 24 de octubre.' : e && e.message, link);
   }
   function tabla(cols, rows, onRow) {
     return h('div', { class: 'tbl-scroll' }, h('table', { class: 'tbl' },

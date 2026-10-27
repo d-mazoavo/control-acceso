@@ -3,7 +3,8 @@ Ajuste del 27 de octubre de 2026. La versión de la aplicación sigue siendo 1.0
 
 QUÉ CAMBIA
 Talento Humano, pestaña «Personal»: si las reglas de Firebase no están actualizadas, la pantalla ya no queda en error
-(«Sin permiso para esta operación»). Muestra el personal propio con un aviso.
+(«Sin permiso para esta operación»). Muestra el personal propio con un aviso. Además, cuando una pantalla se rechaza por
+las reglas de Firebase, el mensaje explica la causa.
 
 LO QUE SIGUE PENDIENTE (REGLAS DE FIREBASE)
 Para que Talento Humano vea también a las personas de otras empresas que tienen jefe inmediato, y para que el Jefe de
@@ -18,7 +19,7 @@ Producción y Talento Humano usen todas sus pantallas, deben estar publicadas la
    datos). Se confirma en «Bitácora» → «Ajuste automático de datos».
 
 ARCHIVOS QUE CAMBIAN (para GitHub)
-index.html, sw.js, LEEME-ACTUALIZACION.txt y, en la carpeta js: views-th.js e i18n-en.js.
+index.html, sw.js, LEEME-ACTUALIZACION.txt y, en la carpeta js: views-th.js, views-planta.js e i18n-en.js.
 
 ACTUALIZAR LA APLICACIÓN EN CADA EQUIPO
 - Computador: abra https://d-mazoavo.github.io/control-acceso/ y oprima Ctrl+F5 (o Ctrl+Mayús+R).
