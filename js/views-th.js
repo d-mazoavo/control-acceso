@@ -13,7 +13,9 @@
   var RE_SALUD = /(diagn[oó]stic|enfermedad|c[aá]ncer|embaraz|psiqui|psicol|terapia|cirug|v\.?i\.?h|medicament|tratamiento|m[eé]dic[oa]|\beps\b|\bips\b|hospital|cl[ií]nica|urgencias|odontol|maternidad|paternidad|parto)/i;
   function errBox(e) {
     var link = e && e.indiceUrl ? h('a', { class: 'btn', href: e.indiceUrl, target: '_blank', rel: 'noopener' }, AP.icon('settings', 18), 'Crear el índice en Firebase (Director)') : null;
-    return AP.empty(e && e.offline ? 'offline' : 'alert', e && e.offline ? 'Sin conexión con el servidor' : 'No fue posible cargar la información', e && e.message, link);
+    var sinPermiso = e && (e.status === 403 || e.code === 'permission-denied');
+    return AP.empty(e && e.offline ? 'offline' : 'alert', e && e.offline ? 'Sin conexión con el servidor' : 'No fue posible cargar la información',
+      sinPermiso ? 'Sin permiso para esta operación. Es probable que las reglas de seguridad de Firebase no estén actualizadas: avise al Director de Seguridad Integral para que publique las reglas de la entrega del 24 de octubre.' : e && e.message, link);
   }
   function tabla(cols, rows, onRow) {
     return h('div', { class: 'tbl-scroll' }, h('table', { class: 'tbl' },
@@ -231,24 +233,27 @@
     async function permisos() {
       if (ED) acciones.replaceChildren(h('button', { class: 'btn primary', type: 'button', onclick: registrar }, AP.icon('plus', 18), 'Registrar permiso'));
       var datos = [], per = [];
-      var fEst = AP.select('est', [['', 'Todos los estados'], ['Vigente', 'Vigentes'], ['Programado', 'Programados'], ['Vencido', 'Vencidos'], ['Anulado', 'Anulados']], '');
+      var fEst = AP.select('est', [['', 'Todos los estados'], ['Vigente', 'Vigentes'], ['Por autorizar', 'Por autorizar'], ['Programado', 'Programados'], ['Vencido', 'Vencidos'], ['Rechazado', 'Rechazados'], ['Anulado', 'Anulados']], '');
       var fTipo = AP.select('tipo', [['', 'Todos los tipos']].concat(AP.CAT.tiposPermiso), '');
       var q = AP.buscador('Buscar persona, documento, tipo, quien autoriza o detalle', pintar);
       [fEst, fTipo].forEach(function (s0) { s0.addEventListener('change', pintar); });
       var out = h('div');
       var ahora = Date.now();
-      var estadoDe = function (p) { return p.Estado === 'Anulado' ? 'Anulado' : new Date(p.Hasta).getTime() < ahora ? 'Vencido' : new Date(p.Desde).getTime() > ahora ? 'Programado' : 'Vigente'; };
-      var KIND = { Anulado: 'deny', Vencido: 'muted', Programado: 'warn', Vigente: 'ok' };
+      var estadoDe = function (p) { return AP.estadoPermiso(p, ahora); };
+      var KIND = AP.KIND_PERMISO;
       function filtrados() { return datos.filter(function (p) { return (!fEst.value || estadoDe(p) === fEst.value) && (!fTipo.value || p.Tipo === fTipo.value) && AP.coincide(p, q.value, ['Title', 'NumDoc', 'Tipo', 'Detalle', 'AutorizadoPor', 'Area']); }); }
       function pintar() {
-        out.replaceChildren(tabla([
+        var pend = datos.filter(function (p) { return p.Estado === 'Por autorizar'; }).length;
+        out.replaceChildren(pend && AP.puedeDecidirPermiso() ? h('button', { class: 'banner warn', type: 'button', style: 'width:100%;text-align:left;cursor:pointer', onclick: function () { fEst.value = 'Por autorizar'; pintar(); } },
+          AP.icon('alert', 18), h('span', null, pend + (pend === 1 ? ' solicitud de permiso espera su decisión. Oprima para verla.' : ' solicitudes de permiso esperan su decisión. Oprima para verlas.'))) : null, tabla([
           ['Persona', function (p) { return h('div', null, h('strong', null, p.Title), h('small', { class: 'block muted' }, [p.NumDoc, p.TipoPersonal, p.Area].filter(Boolean).join(' · '))); }],
           ['Tipo', function (p) { return p.Tipo; }],
           ['Vigencia', function (p) { return AP.CAT.permisosSinFin.indexOf(p.Tipo) >= 0 ? 'Desde ' + U.fDateTime(p.Desde) + ' (sin hora final)' : U.fDateTime(p.Desde) + ' → ' + U.fDateTime(p.Hasta); }],
-          ['Autoriza', function (p) { return p.AutorizadoPor; }],
+          ['Autoriza', function (p) { return p.Estado === 'Por autorizar' ? 'Solicita: ' + (p.SolicitadoPorNombre || p._createdBy || '') : p.AutorizadoPor; }],
+          ['Motivo', function (p) { return p.Motivo ? h('div', null, p.Motivo, p.Remunerado ? h('small', { class: 'block muted' }, p.Remunerado) : null) : ''; }],
           ['Registró', function (p) { return h('small', { class: 'muted' }, p._createdBy || ''); }],
-          ['Estado', function (p) { var e = estadoDe(p); return h('div', null, AP.pill(e, KIND[e]), p.MotivoAnulacion ? h('small', { class: 'block muted' }, p.MotivoAnulacion) : null); }],
-          ['', function (p) { return ED && p.Estado !== 'Anulado' && new Date(p.Hasta).getTime() >= Date.now() ? h('button', { class: 'btn small danger-outline', type: 'button', onclick: function () { anular(p); } }, 'Anular') : null; }]
+          ['Estado', function (p) { var e = estadoDe(p); return h('div', null, AP.pill(e, KIND[e]), (p.MotivoAnulacion || p.MotivoDecision) ? h('small', { class: 'block muted' }, p.MotivoAnulacion || p.MotivoDecision) : null); }],
+          ['', function (p) { return p.Estado === 'Por autorizar' && AP.puedeDecidirPermiso() ? h('button', { class: 'btn small primary', type: 'button', onclick: async function () { if (await AP.decidirPermiso(p)) cargar(); } }, 'Decidir') : ED && AP.permisoActivo(p) && new Date(p.Hasta).getTime() >= Date.now() ? h('button', { class: 'btn small danger-outline', type: 'button', onclick: function () { anular(p); } }, 'Anular') : null; }]
         ], filtrados()));
       }
       async function cargar() {
@@ -564,7 +569,7 @@
             D.permisos(U.fromLocal(a, '00:00').toISOString(), per).catch(function () { return []; })]);
           var ctx = { semanas: J().indexarSemanas(r[0], per), horarios: r[1] };
           var hab = per.filter(function (p) { return p.Estado === 'Habilitado'; });
-          datos = { a: a, b: b, per: per, hab: hab, ctx: ctx, aus: r[2], movs: r[3], permisos: r[4].filter(function (x) { return U.ymd(x.Desde) >= a && U.ymd(x.Desde) <= b && x.Estado !== 'Anulado'; }),
+          datos = { a: a, b: b, per: per, hab: hab, ctx: ctx, aus: r[2], movs: r[3], permisos: r[4].filter(function (x) { return U.ymd(x.Desde) >= a && U.ymd(x.Desde) <= b && AP.permisoActivo(x); }),
             comp: J().compendio(hab, r[3], a, b, ctx, r[2]), grupos: J().agrupar(r[3]), avisoLegado: !!(r[3].avisoLegado || r[4].avisoLegado) };
           pintar();
         } catch (e) { out.replaceChildren(errBox(e)); }

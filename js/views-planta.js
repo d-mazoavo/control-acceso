@@ -12,7 +12,9 @@
   var DIAS_LARGOS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
   function errBox(e) {
     var link = e && e.indiceUrl ? h('a', { class: 'btn', href: e.indiceUrl, target: '_blank', rel: 'noopener' }, AP.icon('settings', 18), 'Crear el índice en Firebase (Director)') : null;
-    return AP.empty(e && e.offline ? 'offline' : 'alert', e && e.offline ? 'Sin conexión con el servidor' : 'No fue posible cargar la información', e && e.message, link);
+    var sinPermiso = e && (e.status === 403 || e.code === 'permission-denied');
+    return AP.empty(e && e.offline ? 'offline' : 'alert', e && e.offline ? 'Sin conexión con el servidor' : 'No fue posible cargar la información',
+      sinPermiso ? 'Sin permiso para esta operación. Es probable que las reglas de seguridad de Firebase no estén actualizadas: avise al Director de Seguridad Integral para que publique las reglas de la entrega del 24 de octubre.' : e && e.message, link);
   }
   function tabla(cols, rows, onRow) {
     return h('div', { class: 'tbl-scroll' }, h('table', { class: 'tbl' },
@@ -147,7 +149,7 @@
       return { y: y, t: t };
     });
     var aus = (info.ausencias || []).filter(function (a) { return a.Token === p.Token && a.Estado !== 'Anulada' && new Date(a.Hasta).getTime() >= ahora; });
-    var per = (info.permisos || []).filter(function (x) { return x.Token === p.Token && x.Estado !== 'Anulado' && new Date(x.Hasta).getTime() >= ahora; });
+    var per = (info.permisos || []).filter(function (x) { return x.Token === p.Token && AP.permisoActivo(x) && new Date(x.Hasta).getTime() >= ahora; });
     var uni = puedeUniforme() ? AP.input('uni', p.NumUniforme || '', { maxlength: 20, placeholder: 'Sin número asignado' }) : null;
     var uniBtn = uni ? h('button', { class: 'btn', type: 'button', onclick: async function () {
       uniBtn.disabled = true;
@@ -239,24 +241,40 @@
     var q = AP.buscador('Buscar nombre, documento, uniforme, cargo o área', pintar);
     var out = h('div', { class: 'stack' });
     [fArea, fCargo, fEst, fClase].filter(Boolean).forEach(function (s) { s.addEventListener('change', pintar); });
-    function filtradas() {
+    // sinEstado: cuenta cada situación respetando los demás filtros pero sin el filtro de estado (para las tarjetas)
+    function filtradas(sinEstado) {
       return filas.filter(function (f) {
         if (fArea.value && f.p.Area !== fArea.value) return false;
         if (fCargo.value && f.p.Cargo !== fCargo.value) return false;
-        if (fEst.value === 'fuera') { if (f.e.k === 'dentro') return false; }
-        else if (fEst.value && f.e.k !== fEst.value) return false;
+        if (!sinEstado) {
+          if (fEst.value === 'fuera') { if (f.e.k === 'dentro') return false; }
+          else if (fEst.value && f.e.k !== fEst.value) return false;
+        }
         if (fClase && fClase.value === 'operativas') { if (AP.CAT.clasesOperativas.indexOf(f.p.TipoPersonal) < 0) return false; }
         else if (fClase && fClase.value && f.p.TipoPersonal !== fClase.value) return false;
         return AP.coincide(f.p, q.value, ['Title', 'NumDoc', 'Cargo', 'Area', 'NumUniforme']);
       });
     }
+    // Cada tarjeta es un botón: al oprimirla se muestran las personas en esa situación (vuelve a oprimirla para ver todas)
+    function tarjeta(valor, num, texto, kind) {
+      var activa = fEst.value === valor;
+      return h('button', { type: 'button', class: 'kpi kpi-link' + (kind ? ' ' + kind : '') + (activa ? ' on' : ''), 'aria-pressed': activa ? 'true' : 'false',
+        onclick: function () {
+          fEst.value = activa ? '' : valor;
+          pintar();
+          if (window.innerWidth < 900) { var t = out.querySelector('.tbl-scroll'); if (t && t.scrollIntoView) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+        } }, h('strong', null, String(num)), h('span', null, texto));
+    }
     function pintar() {
-      var l = filtradas(), n = function (k) { return l.filter(function (f) { return f.e.k === k; }).length; };
+      var base = filtradas(true), l = filtradas(), n = function (k) { return base.filter(function (f) { return f.e.k === k; }).length; };
       var orden = { falta: 0, noasistio: 1, dentro: 2, programado: 3, salio: 4, ausente: 5, descanso: 6, sin: 7 };
+      var tit = fEst.value ? AP.textoOpcion(fEst) : 'Todas las personas';
       out.replaceChildren(
-        h('div', { class: 'kpis' }, kpi(l.length, 'Personas en la vista'), kpi(n('dentro'), 'En planta ahora (adentro)', 'brand'), kpi(l.length - n('dentro'), 'Fuera de planta'),
-          kpi(n('falta'), 'No han llegado a su turno', n('falta') ? 'deny' : ''), kpi(n('noasistio'), 'Sin ingreso en su turno de hoy', n('noasistio') ? 'warn' : ''),
-          kpi(n('programado'), 'Programados más tarde'), kpi(n('ausente'), 'Con ausencia registrada'), kpi(n('salio'), 'Ya salieron')),
+        h('div', { class: 'kpis' }, tarjeta('', base.length, 'Personas en la vista'), tarjeta('dentro', n('dentro'), 'En planta ahora (adentro)', 'brand'), tarjeta('fuera', base.length - n('dentro'), 'Fuera de planta'),
+          tarjeta('falta', n('falta'), 'No han llegado a su turno', n('falta') ? 'deny' : ''), tarjeta('noasistio', n('noasistio'), 'Sin ingreso en su turno de hoy', n('noasistio') ? 'warn' : ''),
+          tarjeta('programado', n('programado'), 'Programados más tarde'), tarjeta('ausente', n('ausente'), 'Con ausencia registrada'), tarjeta('salio', n('salio'), 'Ya salieron'),
+          tarjeta('descanso', n('descanso'), 'En descanso hoy'), tarjeta('sin', n('sin'), 'Sin turno hoy')),
+        h('p', { class: 'muted small' }, tit + ': ' + l.length + (l.length === 1 ? ' persona' : ' personas') + '. Oprima una tarjeta para ver solo a las personas en esa situación.'),
         tabla([
           ['Persona', function (f) { return h('div', null, h('strong', null, f.p.Title), h('small', { class: 'block muted' }, [f.p.NumDoc, f.p.NumUniforme ? 'Uniforme ' + f.p.NumUniforme : '', f.p.Cargo, f.p.Area, opt.clases ? f.p.TipoPersonal : ''].filter(Boolean).join(' · '))); }],
           ['Turno de hoy', function (f) { return f.e.turno || '—'; }],
@@ -960,24 +978,25 @@
     async function permisos() {
       if (ED) acciones.replaceChildren(h('button', { class: 'btn primary', type: 'button', onclick: registrar }, AP.icon('plus', 18), 'Registrar permiso'));
       var datos = [], ops = [];
-      var fEst = AP.select('est', [['', 'Todos los estados'], ['Vigente', 'Vigentes'], ['Programado', 'Programados'], ['Vencido', 'Vencidos'], ['Anulado', 'Anulados']], '');
+      var fEst = AP.select('est', [['', 'Todos los estados'], ['Vigente', 'Vigentes'], ['Por autorizar', 'Por autorizar'], ['Programado', 'Programados'], ['Vencido', 'Vencidos'], ['Rechazado', 'Rechazados'], ['Anulado', 'Anulados']], '');
       var fTipo = AP.select('tipo', [['', 'Todos los tipos']].concat(AP.CAT.tiposPermiso), '');
       var q = AP.buscador('Buscar persona, documento, tipo o detalle', pintar);
       [fEst, fTipo].forEach(function (s0) { s0.addEventListener('change', pintar); });
       var out = h('div');
       var ahora = Date.now();
-      var estadoDe = function (p) { return p.Estado === 'Anulado' ? 'Anulado' : new Date(p.Hasta).getTime() < ahora ? 'Vencido' : new Date(p.Desde).getTime() > ahora ? 'Programado' : 'Vigente'; };
-      var KIND = { Anulado: 'deny', Vencido: 'muted', Programado: 'warn', Vigente: 'ok' };
+      var estadoDe = function (p) { return AP.estadoPermiso(p, ahora); };
+      var KIND = AP.KIND_PERMISO;
       function filtrados() { return datos.filter(function (p) { return (!fEst.value || estadoDe(p) === fEst.value) && (!fTipo.value || p.Tipo === fTipo.value) && AP.coincide(p, q.value, ['Title', 'NumDoc', 'Tipo', 'Detalle', 'AutorizadoPor', 'Area', estadoDe]); }); }
       function pintar() {
         out.replaceChildren(tabla([
           ['Persona', function (p) { return h('div', null, h('strong', null, p.Title), h('small', { class: 'block muted' }, [p.NumDoc, p.Area].filter(Boolean).join(' · '))); }],
           ['Tipo', function (p) { return p.Tipo; }],
           ['Vigencia', function (p) { return AP.CAT.permisosSinFin.indexOf(p.Tipo) >= 0 ? 'Desde ' + U.fDateTime(p.Desde) + ' (sin hora final)' : U.fDateTime(p.Desde) + ' → ' + U.fDateTime(p.Hasta); }],
-          ['Autoriza', function (p) { return p.AutorizadoPor; }],
+          ['Autoriza', function (p) { return p.Estado === 'Por autorizar' ? 'Pendiente de Recursos Humanos' : p.DecididoPorNombre || p.AutorizadoPor; }],
+          ['Motivo', function (p) { return p.Motivo ? h('div', null, p.Motivo, p.Remunerado ? h('small', { class: 'block muted' }, p.Remunerado) : null) : ''; }],
           ['Detalle', function (p) { return p.Detalle; }],
-          ['Estado', function (p) { var e = estadoDe(p); return h('div', null, AP.pill(e, KIND[e]), p.MotivoAnulacion ? h('small', { class: 'block muted' }, p.MotivoAnulacion) : null); }],
-          ['', function (p) { return ED && p.Estado !== 'Anulado' && new Date(p.Hasta).getTime() >= Date.now() ? h('button', { class: 'btn small danger-outline', type: 'button', onclick: function () { anular(p); } }, 'Anular') : null; }]
+          ['Estado', function (p) { var e = estadoDe(p); return h('div', null, AP.pill(e, KIND[e]), (p.MotivoAnulacion || p.MotivoDecision) ? h('small', { class: 'block muted' }, p.MotivoAnulacion || p.MotivoDecision) : null); }],
+          ['', function (p) { return ED && (AP.permisoActivo(p) || p.Estado === 'Por autorizar') && new Date(p.Hasta).getTime() >= Date.now() ? h('button', { class: 'btn small danger-outline', type: 'button', onclick: function () { anular(p); } }, p.Estado === 'Por autorizar' ? 'Cancelar solicitud' : 'Anular') : null; }]
         ], filtrados()));
       }
       async function cargar() {
@@ -1127,7 +1146,7 @@
           res = J().compendio(per, r[3], a, b, ctx, r[2]);
           res.avisoLegado = !!r[3].avisoLegado;
           rango = [a, b];
-          permisosR = r[4].filter(function (x) { return U.ymd(x.Desde) >= a && U.ymd(x.Desde) <= b && x.Estado !== 'Anulado'; });
+          permisosR = r[4].filter(function (x) { return U.ymd(x.Desde) >= a && U.ymd(x.Desde) <= b && AP.permisoActivo(x); });
           // Asistencia por turno y por día (días ya transcurridos)
           porTurno = {}; porDia = {};
           res.forEach(function (x) {

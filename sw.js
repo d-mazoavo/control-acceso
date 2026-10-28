@@ -1,5 +1,5 @@
 /* Permite abrir la aplicación sin internet. Los datos (personas, registros) se guardan aparte, en el almacenamiento del navegador. */
-var VERSION = 'acceso-v1.0.0-b6';
+var VERSION = 'acceso-v1.0.0-b7';
 var FILES = [
   './', 'index.html', 'config.js', 'textos.js', 'manifest.webmanifest', 'css/app.css',
   'js/vendor/firebase-app-compat.js', 'js/vendor/firebase-auth-compat.js', 'js/vendor/firebase-firestore-compat.js', 'js/vendor/jsQR.js', 'js/vendor/qrcode.js', 'js/vendor/read-excel-file.min.js', 'js/vendor/write-excel-file.min.js',
