@@ -224,17 +224,11 @@
     });
   };
 
-  // Logo institucional sin los márgenes blancos de la imagen original (logo.png, 1024 × 1024)
+  // Logo de los informes: Avo Pak sin el texto «Dirección de Seguridad» (img/logo-informe.png)
   async function logoRecortado() {
-    var r = await fetch('img/logo.png');
+    var r = await fetch('img/logo-informe.png');
     if (!r.ok) return null;
-    var bmp = await createImageBitmap(await r.blob());
-    var k = bmp.width / 1024, sx = Math.round(95 * k), sy = Math.round(150 * k), sw = Math.round(835 * k), sh = Math.round(740 * k);
-    var c = document.createElement('canvas'); c.width = 600; c.height = Math.round(600 * sh / sw);
-    var x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
-    x.drawImage(bmp, sx, sy, sw, sh, 0, 0, c.width, c.height);
-    var b = await new Promise(function (res) { c.toBlob(res, 'image/png'); });
-    return new Uint8Array(await b.arrayBuffer());
+    return new Uint8Array(await r.arrayBuffer());
   }
 
   async function generar(i, o) {

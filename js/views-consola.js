@@ -824,7 +824,7 @@
       lista.forEach(function (p) {
         var vis = st.tipo === 'visita';
         cards.appendChild(h('div', { class: 'id-card' + (vis ? ' visit' : '') },
-          h('div', { class: 'id-head' }, h('img', { src: 'img/logo-avo.png', alt: 'Avo Pak' }), h('span', null, vis ? 'PASE DE VISITANTE' : 'CREDENCIAL DE ACCESO')),
+          h('div', { class: 'id-head' }, h('img', { src: 'img/logo-informe.png', alt: 'Avo Pak' }), h('span', null, vis ? 'PASE DE VISITANTE' : 'CREDENCIAL DE ACCESO')),
           h('div', { class: 'id-body' },
             vis ? null : h('img', { class: 'id-photo', src: p.Foto || U.avatar(p.Title), alt: '' }),
             h('div', { class: 'id-data' },
@@ -851,7 +851,7 @@
     x.fillStyle = '#587e50'; x.fillRect(0, 0, W, 150);
     try {
       // Logo completo y proporcional dentro de la franja verde (sin recortes)
-      var logo = await new Promise(function (res, rej) { var i = new Image(); i.onload = function () { res(i); }; i.onerror = rej; i.src = 'img/logo-avo.png'; });
+      var logo = await new Promise(function (res, rej) { var i = new Image(); i.onload = function () { res(i); }; i.onerror = rej; i.src = 'img/logo-informe.png'; });
       var caja = 122, k = Math.min(caja / logo.width, caja / logo.height), lw = logo.width * k, lh = logo.height * k;
       x.fillStyle = '#ffffff';
       if (x.roundRect) { x.beginPath(); x.roundRect(30, 14, caja, caja, 12); x.fill(); } else x.fillRect(30, 14, caja, caja);

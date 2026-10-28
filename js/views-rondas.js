@@ -589,7 +589,7 @@
     l = l.slice().sort(function (a, b) { return (Number(a.Orden) || 999) - (Number(b.Orden) || 999) || (U.fold(a.Title) < U.fold(b.Title) ? -1 : 1); });
     var hoja = h('div', { class: 'ronda-labels' }, l.map(function (p) {
       return h('div', { class: 'ronda-label' },
-        h('div', { class: 'rl-head' }, h('img', { src: 'img/logo.png', alt: 'Avo Pak' }), h('span', null, 'PUNTO DE CONTROL DE RONDA')),
+        h('div', { class: 'rl-head' }, h('img', { src: 'img/logo-informe.png', alt: 'Avo Pak' }), h('span', null, 'PUNTO DE CONTROL DE RONDA')),
         h('div', { class: 'rl-qr', html: U.qrSvg(AP.Rondas.payload(p.Codigo), 5, 2) }),
         h('strong', null, (p.Orden ? p.Orden + '. ' : '') + p.Title),
         p.Ubicacion ? h('span', null, p.Ubicacion) : null,

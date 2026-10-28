@@ -46,7 +46,7 @@
       if (!todo) secs = m.secciones.filter(aplica);
       cuerpo.replaceChildren(
         h('div', { class: 'manual-head' },
-          h('div', null, h('img', { src: 'img/logo.png', alt: 'Avo Pak' })),
+          h('div', null, h('img', { src: 'img/logo-informe.png', alt: 'Avo Pak' })),
           h('div', null, h('h1', null, m.titulo || 'Manual de uso'), h('strong', null, 'Avo-Pak'), h('small', { class: 'muted' }, 'Proceso: Seguridad · Dirección de Seguridad Integral')),
           h('div', null, h('span', { class: 'mh-meta' }, 'Código: ', h('strong', null, m.codigo || 'Por asignar')), h('span', { class: 'mh-meta' }, 'Fecha: ', h('strong', null, m.fecha ? U.fDate(U.fromLocal(m.fecha, '12:00')) : '')),
             h('span', { class: 'mh-meta' }, 'Versión: ', h('strong', null, m.version || '01')), h('span', { class: 'mh-meta' }, 'Aplicación: v', AP.VERSION))),
@@ -89,7 +89,7 @@
     var doc = new X.Doc();
     // Logo en el encabezado
     var logo = null;
-    try { var resp = await fetch('img/logo.png'); logo = new Uint8Array(await resp.arrayBuffer()); } catch (e) { logo = null; }
+    try { var resp = await fetch('img/logo-informe.png'); logo = new Uint8Array(await resp.arrayBuffer()); } catch (e) { logo = null; }
     var dib = logo ? await doc.imagen(logo, 'image/png', 2.2, 2.2, true) : '';
     var celda = function (xml, fill) { return { xml: xml, fill: fill, valign: 'center' }; };
     var enc = X.tabla([[
