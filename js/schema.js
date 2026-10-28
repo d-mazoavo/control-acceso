@@ -132,7 +132,10 @@
         // Tipo de la persona (Talento Humano consulta los del personal propio) y su jefe inmediato (Jefe de Producción)
         ['PersonaTipo', 'text', IDX], ['JefeId', 'text', IDX],
         // Mes (AAAA-MM) de inicio del permiso y ámbito de Talento Humano: consultas sin índices compuestos
-        ['Mes', 'text', IDX], ['AmbitoTH', 'bool', IDX]
+        ['Mes', 'text', IDX], ['AmbitoTH', 'bool', IDX],
+        // Motivo del permiso (catálogo legal), clase de remuneración, soporte y decisión de Recursos Humanos
+        ['Motivo', 'text'], ['Remunerado', 'text'], ['BaseLegal', 'text'], ['Soporte', 'text'], ['SolicitadoPor', 'text'], ['SolicitadoPorNombre', 'text'],
+        ['DecididoPor', 'text'], ['DecididoPorNombre', 'text'], ['FechaDecision', 'datetime'], ['MotivoDecision', 'text'], ['AusenciaId', 'text']
       ]
     },
     AP_Solicitudes: {
@@ -267,6 +270,30 @@
     modalidadesHorario: [['Turno', 'Turno con control de puntualidad y salida'], ['Libre', 'Acceso libre dentro del horario']],
     motivosCierreSesion: ['Se retiró sin cerrar el turno', 'Cambio de turno: el relevo ya ingresó', 'Celular perdido, dañado o en poder de otra persona', 'Otro'],
     tiposPermiso: ['Ingreso tardío', 'Salida anticipada', 'Salida temporal (cita o diligencia)', 'Ingreso y salida fuera de horario'],
+    // Permisos y licencias de uno o más días (no actúan en portería: al aprobarlos Talento Humano se crea la ausencia correspondiente)
+    tipoDiaCompleto: 'Permiso o licencia de día completo',
+    // Estados de un permiso solicitado por el jefe inmediato: queda «Por autorizar» hasta que Recursos Humanos decide
+    estadosPermisoNoVigentes: ['Anulado', 'Por autorizar', 'Rechazado'],
+    // Catálogo de motivos (k, clase, fundamento, día completo, tipo de ausencia al aprobar). Los fundamentos deben validarse
+    // contra el texto oficial vigente antes de su uso formal.
+    motivosPermiso: [
+      { k: 'Cita médica o de salud (sin diagnóstico)', r: 'Remunerado por ley', b: 'Art. 57 num. 6 CST (modificado por Ley 2466 de 2025, art. 15)', s: 'Constancia de asistencia expedida por la entidad de salud' },
+      { k: 'Calamidad doméstica grave', r: 'Remunerado por ley', b: 'Art. 57 num. 6 CST (Ley 2466 de 2025, art. 15)', s: 'Soporte del hecho, dentro del plazo del RIT' },
+      { k: 'Votación', r: 'Remunerado por ley', b: 'Art. 57 num. 6 CST (Ley 2466 de 2025, art. 15); Ley 403 de 1997, art. 3', s: 'Certificado electoral' },
+      { k: 'Jurado de votación', r: 'Remunerado por ley', b: 'Decreto 2241 de 1986, art. 105', s: 'Certificado o designación como jurado' },
+      { k: 'Obligaciones escolares como acudiente', r: 'Remunerado por ley', b: 'Art. 57 num. 6 CST (Ley 2466 de 2025, art. 15)', s: 'Citación o constancia del plantel' },
+      { k: 'Citación judicial o administrativa', r: 'Remunerado por ley', b: 'Art. 57 num. 6 CST (Ley 2466 de 2025, art. 15)', s: 'Citación de la autoridad' },
+      { k: 'Comisión sindical o entierro de compañero', r: 'Remunerado por ley', b: 'Art. 57 num. 6 CST (Ley 2466 de 2025, art. 15)', s: 'Comunicación de la organización sindical o aviso del hecho' },
+      { k: 'Licencia por luto (5 días hábiles)', r: 'Remunerado por ley', b: 'Ley 1280 de 2009, art. 1', s: 'Registro civil de defunción', dia: true, aus: 'Licencia (luto, calamidad u otra legal)' },
+      { k: 'Licencia de maternidad (18 semanas)', r: 'Remunerado por ley', b: 'Art. 236 CST (Ley 2114 de 2021)', s: 'Certificado de la EPS', dia: true, aus: 'Ausencia justificada (reservada)' },
+      { k: 'Licencia de paternidad (2 semanas)', r: 'Remunerado por ley', b: 'Art. 236 CST (Ley 2114 de 2021)', s: 'Registro civil de nacimiento', dia: true, aus: 'Licencia (luto, calamidad u otra legal)' },
+      { k: 'Licencia parental compartida', r: 'Remunerado por ley', b: 'Ley 2114 de 2021', s: 'Certificado de la EPS', dia: true, aus: 'Ausencia justificada (reservada)' },
+      { k: 'Matrimonio (3 días hábiles)', r: 'Remunerado por acuerdo o reglamento', b: 'RIT AVO PAK 2026, art. 80 (no es licencia legal)', s: 'Registro civil de matrimonio', dia: true, aus: 'Permiso remunerado (día completo)' },
+      { k: 'Día de la bicicleta (1 día por cada 6 meses)', r: 'Remunerado por acuerdo o reglamento', b: 'Acuerdo con el empleador', s: 'Constancia de uso de bicicleta, según acuerdo', dia: true, aus: 'Permiso remunerado (día completo)' },
+      { k: 'Motivos personales (no remunerado)', r: 'No remunerado', b: 'Art. 51 CST; acuerdo entre las partes. El empleador sigue cotizando salud y pensión', s: 'Solicitud escrita', dia: true, aus: 'Permiso no remunerado (día completo)' },
+      { k: 'Estudio (no remunerado)', r: 'No remunerado', b: 'Art. 51 CST; acuerdo entre las partes. El empleador sigue cotizando salud y pensión', s: 'Constancia de la institución', dia: true, aus: 'Permiso no remunerado (día completo)' },
+      { k: 'Viaje (no remunerado)', r: 'No remunerado', b: 'Art. 51 CST; acuerdo entre las partes. El empleador sigue cotizando salud y pensión', s: 'Solicitud escrita', dia: true, aus: 'Permiso no remunerado (día completo)' }
+    ],
     // Salida anticipada: la persona no regresa, así que el permiso no lleva hora final (vale desde la hora indicada hasta el fin del día)
     permisosSinFin: ['Salida anticipada'],
     resultadosVerificacion: ['Justificada', 'No justificada', 'Pendiente de soporte'],

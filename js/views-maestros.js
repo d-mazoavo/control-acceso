@@ -310,7 +310,7 @@
           if (!!x.AmbitoTH !== amb(p)) c.AmbitoTH = amb(p);
           if (!x.PersonaId) c.PersonaId = p.id;
           if (!x.PersonaTipo && p.Tipo) c.PersonaTipo = p.Tipo;
-          if (x.Estado !== 'Anulado' && x.Hasta >= ahoraIso && (x.JefeId || '') !== (p.JefeId || '')) c.JefeId = p.JefeId || '';
+          if (AP.permisoActivo(x) && x.Hasta >= ahoraIso && (x.JefeId || '') !== (p.JefeId || '')) c.JefeId = p.JefeId || '';
         }
         if (Object.keys(c).length) await upd('AP_Permisos', x.id, c);
       }

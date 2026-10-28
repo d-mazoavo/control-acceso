@@ -11,8 +11,8 @@
   AP.MANUAL = {
     titulo: 'Instructivo de uso de la aplicación Control de Acceso',
     codigo: 'Por asignar (Dirección de Calidad)',
-    version: '04',
-    fecha: '2026-10-26',
+    version: '05',
+    fecha: '2026-10-27',
     appVersion: '1.0.0',
     secciones: [
       { id: 'objetivo', titulo: 'Objetivo', roles: ['todos'], bloques: [
@@ -189,7 +189,7 @@
           '«Excel por turnos» descarga, para el periodo que elija (hasta 92 días), una hoja por turno con quién está en cada turno día por día, una hoja de descansos y un resumen.'
         ] },
         { h: 'Permisos del personal' },
-        { p: 'Registre permisos de ingreso tardío, salida anticipada (sin hora final), salida temporal o ingreso y salida fuera de horario para su personal. Por defecto usted figura como quien autoriza. Un permiso no se borra: se anula con motivo.' },
+        { p: 'Registre permisos de ingreso tardío, salida anticipada (sin hora final), salida temporal o ingreso y salida fuera de horario para su personal. Elija siempre el motivo del catálogo (citas médicas sin diagnóstico, calamidad doméstica, votación, jurado, acudiente escolar, citaciones, luto, matrimonio, maternidad, paternidad, permisos no remunerados, entre otros): cada uno indica si es remunerado por ley, por acuerdo o no remunerado, su fundamento y el soporte esperado. Su solicitud no se aplica de inmediato: queda «Por autorizar» y se envía al Jefe de Recursos Humanos, que la autoriza o la rechaza con justificación. La portería solo aplica los permisos autorizados. Mientras esté pendiente, usted puede cancelar la solicitud. Un permiso no se borra: se anula con motivo.' },
         { h: 'Estadísticas y registro de cambios' },
         { ul: [
           '«Estadísticas» muestra, para el periodo elegido, la asistencia a los turnos programados (por turno, por día y por persona), las llegadas tarde, los días de ausencia, los permisos y las horas en planta según portería, con descarga en Excel.',
@@ -201,7 +201,7 @@
         { h: 'Personal' },
         { p: 'Lista el personal propio de Avo Pak y a las personas de otras empresas que tienen jefe inmediato asignado, con filtros por clase, área, cargo, jefe inmediato y estado. «Ficha» muestra los datos de la persona (solo consulta), su programación de la semana, sus permisos y sus ausencias. Talento Humano no modifica los datos de las personas (los registra y corrige el Director de Seguridad Integral), salvo el número de uniforme: en la ficha o con «Números de uniforme».' },
         { h: 'Permisos' },
-        { p: 'Registre permisos por horas del personal propio y de las personas con jefe inmediato asignado, aunque no estén a cargo del Jefe de Producción (ingreso tardío, salida anticipada, salida temporal, ingreso y salida fuera de horario). La portería los aplica al leer el QR. Un permiso no se borra: se anula con motivo.' },
+        { p: 'Registre permisos por horas del personal propio y de las personas con jefe inmediato asignado, aunque no estén a cargo del Jefe de Producción (ingreso tardío, salida anticipada, salida temporal, ingreso y salida fuera de horario). La portería los aplica al leer el QR. Las solicitudes de los jefes aparecen «Por autorizar»: oprima «Decidir», revise el motivo, su fundamento legal y el soporte esperado, y autorice o rechace (el rechazo exige justificación). Los permisos remunerados por ley solo se rechazan si no se cumplen los requisitos de aviso o soporte. Al autorizar una licencia de uno o más días se crea la ausencia correspondiente. Un permiso no se borra: se anula con motivo.' },
         { h: 'Vacaciones y ausencias' },
         { ol: [
           'En «Vacaciones y ausencias» oprima «Registrar ausencia», busque a la persona y elija el tipo.',
@@ -277,7 +277,8 @@
       { version: '01', fecha: '2026-10-22', descripcion: 'Versión inicial del instructivo, acorde con la versión 1.0.0 de la aplicación: perfiles de solo consulta, Gobierno Corporativo, Jefe de Producción y Talento Humano; programación de planta; ausencias; horas en planta; salida anticipada sin hora final; alerta de salida; metas de ronda; estadísticas; idioma del menú.' },
       { version: '02', fecha: '2026-10-22', descripcion: 'Empresas (personas jurídicas) y catálogo de cargos; jefe inmediato en la ficha de la persona; usuarios creados desde una persona registrada y visibles solo para el Director; panel del Jefe de Producción por personal a cargo (turnos, asignación, estadísticas, Excel por turnos, ficha de consulta); Talento Humano con personal, permisos, programación, estadísticas y horas según portería; filtro en todas las listas; visitas por llegar; bloqueo de visitas de personas con ingreso autorizado; cierre de sesión al cambiar el perfil.' },
       { version: '03', fecha: '2026-10-24', descripcion: 'Consultas del Jefe de Producción y de Talento Humano sin índices compuestos; número de uniforme (Director, jefe inmediato y Talento Humano); jefe inmediato para cualquier tipo de persona; el Jefe de Producción solo ve personal habilitado; horarios fijos asignados por el jefe; Talento Humano con permisos y consulta de las personas con jefe inmediato y con todo lo programado por persona; búsqueda de Personas solo por los datos de la persona; «Usuarios» al final del menú; traducción completa de la pantalla al inglés.' },
-      { version: '04', fecha: '2026-10-26', descripcion: 'El ingreso en un día no programado o de descanso, de cualquier persona con horario (personal propio, contratistas y demás), lo decide el Director de Seguridad Integral: el vigilante envía la solicitud y la persona no ingresa mientras no se apruebe. Se eliminó en ese caso la opción de registrar el ingreso pendiente de verificación.' }
+      { version: '04', fecha: '2026-10-26', descripcion: 'El ingreso en un día no programado o de descanso, de cualquier persona con horario (personal propio, contratistas y demás), lo decide el Director de Seguridad Integral: el vigilante envía la solicitud y la persona no ingresa mientras no se apruebe. Se eliminó en ese caso la opción de registrar el ingreso pendiente de verificación.' },
+      { version: '05', fecha: '2026-10-27', descripcion: 'Los permisos solicitados por el jefe inmediato se envían a Recursos Humanos («Por autorizar») y solo se aplican en portería cuando se autorizan; catálogo de motivos de permisos y licencias con su clase de remuneración, fundamento y soporte; licencias de día completo que crean la ausencia al autorizarse; las tarjetas de «Estado en planta» muestran a las personas de cada situación.' }
     ]
   };
 })();

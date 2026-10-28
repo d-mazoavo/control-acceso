@@ -133,10 +133,20 @@
   };
 
   // Permisos vigentes del instante, de los tipos indicados
+  // Un permiso solo produce efectos si está vigente: «Por autorizar», «Rechazado» y «Anulado» no cuentan
+  AP.permisoActivo = function (p) { return AP.CAT.estadosPermisoNoVigentes.indexOf(p.Estado) < 0; };
+  // Estado que se muestra: Anulado, Por autorizar o Rechazado vienen del registro; los demás, de la vigencia
+  AP.estadoPermiso = function (p, ahora) {
+    if (p.Estado === 'Anulado' || p.Estado === 'Por autorizar' || p.Estado === 'Rechazado') return p.Estado;
+    ahora = ahora || Date.now();
+    return new Date(p.Hasta).getTime() < ahora ? 'Vencido' : new Date(p.Desde).getTime() > ahora ? 'Programado' : 'Vigente';
+  };
+  AP.KIND_PERMISO = { 'Anulado': 'deny', 'Rechazado': 'deny', 'Vencido': 'muted', 'Programado': 'warn', 'Por autorizar': 'warn', 'Vigente': 'ok' };
+  AP.puedeDecidirPermiso = function () { return AP.Session.rol === 'Administrador' || AP.Session.rol === 'Talento Humano'; };
   H.permisosVigentes = function (token, now, tipos) {
     var t = now.getTime();
     return AP.Sync.permisos.filter(function (p) {
-      return p.Token === token && p.Estado !== 'Anulado' && (!tipos || tipos.indexOf(p.Tipo) >= 0) &&
+      return p.Token === token && AP.permisoActivo(p) && (!tipos || tipos.indexOf(p.Tipo) >= 0) &&
         new Date(p.Desde).getTime() <= t && t <= H.finPermiso(p).getTime();
     }).sort(function (a, b) { return a.Hasta < b.Hasta ? 1 : -1; });
   };
@@ -215,7 +225,7 @@
     }
     // Reingreso dentro de la misma jornada (salió y regresa): no se mide como llegada tardía
     if (ult && ult.Sentido === 'Salida' && new Date(ult.FechaHora).getTime() >= j.start.getTime() - c.minutosAntelacionTurno * 60000 && now <= j.end) {
-      var pt = AP.Sync.permisos.filter(function (x) { return x.Token === token && x.Estado !== 'Anulado' && x.Tipo === 'Salida temporal (cita o diligencia)' && new Date(x.Desde).getTime() <= new Date(ult.FechaHora).getTime() + 60000; }).sort(function (a, b) { return a.Hasta < b.Hasta ? 1 : -1; })[0];
+      var pt = AP.Sync.permisos.filter(function (x) { return x.Token === token && AP.permisoActivo(x) && x.Tipo === 'Salida temporal (cita o diligencia)' && new Date(x.Desde).getTime() <= new Date(ult.FechaHora).getTime() + 60000; }).sort(function (a, b) { return a.Hasta < b.Hasta ? 1 : -1; })[0];
       if (pt && now.getTime() > new Date(pt.Hasta).getTime() + 5 * 60000) {
         return { nivel: 'warn', registrable: true, novedad: 'Reingreso fuera del plazo del permiso', etiqueta: 'REINGRESO FUERA DE PLAZO — PENDIENTE', detalle: 'El permiso de salida temporal vencía a las ' + hm(pt.Hasta) + '.', horarioInfo: info };
       }

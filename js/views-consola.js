@@ -642,7 +642,7 @@
     async function moverAlNuevoJefe(p, antes, ahora) {
       var hoyIso = new Date().toISOString(), amb = p.Tipo === 'Personal propio' || !!ahora, n = 0;
       var r = await Promise.all([AP.B.consulta('AP_Permisos', [['Token', '==', p.Token]]), AP.B.consulta('AP_Ausencias', [['Token', '==', p.Token]]), AP.B.consulta('AP_Horarios', [['Token', '==', p.Token]])]);
-      var perm = r[0].filter(function (x) { return x.Estado !== 'Anulado' && x.Hasta >= hoyIso && ((x.JefeId || '') !== ahora || !!x.AmbitoTH !== amb); });
+      var perm = r[0].filter(function (x) { return AP.permisoActivo(x) && x.Hasta >= hoyIso && ((x.JefeId || '') !== ahora || !!x.AmbitoTH !== amb); });
       for (var i = 0; i < perm.length; i++) {
         await AP.B.update('AP_Permisos', perm[i].id, { JefeId: ahora, AmbitoTH: amb, PersonaId: p.id, PersonaTipo: p.Tipo, Mes: perm[i].Mes || U.ymd(perm[i].Desde).slice(0, 7) }); n++;
       }

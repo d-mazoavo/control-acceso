@@ -293,6 +293,8 @@ button.banner { cursor: pointer; }
 .kpi.kpi-link { cursor: pointer; transition: box-shadow .15s, transform .1s; }
 .kpi.kpi-link:hover { box-shadow: 0 4px 16px rgba(0,0,0,.12); transform: translateY(-1px); }
 .kpi.kpi-link:active { transform: translateY(0); }
+button.kpi { text-align: left; font: inherit; width: 100%; }
+.kpi.on { outline: 3px solid var(--brand); outline-offset: 1px; }
 .alerts { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 360px; overflow: auto; }
 .alerts li { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border-radius: 10px; font-size: .9rem; }
 .alerts li svg { flex: none; margin-top: 2px; }

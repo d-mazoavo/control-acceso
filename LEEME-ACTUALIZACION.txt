@@ -1,25 +1,37 @@
 AVO PAK S.A.S. — CONTROL DE ACCESO
-Ajuste del 27 de octubre de 2026. La versión de la aplicación sigue siendo 1.0.0.
+Ajuste del 27 de octubre de 2026 (etiqueta de caché b7). La versión de la aplicación sigue siendo 1.0.0. Manual de uso: revisión 05.
 
 QUÉ CAMBIA
-Talento Humano, pestaña «Personal»: si las reglas de Firebase no están actualizadas, la pantalla ya no queda en error
-(«Sin permiso para esta operación»). Muestra el personal propio con un aviso. Además, cuando una pantalla se rechaza por
-las reglas de Firebase, el mensaje explica la causa.
+1. Estado en planta: cada tarjeta (dentro, fuera, falta, no asistió, programado, ausente, salió, en descanso, sin turno) se
+   puede oprimir y la tabla muestra solo a las personas de esa situación. Al oprimirla de nuevo se quita el filtro.
+2. Permisos del jefe: el permiso que registra el Jefe de Producción (o el de Mantenimiento o la Directora de Calidad, que
+   tienen el mismo perfil) ya no queda vigente: se envía a Recursos Humanos como «Por autorizar». Talento Humano oprime
+   «Decidir», revisa el motivo, su fundamento y el soporte esperado, y lo autoriza (queda Vigente) o lo rechaza (exige
+   justificación). La portería solo aplica los permisos vigentes. El jefe puede cancelar su solicitud mientras esté pendiente.
+3. Catálogo de motivos (remunerados por ley, por acuerdo o reglamento, y no remunerados) con su fundamento legal y el soporte
+   esperado. Las licencias de uno o más días (luto, maternidad, paternidad, parental compartida, matrimonio, bicicleta,
+   no remunerados) piden fechas y, al autorizarse, crean la ausencia en «Vacaciones y ausencias».
+4. Talento Humano ve un aviso con las solicitudes pendientes. El Director también puede decidirlas (Consola → Permisos).
 
-LO QUE SIGUE PENDIENTE (REGLAS DE FIREBASE)
-Para que Talento Humano vea también a las personas de otras empresas que tienen jefe inmediato, y para que el Jefe de
-Producción y Talento Humano usen todas sus pantallas, deben estar publicadas las reglas de la entrega del 24 de octubre:
+IMPORTANTE: CAMBIAN LAS REGLAS DE FIREBASE
+Esta entrega incluye reglas nuevas (reglas-firestore-NO-SUBIR-A-GITHUB.txt). Sin publicarlas, el jefe no puede enviar
+solicitudes y Talento Humano no puede decidirlas.
 1. Entre a https://console.firebase.google.com con la cuenta propietaria del proyecto avopak-acceso-bf73e.
 2. Firestore Database → pestaña «Reglas».
-3. Seleccione todo el texto (Ctrl+A) y bórrelo.
-4. Pegue todo el contenido de reglas-firestore-NO-SUBIR-A-GITHUB.txt (entrega del 24 de octubre) y oprima «Publicar».
-   Ese archivo NO se sube a GitHub, porque contiene el código de instalación.
-5. Cierre sesión y vuelva a ingresar con el usuario de Talento Humano y con el del Jefe de Producción.
-6. Ingrese usted como Director desde un computador y deje la aplicación abierta unos 2 minutos (ajuste automático de
-   datos). Se confirma en «Bitácora» → «Ajuste automático de datos».
+3. Seleccione todo el texto (Ctrl+A), bórrelo y pegue todo el contenido de reglas-firestore-NO-SUBIR-A-GITHUB.txt.
+4. Oprima «Publicar». Ese archivo NO se sube a GitHub, porque contiene el código de instalación.
+5. Cierre sesión y vuelva a ingresar con Talento Humano y con los jefes.
+6. Ingrese como Director desde un computador y deje la aplicación abierta unos 2 minutos (ajuste automático de datos).
+
+CREAR LOS USUARIOS DEL JEFE DE MANTENIMIENTO Y DE LA DIRECTORA DE CALIDAD (lo hace el Director)
+1. Personas: registre a cada uno (si no existe) con su cargo y clase de personal (Mantenimiento / Calidad).
+2. En cada persona a su cargo, asigne el jefe inmediato (Mantenimiento o Calidad según corresponda).
+3. Usuarios → Nuevo usuario → elija la persona, perfil «Jefe de Producción», usuario y clave inicial.
+Con ese perfil programan turnos y horarios de su personal y solicitan permisos (que decide Recursos Humanos).
 
 ARCHIVOS QUE CAMBIAN (para GitHub)
-index.html, sw.js, LEEME-ACTUALIZACION.txt y, en la carpeta js: views-th.js, views-planta.js e i18n-en.js.
+index.html, sw.js, LEEME-ACTUALIZACION.txt, css/app.css y, en la carpeta js: horarios.js, schema.js, manual.js, i18n-en.js,
+views-horarios.js, views-planta.js, views-th.js, views-consola.js y views-maestros.js (más lo de la rama anterior).
 
 ACTUALIZAR LA APLICACIÓN EN CADA EQUIPO
 - Computador: abra https://d-mazoavo.github.io/control-acceso/ y oprima Ctrl+F5 (o Ctrl+Mayús+R).
