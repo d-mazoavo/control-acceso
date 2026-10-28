@@ -346,7 +346,7 @@ progress { width: 100%; height: 14px; accent-color: var(--brand); }
 .print-sheet { display: grid; grid-template-columns: repeat(auto-fill, 85.6mm); gap: 6mm; }
 .id-card { width: 85.6mm; height: 54mm; border: 0.3mm dashed #aaa; border-radius: 3mm; overflow: hidden; display: flex; flex-direction: column; background: #fff; color: #1f231a; break-inside: avoid; page-break-inside: avoid; }
 .id-head { background: #587e50; color: #fff; display: flex; align-items: center; justify-content: space-between; padding: 1.5mm 3mm; height: 9mm; }
-.id-head img { height: 6mm; } .id-head span { font-size: 2.5mm; font-weight: 800; letter-spacing: .05em; }
+.id-head img { height: 6mm; background: #fff; border-radius: 1mm; padding: .4mm; } .id-head span { font-size: 2.5mm; font-weight: 800; letter-spacing: .05em; }
 .id-card.visit .id-head { background: #2d3a4a; }
 .id-body { flex: 1; display: grid; grid-template-columns: auto 1fr 25mm; gap: 2mm; padding: 2mm 3mm; align-items: center; }
 .id-card.visit .id-body { grid-template-columns: 1fr 27mm; }
@@ -454,7 +454,7 @@ details.card > summary { margin: -2px 0; }
 .ronda-labels { display: grid; grid-template-columns: repeat(auto-fill, 90mm); gap: 6mm; }
 .ronda-label { width: 90mm; border: .3mm dashed #999; border-radius: 3mm; padding: 4mm; display: flex; flex-direction: column; align-items: center; gap: 1.5mm; background: #fff; color: #1c2419; text-align: center; break-inside: avoid; page-break-inside: avoid; }
 .ronda-label .rl-head { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 2mm; border-bottom: .6mm solid #587e50; padding: 0 1mm 1.5mm; }
-.ronda-label .rl-head img { height: 13mm; width: 13mm; object-fit: cover; } .ronda-label .rl-head span { font-size: 2.8mm; font-weight: 800; letter-spacing: .05em; color: #3d5a37; text-align: right; }
+.ronda-label .rl-head img { height: 11mm; width: auto; object-fit: contain; } .ronda-label .rl-head span { font-size: 2.8mm; font-weight: 800; letter-spacing: .05em; color: #3d5a37; text-align: right; }
 .ronda-label .rl-qr { width: 62mm; } .ronda-label .rl-qr svg { width: 100%; height: auto; display: block; }
 .ronda-label strong { font-size: 4.4mm; line-height: 1.15; } .ronda-label span { font-size: 3mm; } .ronda-label small { font-size: 2.4mm; color: #555; }
 
