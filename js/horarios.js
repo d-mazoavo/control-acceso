@@ -35,6 +35,9 @@
   // Cada semana (lunes a domingo) es un registro con { idPersona: { t: token, d: { 'AAAA-MM-DD': código } } } y la copia de
   // los turnos usados ({ código: { n: nombre, e: 'HH:MM', s: 'HH:MM' } }). Código 'D' = descanso. Para las fechas de una
   // semana en la que la persona figura, la programación de planta reemplaza su horario general.
+  // Horas extra de un día: x: { 'AAAA-MM-DD': { a: minutos antes de la entrada, d: minutos después de la salida, m: motivo } }.
+  // Amplían la ventana de ingreso y de permanencia; la llegada tarde se mide contra la entrada del turno y la salida se
+  // autoriza desde la salida del turno (las horas extra no se imponen en portería).
   function jsonDe(t, def) { try { var v = JSON.parse(t || ''); return v && typeof v === 'object' ? v : def; } catch (e) { return def; } }
   H.jsonDe = jsonDe;
   H.lunes = function (ymd) { var d = dow(ymd); return addYmd(ymd, d === 0 ? -6 : 1 - d); };
@@ -54,19 +57,20 @@
     // Primero los registros sin jefe (versión anterior o del Director): la programación del jefe inmediato prevalece
     src.slice().sort(function (a, b) { return (a.JefeId ? 1 : 0) - (b.JefeId ? 1 : 0); }).forEach(function (w) {
       var datos = jsonDe(w.Datos, {}), turnos = jsonDe(w.Turnos, {}), porTok = idx[w.Semana] = idx[w.Semana] || {};
-      Object.keys(datos).forEach(function (pid) { var x = datos[pid]; if (x && x.t && H.aplicaA(w, x)) porTok[x.t] = { d: x.d || {}, turnos: turnos }; });
+      Object.keys(datos).forEach(function (pid) { var x = datos[pid]; if (x && x.t && H.aplicaA(w, x)) porTok[x.t] = { d: x.d || {}, x: x.x || {}, turnos: turnos }; });
     });
     cachePlanta = { src: src, tok: AP.Sync.byToken, idx: idx };
     return idx;
   }
   // Asignación de planta de la persona en una fecha: null = la semana no la incluye (rige su horario general);
-  // { cod: '' | 'D' | código, turno } = la semana sí la incluye
+  // { cod: '' | 'D' | código, turno, extra } = la semana sí la incluye
   H.planta = function (token, ymd) {
     var w = indicePlanta()[H.lunes(ymd)];
     var x = w && w[token];
     if (!x) return null;
-    var cod = x.d[ymd] || '';
-    return { cod: cod, turno: cod && cod !== 'D' ? x.turnos[cod] || null : null };
+    var cod = x.d[ymd] || '', turno = cod && cod !== 'D' ? x.turnos[cod] || null : null;
+    var ex = turno && x.x ? x.x[ymd] : null;
+    return { cod: cod, turno: turno, extra: ex && (Number(ex.a) > 0 || Number(ex.d) > 0) ? { a: Number(ex.a) || 0, d: Number(ex.d) || 0 } : null };
   };
   // ¿La persona tiene horario general o programación de planta en los días cercanos?
   H.tieneHorario = function (token, now) {
@@ -85,9 +89,11 @@
       if (pl) {
         // Programación de planta: un turno ese día, o descanso / sin turno (sin jornada ese día)
         if (pl.turno && toMin(pl.turno.e) != null && toMin(pl.turno.s) != null) {
-          var a1 = toMin(pl.turno.e), b1 = toMin(pl.turno.s);
-          out.push({ rec: { Turno: pl.turno.n || pl.cod, HoraEntrada: pl.turno.e, HoraSalida: pl.turno.s, Modalidad: 'Turno', Planta: true }, ymd: ymd,
-            start: U.fromLocal(ymd, pl.turno.e), end: U.fromLocal(b1 <= a1 ? addYmd(ymd, 1) : ymd, pl.turno.s) });
+          var a1 = toMin(pl.turno.e), b1 = toMin(pl.turno.s), xa = pl.extra ? pl.extra.a : 0, xd = pl.extra ? pl.extra.d : 0;
+          var st = U.fromLocal(ymd, pl.turno.e), fo = U.fromLocal(b1 <= a1 ? addYmd(ymd, 1) : ymd, pl.turno.s);
+          // start = entrada del turno (para medir la llegada); desde = con las horas extra de antes; end = con las de después
+          out.push({ rec: { Turno: pl.turno.n || pl.cod, HoraEntrada: pl.turno.e, HoraSalida: pl.turno.s, Modalidad: 'Turno', Planta: true, ExtraAntes: xa, ExtraDespues: xd }, ymd: ymd,
+            start: st, desde: new Date(st.getTime() - xa * 60000), finOrd: fo, end: new Date(fo.getTime() + xd * 60000) });
         }
         return;
       }
@@ -99,7 +105,7 @@
         if (a == null || b == null) return;
         var start = U.fromLocal(ymd, x.HoraEntrada);
         var end = U.fromLocal(b <= a ? addYmd(ymd, 1) : ymd, x.HoraSalida);
-        out.push({ rec: x, ymd: ymd, start: start, end: end });
+        out.push({ rec: x, ymd: ymd, start: start, desde: start, finOrd: end, end: end });
       });
     });
     return out;
@@ -113,11 +119,11 @@
     if (!ins.length) return null;
     var ant = cfg().minutosAntelacionTurno * 60000, t = now.getTime(), hoy = U.ymd(now), best = null;
     if (opt && opt.salida) {
-      ins.forEach(function (i) { if (i.start.getTime() - ant <= t && (!best || i.start > best.start)) best = i; });
+      ins.forEach(function (i) { if (i.desde.getTime() - ant <= t && (!best || i.start > best.start)) best = i; });
       return best;
     }
     ins.forEach(function (i) {
-      var dentro = t >= i.start.getTime() - ant && t <= i.end.getTime();
+      var dentro = t >= i.desde.getTime() - ant && t <= i.end.getTime();
       if (!(dentro || i.ymd === hoy)) return;
       if (!best || (dentro && i.start > best.start) || (!dentro && !best.dentro && i.start > best.start)) { best = i; best.dentro = dentro; }
     });
@@ -162,6 +168,10 @@
   function hm(d) { return U.fTime(d); }
   function descJornada(j) {
     var t = (j.rec.Turno ? j.rec.Turno + ' · ' : '') + j.rec.HoraEntrada + ' a ' + j.rec.HoraSalida;
+    var ex = [];
+    if (j.rec.ExtraAntes && j.desde) ex.push('desde las ' + hm(j.desde));
+    if (j.rec.ExtraDespues) ex.push('hasta las ' + hm(j.end));
+    if (ex.length) t += ', con horas extra ' + ex.join(' y ');
     return esLibre(j.rec) ? t + ' (acceso libre)' : t;
   }
 
@@ -177,7 +187,7 @@
     if (perm) return { cubre: true, desc: 'permiso «' + perm.Tipo + '» vigente hasta el ' + U.fDateTime(H.finPermiso(perm)) };
     if (!H.tieneHorario(token, ini)) return { cubre: true, permanente: true, desc: 'acceso con su credencial, sin restricción de horario' };
     var ant = cfg().minutosAntelacionTurno * 60000;
-    var j = H.instancias(token, ini).filter(function (i) { return t >= i.start.getTime() - ant && t <= i.end.getTime(); })[0];
+    var j = H.instancias(token, ini).filter(function (i) { return t >= i.desde.getTime() - ant && t <= i.end.getTime(); })[0];
     if (j) return { cubre: true, libre: esLibre(j.rec), desc: (esLibre(j.rec) ? 'ingreso libre' : 'turno') + ' ' + descJornada(j) + ' del ' + U.fDate(j.start) };
     return { cubre: false };
   };
@@ -224,7 +234,7 @@
         detalle: 'Su horario de acceso inicia a las ' + j.rec.HoraEntrada + ' y el ingreso se habilita desde las ' + hm(new Date(j.start.getTime() - antL)) + '. Si lo deja ingresar, queda como novedad pendiente de verificación por el Director de Seguridad Integral.', horarioInfo: info };
     }
     // Reingreso dentro de la misma jornada (salió y regresa): no se mide como llegada tardía
-    if (ult && ult.Sentido === 'Salida' && new Date(ult.FechaHora).getTime() >= j.start.getTime() - c.minutosAntelacionTurno * 60000 && now <= j.end) {
+    if (ult && ult.Sentido === 'Salida' && new Date(ult.FechaHora).getTime() >= j.desde.getTime() - c.minutosAntelacionTurno * 60000 && now <= j.end) {
       var pt = AP.Sync.permisos.filter(function (x) { return x.Token === token && AP.permisoActivo(x) && x.Tipo === 'Salida temporal (cita o diligencia)' && new Date(x.Desde).getTime() <= new Date(ult.FechaHora).getTime() + 60000; }).sort(function (a, b) { return a.Hasta < b.Hasta ? 1 : -1; })[0];
       if (pt && now.getTime() > new Date(pt.Hasta).getTime() + 5 * 60000) {
         return { nivel: 'warn', registrable: true, novedad: 'Reingreso fuera del plazo del permiso', etiqueta: 'REINGRESO FUERA DE PLAZO — PENDIENTE', detalle: 'El permiso de salida temporal vencía a las ' + hm(pt.Hasta) + '.', horarioInfo: info };
@@ -232,8 +242,9 @@
       return { nivel: 'ok', etiqueta: 'REINGRESO', detalle: 'Regresa a su jornada (' + info + ').', horarioInfo: info };
     }
     var delta = Math.floor(now.getTime() / 60000) - Math.floor(j.start.getTime() / 60000);
-    // Minutos que faltan para la hora de entrada (por minuto de reloj, igual que la llegada tardía)
-    var ant = Math.floor(j.start.getTime() / 60000) - Math.floor(now.getTime() / 60000);
+    // Minutos que faltan para la hora de entrada, o para el inicio de las horas extra programadas antes del turno
+    // (por minuto de reloj, igual que la llegada tardía)
+    var ant = Math.floor(j.desde.getTime() / 60000) - Math.floor(now.getTime() / 60000);
     if (now > j.end) {
       return { nivel: 'deny', sinExcepcion: true, aprobacionDirector: true, tipoSolicitud: 'Fuera de turno', novedad: 'Ingreso fuera de turno', etiqueta: 'FUERA DE SU TURNO — REQUIERE APROBACIÓN DEL DIRECTOR',
         detalle: 'Su turno era ' + info + ' y ya terminó. Envíe la solicitud al Director de Seguridad Integral, que aprueba o rechaza el ingreso.', horarioInfo: info };
@@ -241,9 +252,9 @@
     if (delta <= 0) {
       // Antes de la ventana habilitada (por defecto, 30 min antes de la entrada): alerta de llegada muy temprano
       if (ant > c.minutosAntelacionTurno) {
-        var desde = new Date(j.start.getTime() - c.minutosAntelacionTurno * 60000);
+        var desde = new Date(j.desde.getTime() - c.minutosAntelacionTurno * 60000);
         return { nivel: 'warn', registrable: true, novedad: 'Llegada muy temprano (' + ant + ' min antes del turno)', etiqueta: 'MUY TEMPRANO — FALTAN ' + ant + ' MIN PARA SU TURNO',
-          detalle: 'Su turno inicia a las ' + j.rec.HoraEntrada + ' y el ingreso se habilita desde las ' + hm(desde) + '. Si lo deja ingresar, queda como novedad pendiente de verificación por el Director de Seguridad Integral.', horarioInfo: info };
+          detalle: 'Su turno inicia a las ' + (j.desde < j.start ? hm(j.desde) + ' (horas extra)' : j.rec.HoraEntrada) + ' y el ingreso se habilita desde las ' + hm(desde) + '. Si lo deja ingresar, queda como novedad pendiente de verificación por el Director de Seguridad Integral.', horarioInfo: info };
       }
       return { nivel: 'ok', etiqueta: 'HABILITADO — A TIEMPO', detalle: 'Turno ' + info + '.', horarioInfo: info };
     }
@@ -267,8 +278,11 @@
     if ((j && esLibre(j.rec)) || (hs.length && hs.every(esLibre) && !(j && j.rec.Planta))) {
       return { nivel: 'ok', etiqueta: 'SALIDA — ACCESO LIBRE', detalle: 'Puede salir y volver a ingresar dentro de su horario de acceso' + (info ? ' (' + info + ')' : '') + '.', horarioInfo: info };
     }
-    if (j && now.getTime() >= j.end.getTime() - c.minutosSalidaAntesDeFin * 60000) {
-      return { nivel: 'ok', etiqueta: 'SALIDA AUTORIZADA', detalle: 'Finalizó su jornada (' + info + ').', horarioInfo: info };
+    // La salida se autoriza desde el fin del turno, aunque tenga horas extra programadas después (no se imponen en portería)
+    var finS = j ? (j.finOrd || j.end) : null;
+    if (j && now.getTime() >= finS.getTime() - c.minutosSalidaAntesDeFin * 60000) {
+      var conExtra = j.end > finS && now < j.end;
+      return { nivel: 'ok', etiqueta: 'SALIDA AUTORIZADA', detalle: (conExtra ? 'Terminó su turno; tenía horas extra programadas hasta las ' + hm(j.end) + ' (' + info + ').' : 'Finalizó su jornada (' + info + ').'), horarioInfo: info };
     }
     var perm = H.permisosVigentes(token, now, TIPOS_SALIDA)[0];
     if (perm) {
@@ -278,6 +292,6 @@
       return { nivel: 'ok', etiqueta: 'SALIDA AUTORIZADA — ' + perm.Tipo.toUpperCase(), detalle: detS, permisoId: perm.id || perm.IdLocal, horarioInfo: info };
     }
     return { nivel: 'deny', salidaNoAutorizada: true, novedad: 'Salida no autorizada', etiqueta: 'SALIDA NO AUTORIZADA',
-      detalle: (j ? 'Su jornada termina a las ' + hm(j.end) + ' (' + info + '). ' : 'No tiene jornada programada hoy. ') + 'No tiene permiso de salida registrado.', horarioInfo: info };
+      detalle: (j ? 'Su jornada termina a las ' + hm(finS) + ' (' + info + '). ' : 'No tiene jornada programada hoy. ') + 'No tiene permiso de salida registrado.', horarioInfo: info };
   };
 })();

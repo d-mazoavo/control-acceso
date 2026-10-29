@@ -11,8 +11,8 @@
   AP.MANUAL = {
     titulo: 'Instructivo de uso de la aplicación Control de Acceso',
     codigo: 'Por asignar (Dirección de Calidad)',
-    version: '05',
-    fecha: '2026-10-27',
+    version: '06',
+    fecha: '2026-10-28',
     appVersion: '1.0.0',
     secciones: [
       { id: 'objetivo', titulo: 'Objetivo', roles: ['todos'], bloques: [
@@ -171,22 +171,39 @@
         { p: 'Muestra a cada persona a cargo con su número de uniforme, su turno de hoy y su estado según la portería (en planta, fuera, no ha llegado, ya salió, con ausencia), con filtros por área, cargo, estado y texto, y descarga en Excel. «Ficha» abre los datos de la persona (solo consulta), su programación de los próximos 7 días, sus permisos y sus ausencias, y permite cambiar su número de uniforme. «Números de uniforme» permite registrar o corregir varios a la vez.' },
         { p: 'Si una consulta secundaria no responde (por ejemplo, sin conexión), el personal se muestra igual con un aviso. Los ingresos y salidas registrados antes de la actualización de octubre de 2026 pueden no aparecer: la pantalla lo advierte.' },
         { h: 'Turnos y asignación' },
-        { p: 'Cree los turnos con un código de 1 a 3 caracteres y su hora de entrada y de salida (por ejemplo, T1 06:00–14:00, T2 14:00–22:00, T3 22:00–06:00). Si la hora de salida es menor que la de entrada, el turno termina al día siguiente. Un turno no se borra: se marca inactivo. Con «Asignar turno a personas» (o «Asignar personas» en cada turno) elija el turno, el rango de fechas, los días de la semana y las personas: la programación de cada semana se guarda sola y queda en el registro de cambios.' },
+        { p: 'Cree los turnos con un código de 1 a 3 caracteres y su hora de entrada y de salida (por ejemplo, T1 06:00–14:00, T2 14:00–22:00, T3 22:00–06:00). Si la hora de salida es menor que la de entrada, el turno termina al día siguiente. Un turno no se borra: se marca inactivo.' },
+        { ol: [
+          'Elija arriba el periodo (por defecto, esta y la próxima semana). Cada turno muestra cuántas personas tiene hoy y en el periodo.',
+          'Oprima «Asignar personas» en el turno (o «Asignar turno a personas» arriba). Elija las fechas (o una fecha rápida: resto de esta semana, próxima semana, próximas 2 o 4 semanas), los días de la semana y las personas. La lista indica lo que cada persona ya tiene programado en esas fechas («Ya en T1 todos esos días», «Sin turno», otro turno o descanso) y puede filtrarse.',
+          'Oprima «Asignar». La programación de cada semana se guarda sola y queda en el registro de cambios.',
+          'Oprima «N personas» en un turno para ver abajo quiénes están en él, con los días programados, las horas y las horas extra. La lista se filtra por turno, por área, por cargo y por texto, muestra también a quienes no tienen turno o tienen horas extra, y se descarga en Excel.',
+          'Marque personas en esa lista para asignarles horas extra, cambiarlas de turno o quitarlas del turno (solo en los días del periodo en que lo tienen).'
+        ] },
+        { h: 'Horas extra' },
+        { p: 'Las horas extra se suman al turno que la persona tiene programado ese día: antes de la entrada, después de la salida o ambas. Use «Horas extra» (en «Turnos y asignación» o en «Programación semanal»), elija las fechas, las horas, las personas con turno en esas fechas y escriba el motivo (obligatorio). También puede oprimir la casilla de un día en la programación semanal. Para quitarlas, deje ambas en «Sin horas extra».' },
+        { ul: [
+          'Límite de referencia: {maxExtraDia} horas extra diarias y {maxExtraSemana} semanales (art. 167A del Código Sustantivo del Trabajo). El Jefe de Producción no puede superarlo; el Director de Seguridad Integral solo puede hacerlo confirmándolo, en situaciones excepcionales, y queda señalado en el registro de cambios.',
+          'Desde la Ley 2466 de 2025 no se pide permiso al Ministerio del Trabajo para laborar horas extra, pero el empleador debe llevar su registro: la programación, con su motivo y el registro de cambios, sirve de soporte. Talento Humano las ve en «Programación de turnos» y en «Horas según portería».',
+          'La portería amplía el horario de la persona: con horas extra antes, puede ingresar desde esa hora; con horas extra después, puede permanecer hasta esa hora. La llegada tarde se mide contra la entrada del turno y la salida se autoriza desde la salida del turno.',
+          'Si el día pasa a descanso o queda sin turno, sus horas extra se quitan.'
+        ] },
         { h: 'Horarios fijos' },
         { p: 'Para el personal que no rota por turnos (por ejemplo, de lunes a viernes de 08:00 a 17:00): «Horarios fijos» → «Asignar horario fijo», escriba el nombre del horario, la hora de entrada y de salida, los días y, si quiere, la vigencia, y elija las personas. La portería le aplica control de puntualidad igual que a los turnos. Los horarios no se borran: se desactivan. En las semanas en que la persona figure en la programación semanal, esa programación reemplaza el horario fijo. Cada cambio queda en el registro de cambios.' },
         { h: 'Programación semanal' },
+        { p: 'Muestra lo programado por persona y por día, venga de «Asignar turno a personas», de un ajuste por día o del ajuste a mano. Se abre en consulta: un clic no cambia nada por accidente.' },
         { ol: [
-          'En «Programación semanal» elija la semana con las flechas o la fecha.',
-          'Elija el turno en el «Pincel» y haga clic (o arrastre) sobre los días de cada persona. «D» es descanso y «Quitar» deja el día sin turno.',
-          'Use «Aplicar patrón» para asignar un turno por día de la semana a varias personas, o «Copiar semana anterior».',
-          'Revise la columna de horas: en rojo, quienes superan {maxSemanal} horas programadas en la semana (jornada máxima ordinaria de referencia).',
-          'Oprima «Guardar semana». Si cambia un día que ya empezó (hoy o anteriores), la aplicación exige el motivo.'
+          'Elija la semana con las flechas o la fecha. Si la semana no tiene nada programado, la pantalla lo avisa y ofrece ir a la semana programada más próxima.',
+          'Filtre por área, cargo, turno («Sin turno en la semana», «Con horas extra» o un turno) o texto. Arriba de la cuadrícula se resume cuántas personas tienen turno, cuántas están sin programar y cuántas tienen horas extra.',
+          'Para cambiar un día, oprima su casilla: elija el turno, descanso o «Sin turno» y, si quiere, horas extra antes o después; oprima «Guardar». Se guarda de inmediato y queda en el registro de cambios.',
+          'Para cambiar muchas casillas, oprima «Ajustar a mano»: elija el turno en el «Pincel» y haga clic (o arrastre) sobre los días. Use «Aplicar patrón» o «Copiar semana anterior» si le sirve y oprima «Guardar semana» (o «Terminar el ajuste» para descartar). Las horas extra se conservan mientras el día siga con turno.',
+          'Revise las columnas «Horas» (en rojo, quienes superan {maxSemanal} horas de turno en la semana) y «Extra» (en rojo, más de {maxExtraSemana} horas extra). Una casilla con «+2» tiene 2 horas extra ese día.',
+          'Si cambia un día que ya empezó (hoy o anteriores), la aplicación exige el motivo.'
         ] },
         { ul: [
           'La portería aplica a esta programación las mismas reglas de puntualidad de la sección de portería.',
           'Las celdas rayadas indican una ausencia registrada por Talento Humano.',
           'Si otra persona guarda la misma semana mientras usted la edita, la aplicación no sobrescribe: le pide recargar.',
-          '«Excel por turnos» descarga, para el periodo que elija (hasta 92 días), una hoja por turno con quién está en cada turno día por día, una hoja de descansos y un resumen.'
+          '«Excel de la semana» descarga la vista filtrada, con las horas extra de cada día. «Excel por turnos» descarga, para el periodo que elija (hasta 92 días), una hoja por turno con quién está en cada turno día por día y sus horas extra, una hoja de descansos y un resumen.'
         ] },
         { h: 'Permisos del personal' },
         { p: 'Registre permisos de ingreso tardío, salida anticipada (sin hora final), salida temporal o ingreso y salida fuera de horario para su personal. Elija siempre el motivo del catálogo (citas médicas sin diagnóstico, calamidad doméstica, votación, jurado, acudiente escolar, citaciones, luto, matrimonio, maternidad, paternidad, permisos no remunerados, entre otros): cada uno indica si es remunerado por ley, por acuerdo o no remunerado, su fundamento y el soporte esperado. Su solicitud no se aplica de inmediato: queda «Por autorizar» y se envía al Jefe de Recursos Humanos, que la autoriza o la rechaza con justificación. La portería solo aplica los permisos autorizados. Mientras esté pendiente, usted puede cancelar la solicitud. Un permiso no se borra: se anula con motivo.' },
@@ -278,7 +295,8 @@
       { version: '02', fecha: '2026-10-22', descripcion: 'Empresas (personas jurídicas) y catálogo de cargos; jefe inmediato en la ficha de la persona; usuarios creados desde una persona registrada y visibles solo para el Director; panel del Jefe de Producción por personal a cargo (turnos, asignación, estadísticas, Excel por turnos, ficha de consulta); Talento Humano con personal, permisos, programación, estadísticas y horas según portería; filtro en todas las listas; visitas por llegar; bloqueo de visitas de personas con ingreso autorizado; cierre de sesión al cambiar el perfil.' },
       { version: '03', fecha: '2026-10-24', descripcion: 'Consultas del Jefe de Producción y de Talento Humano sin índices compuestos; número de uniforme (Director, jefe inmediato y Talento Humano); jefe inmediato para cualquier tipo de persona; el Jefe de Producción solo ve personal habilitado; horarios fijos asignados por el jefe; Talento Humano con permisos y consulta de las personas con jefe inmediato y con todo lo programado por persona; búsqueda de Personas solo por los datos de la persona; «Usuarios» al final del menú; traducción completa de la pantalla al inglés.' },
       { version: '04', fecha: '2026-10-26', descripcion: 'El ingreso en un día no programado o de descanso, de cualquier persona con horario (personal propio, contratistas y demás), lo decide el Director de Seguridad Integral: el vigilante envía la solicitud y la persona no ingresa mientras no se apruebe. Se eliminó en ese caso la opción de registrar el ingreso pendiente de verificación.' },
-      { version: '05', fecha: '2026-10-27', descripcion: 'Los permisos solicitados por el jefe inmediato se envían a Recursos Humanos («Por autorizar») y solo se aplican en portería cuando se autorizan; catálogo de motivos de permisos y licencias con su clase de remuneración, fundamento y soporte; licencias de día completo que crean la ausencia al autorizarse; las tarjetas de «Estado en planta» muestran a las personas de cada situación.' }
+      { version: '05', fecha: '2026-10-27', descripcion: 'Los permisos solicitados por el jefe inmediato se envían a Recursos Humanos («Por autorizar») y solo se aplican en portería cuando se autorizan; catálogo de motivos de permisos y licencias con su clase de remuneración, fundamento y soporte; licencias de día completo que crean la ausencia al autorizarse; las tarjetas de «Estado en planta» muestran a las personas de cada situación.' },
+      { version: '06', fecha: '2026-10-28', descripcion: '«Turnos y asignación» muestra, por periodo, quiénes están en cada turno (filtrable y descargable) y permite quitar del turno o cambiar de turno; al asignar, la lista indica lo que cada persona ya tiene programado y ofrece fechas rápidas; horas extra antes o después del turno, con motivo, límite de referencia (art. 167A CST) y efecto en portería; la programación semanal se abre en consulta, se edita por día con un clic o a mano con el pincel, filtra por turno y avisa cuando la semana está vacía.' }
     ]
   };
 })();

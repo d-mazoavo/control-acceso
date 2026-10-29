@@ -1,37 +1,29 @@
 AVO PAK S.A.S. — CONTROL DE ACCESO
-Ajuste del 27 de octubre de 2026 (etiqueta de caché b7). La versión de la aplicación sigue siendo 1.0.0. Manual de uso: revisión 05.
+Ajuste del 28 de octubre de 2026 (etiqueta de caché b9). La versión de la aplicación sigue siendo 1.0.0. Manual de uso: revisión 06.
+No cambian las reglas de Firebase: no hay que publicar nada en la consola.
 
 QUÉ CAMBIA
-1. Estado en planta: cada tarjeta (dentro, fuera, falta, no asistió, programado, ausente, salió, en descanso, sin turno) se
-   puede oprimir y la tabla muestra solo a las personas de esa situación. Al oprimirla de nuevo se quita el filtro.
-2. Permisos del jefe: el permiso que registra el Jefe de Producción (o el de Mantenimiento o la Directora de Calidad, que
-   tienen el mismo perfil) ya no queda vigente: se envía a Recursos Humanos como «Por autorizar». Talento Humano oprime
-   «Decidir», revisa el motivo, su fundamento y el soporte esperado, y lo autoriza (queda Vigente) o lo rechaza (exige
-   justificación). La portería solo aplica los permisos vigentes. El jefe puede cancelar su solicitud mientras esté pendiente.
-3. Catálogo de motivos (remunerados por ley, por acuerdo o reglamento, y no remunerados) con su fundamento legal y el soporte
-   esperado. Las licencias de uno o más días (luto, maternidad, paternidad, parental compartida, matrimonio, bicicleta,
-   no remunerados) piden fechas y, al autorizarse, crean la ausencia en «Vacaciones y ausencias».
-4. Talento Humano ve un aviso con las solicitudes pendientes. El Director también puede decidirlas (Consola → Permisos).
+1. Turnos y asignación: arriba se elige el periodo (por defecto, esta y la próxima semana). Cada turno muestra cuántas personas
+   tiene hoy y en el periodo; al oprimir «N personas» aparece abajo la lista de quienes están en ese turno, con los días, las
+   horas y las horas extra. La lista se filtra por turno, área, cargo y texto (también «Sin turno en el periodo» y «Con horas
+   extra») y se descarga en Excel. Marcando personas se les asignan horas extra, se cambian de turno o se quitan del turno.
+2. Asignar personas: la lista indica lo que cada persona ya tiene programado en las fechas elegidas («Ya en T6 todos esos días»,
+   «Sin turno», otro turno o descanso) y se puede filtrar. Hay fechas rápidas (resto de esta semana, próxima semana, próximas
+   2 o 4 semanas). Antes, la asignación quedaba por defecto en la semana siguiente y no se veía en la semana actual ni en
+   «Personas hoy»: por eso parecía que no se había guardado.
+3. Horas extra: se asignan al turno programado del día, antes de la entrada, después de la salida o ambas, con motivo
+   obligatorio. Límite de referencia: 2 horas diarias y 12 semanales (art. 167A del Código Sustantivo del Trabajo). El jefe no
+   puede superarlo; el Director solo confirmándolo, y queda señalado en el registro de cambios. La portería amplía el horario
+   de ingreso y de permanencia; la llegada tarde se mide contra la entrada del turno y la salida se autoriza desde la salida
+   del turno. Talento Humano las ve en «Programación de turnos» y en «Horas según portería», y salen en los Excel.
+4. Programación semanal: se abre en consulta (un clic ya no pinta por accidente). Al oprimir una casilla se cambia el turno de
+   ese día o se le asignan horas extra; «Ajustar a mano» activa el pincel para cambiar muchas casillas. Filtro por turno,
+   resumen de quién tiene turno y quién no, columna de horas extra y aviso cuando la semana está vacía, con un botón para ir a
+   la semana programada más próxima.
 
-IMPORTANTE: CAMBIAN LAS REGLAS DE FIREBASE
-Esta entrega incluye reglas nuevas (reglas-firestore-NO-SUBIR-A-GITHUB.txt). Sin publicarlas, el jefe no puede enviar
-solicitudes y Talento Humano no puede decidirlas.
-1. Entre a https://console.firebase.google.com con la cuenta propietaria del proyecto avopak-acceso-bf73e.
-2. Firestore Database → pestaña «Reglas».
-3. Seleccione todo el texto (Ctrl+A), bórrelo y pegue todo el contenido de reglas-firestore-NO-SUBIR-A-GITHUB.txt.
-4. Oprima «Publicar». Ese archivo NO se sube a GitHub, porque contiene el código de instalación.
-5. Cierre sesión y vuelva a ingresar con Talento Humano y con los jefes.
-6. Ingrese como Director desde un computador y deje la aplicación abierta unos 2 minutos (ajuste automático de datos).
-
-CREAR LOS USUARIOS DEL JEFE DE MANTENIMIENTO Y DE LA DIRECTORA DE CALIDAD (lo hace el Director)
-1. Personas: registre a cada uno (si no existe) con su cargo y clase de personal (Mantenimiento / Calidad).
-2. En cada persona a su cargo, asigne el jefe inmediato (Mantenimiento o Calidad según corresponda).
-3. Usuarios → Nuevo usuario → elija la persona, perfil «Jefe de Producción», usuario y clave inicial.
-Con ese perfil programan turnos y horarios de su personal y solicitan permisos (que decide Recursos Humanos).
-
-ARCHIVOS QUE CAMBIAN (para GitHub)
-index.html, sw.js, LEEME-ACTUALIZACION.txt, css/app.css y, en la carpeta js: horarios.js, schema.js, manual.js, i18n-en.js,
-views-horarios.js, views-planta.js, views-th.js, views-consola.js y views-maestros.js (más lo de la rama anterior).
+ARCHIVOS QUE CAMBIAN
+index.html, sw.js, LEEME-ACTUALIZACION.txt, css/app.css y, en la carpeta js: jornada.js, horarios.js, views-planta.js,
+views-th.js, views-manual.js, manual.js e i18n-en.js. Ya están publicados en GitHub: no hay que subir nada.
 
 ACTUALIZAR LA APLICACIÓN EN CADA EQUIPO
 - Computador: abra https://d-mazoavo.github.io/control-acceso/ y oprima Ctrl+F5 (o Ctrl+Mayús+R).
