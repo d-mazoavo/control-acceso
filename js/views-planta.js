@@ -34,6 +34,9 @@
     'Si se necesitan, el Director de Seguridad Integral puede habilitarlos en «Instalación» → «Índices de la base de datos» (opcional).';
   var RE_SALUD = /(diagn[oó]stic|enfermedad|c[aá]ncer|embaraz|psiqui|psicol|terapia|cirug|incapacidad|v\.?i\.?h|medicament|tratamiento|m[eé]dic[oa]|\beps\b|\bips\b|hospital|cl[ií]nica|urgencias|odontol)/i;
 
+  // Grupo «todo el personal» (todos los jefes inmediatos y el personal propio sin jefe) para el Director y Gobierno Corporativo
+  var TODOS = '*';
+
   // ---------- Perfil de quien consulta ----------
   function rol() { return AP.Session.rol; }
   function esJefe() { return rol() === 'Jefe de Producción'; }
@@ -57,7 +60,7 @@
     personal: async function (g, todas) {
       var l;
       if (esJefe()) l = (await AP.B.consulta('AP_Personas', [['JefeId', '==', miPid()]], { exclude: ['Observaciones'] })).filter(function (p) { return p.Estado === 'Habilitado'; });
-      else l = (todas || await D.personasTodas()).filter(function (p) { return g ? p.JefeId === g : (p.Tipo === 'Personal propio' && !p.JefeId); });
+      else l = (todas || await D.personasTodas()).filter(function (p) { return g === TODOS ? (p.Tipo === 'Personal propio' || !!p.JefeId) : g ? p.JefeId === g : (p.Tipo === 'Personal propio' && !p.JefeId); });
       return l.sort(porNombre);
     },
     // Turnos del grupo y turnos generales (sin jefe)
@@ -238,9 +241,12 @@
     var fEst = AP.select('est', [['', 'Todos los estados'], ['dentro', 'En planta (adentro)'], ['fuera', 'Fuera de planta'], ['falta', 'No ha llegado'], ['noasistio', 'Sin ingreso en su turno'], ['programado', 'Programado más tarde'],
       ['salio', 'Ya salió'], ['ausente', 'Ausencia registrada'], ['descanso', 'Descanso'], ['sin', 'Sin turno hoy']], '');
     var fClase = opt.clases ? AP.select('clase', [['', 'Toda clase de personal'], ['operativas', 'Operarios y personal operativo']].concat(AP.CAT.tiposPersonal), opt.claseDef || '') : null;
-    var q = AP.buscador('Buscar nombre, documento, uniforme, cargo o área', pintar);
+    // opt.jefe(p) → nombre del jefe inmediato: agrega el filtro y el dato (vista de todo el personal)
+    var jefeTxt = function (p) { return opt.jefe ? opt.jefe(p) || 'Sin jefe inmediato' : ''; };
+    var fJefe = opt.jefe ? AP.select('jefe', [['', 'Todos los jefes inmediatos']].concat(Array.from(new Set(filas.map(function (f) { return jefeTxt(f.p); }))).sort(function (a, b) { return U.fold(a) < U.fold(b) ? -1 : 1; })), '') : null;
+    var q = AP.buscador(opt.jefe ? 'Buscar nombre, documento, uniforme, cargo, área o jefe' : 'Buscar nombre, documento, uniforme, cargo o área', pintar);
     var out = h('div', { class: 'stack' });
-    [fArea, fCargo, fEst, fClase].filter(Boolean).forEach(function (s) { s.addEventListener('change', pintar); });
+    [fArea, fCargo, fEst, fClase, fJefe].filter(Boolean).forEach(function (s) { s.addEventListener('change', pintar); });
     // sinEstado: cuenta cada situación respetando los demás filtros pero sin el filtro de estado (para las tarjetas)
     function filtradas(sinEstado) {
       return filas.filter(function (f) {
@@ -252,7 +258,8 @@
         }
         if (fClase && fClase.value === 'operativas') { if (AP.CAT.clasesOperativas.indexOf(f.p.TipoPersonal) < 0) return false; }
         else if (fClase && fClase.value && f.p.TipoPersonal !== fClase.value) return false;
-        return AP.coincide(f.p, q.value, ['Title', 'NumDoc', 'Cargo', 'Area', 'NumUniforme']);
+        if (fJefe && fJefe.value && jefeTxt(f.p) !== fJefe.value) return false;
+        return AP.coincide(f.p, q.value, ['Title', 'NumDoc', 'Cargo', 'Area', 'NumUniforme', jefeTxt]);
       });
     }
     // Cada tarjeta es un botón: al oprimirla se muestran las personas en esa situación (vuelve a oprimirla para ver todas)
@@ -277,6 +284,7 @@
         h('p', { class: 'muted small' }, tit + ': ' + l.length + (l.length === 1 ? ' persona' : ' personas') + '. Oprima una tarjeta para ver solo a las personas en esa situación.'),
         tabla([
           ['Persona', function (f) { return h('div', null, h('strong', null, f.p.Title), h('small', { class: 'block muted' }, [f.p.NumDoc, f.p.NumUniforme ? 'Uniforme ' + f.p.NumUniforme : '', f.p.Cargo, f.p.Area, opt.clases ? f.p.TipoPersonal : ''].filter(Boolean).join(' · '))); }],
+          opt.jefe ? ['Jefe inmediato', function (f) { return jefeTxt(f.p); }] : null,
           ['Turno de hoy', function (f) { return f.e.turno || '—'; }],
           ['Estado según portería', function (f) { return h('div', null, AP.pill(f.e.txt, f.e.kind), f.e.nov ? h('small', { class: 'block txt-warn' }, f.e.nov) : null); }],
           opt.onRow ? ['', function (f) { return h('button', { class: 'btn small', type: 'button', onclick: function () { opt.onRow(f); } }, AP.icon('eye', 16), 'Ficha'); }] : null
@@ -286,13 +294,13 @@
       h('div', { class: 'banner info' }, AP.icon('clock', 18), h('span', null, 'Estado a las ' + U.fTime(new Date()) + ' según los registros de ingreso y salida de portería, la programación de turnos y las ausencias de Talento Humano. ' +
         '«En planta» = su último registro en portería es un ingreso. Los registros hechos sin conexión aparecen cuando el celular de portería los envía.')),
       opt.aviso ? h('div', { class: 'banner warn' }, AP.icon('alert', 18), h('span', null, opt.aviso)) : null,
-      h('div', { class: 'filters' }, fClase, fArea, fCargo, fEst, q, opt.uniformes ? h('button', { class: 'btn', type: 'button', onclick: opt.uniformes }, AP.icon('edit', 18), 'Números de uniforme') : null, AP.btnExcel(function () {
+      h('div', { class: 'filters' }, fClase, fJefe, fArea, fCargo, fEst, q, opt.uniformes ? h('button', { class: 'btn', type: 'button', onclick: opt.uniformes }, AP.icon('edit', 18), 'Números de uniforme') : null, AP.btnExcel(function () {
         var l = filtradas();
         if (!l.length) return AP.toast('No hay personas con el filtro actual.', 'warn');
         AP.exportar('Estado_del_personal', [['Persona', function (f) { return f.p.Title; }, 30], ['Documento', function (f) { return f.p.NumDoc; }, 15], ['Número de uniforme', function (f) { return f.p.NumUniforme; }, 11], ['Clase', function (f) { return f.p.TipoPersonal; }, 14],
-          ['Cargo', function (f) { return f.p.Cargo; }, 22], ['Área', function (f) { return f.p.Area; }, 18], ['Turno de hoy', function (f) { return f.e.turno; }, 22],
-          ['Estado según portería', function (f) { return f.e.txt; }, 34], ['Novedad', function (f) { return f.e.nov; }, 30]], l, 'xlsx',
-          [['Corte', U.fDateTime(new Date())], ['Filtro', [fClase && AP.textoOpcion(fClase), fArea.value, fCargo.value, fEst.value, q.value].filter(Boolean).join(' · ') || 'ninguno'],
+          ['Cargo', function (f) { return f.p.Cargo; }, 22], ['Área', function (f) { return f.p.Area; }, 18]].concat(opt.jefe ? [['Jefe inmediato', function (f) { return jefeTxt(f.p); }, 28]] : [], [['Turno de hoy', function (f) { return f.e.turno; }, 22],
+          ['Estado según portería', function (f) { return f.e.txt; }, 34], ['Novedad', function (f) { return f.e.nov; }, 30]]), l, 'xlsx',
+          [['Corte', U.fDateTime(new Date())], ['Filtro', [fClase && AP.textoOpcion(fClase), fJefe && fJefe.value, fArea.value, fCargo.value, fEst.value, q.value].filter(Boolean).join(' · ') || 'ninguno'],
             ['Fuente', 'Registros de ingreso y salida de portería, programación de turnos y ausencias de Talento Humano'], ['Generado por', AP.Session.user.nombre]]);
       })), out);
     pintar();
@@ -1149,13 +1157,24 @@
     var ED = puedeEditar();
     var tab = qs.t || 'personal';
     var content = h('div', { class: 'stack' });
-    var TABS = [['personal', esJefe() ? 'Mi personal' : 'Personal del grupo'], ['semana', 'Programación semanal'], ['turnos', 'Turnos y asignación'], ['horarios', 'Horarios fijos'], ['permisos', 'Permisos'], ['estadisticas', 'Estadísticas'], ['cambios', 'Registro de cambios']];
+    var TABS = [['personal', esJefe() ? 'Mi personal' : 'Estado del personal'], ['semana', 'Programación semanal'], ['turnos', 'Turnos y asignación'], ['horarios', 'Horarios fijos'], ['permisos', 'Permisos'], ['estadisticas', 'Estadísticas'], ['cambios', 'Registro de cambios']];
     var box = h('div', { class: 'stack' }, AP.spinner('Cargando…'));
     var acciones = h('div', { class: 'row gap wrap' });
     var grupoBox = h('div');
     AP.consolaShell('/consola/planta', esJefe() ? 'Mi personal y programación' : 'Programación de planta', content, ED ? acciones : AP.pill('Solo consulta', 'muted'));
-    var g = '', gNombre = '', todas = null;
-    function ruta(t, extra) { return '/consola/planta?t=' + t + (esJefe() ? '' : '&j=' + encodeURIComponent(g || 'sin')) + (extra || ''); }
+    var g = '', gNombre = '', todas = null, gr = null;
+    function ruta(t, extra) { return '/consola/planta?t=' + t + (esJefe() ? '' : '&j=' + encodeURIComponent(g === TODOS ? 'todos' : g || 'sin')) + (extra || ''); }
+    // Consultas por grupo: con «todo el personal» se consultan todos los grupos
+    function gq() { return g === TODOS ? undefined : g; }
+    function jefeDe(p) { if (!p.JefeId) return ''; var j = (todas || []).find(function (x) { return x.id === p.JefeId; }); return j ? j.Title : (p.JefeNombre || ''); }
+    // Pestañas que se programan por jefe inmediato: con «todo el personal» se pide elegir el grupo
+    function elegirGrupo(que) {
+      acciones.replaceChildren();
+      box.replaceChildren(h('div', { class: 'banner info' }, AP.icon('users', 18), h('span', null, que + ' se maneja por jefe inmediato. Elija el grupo:')),
+        h('div', { class: 'row gap wrap' }, gr.lista.map(function (x) {
+          return h('button', { class: 'btn', type: 'button', onclick: function () { g = x.id; AP.go(ruta(tab)); } }, AP.icon('users', 18), x.nombre + ' (' + x.n + ')');
+        }), h('button', { class: 'btn', type: 'button', onclick: function () { g = ''; AP.go(ruta(tab)); } }, AP.icon('users', 18), 'Personal propio sin jefe inmediato (' + gr.sinJefe + ')')));
+    }
     var tabs = h('div', { class: 'tabs' });
     content.append(grupoBox, tabs, box);
     function pintarTabs() {
@@ -1174,19 +1193,24 @@
           grupoBox.replaceChildren(h('p', { class: 'muted small' }, 'Personal que lo tiene a usted como jefe inmediato en su ficha. Si falta alguien o sobra alguien, el Director de Seguridad Integral lo corrige en Personas.'));
         } else {
           todas = await D.personasTodas();
-          var gr = await grupos(todas);
-          var pedido = qs.j === 'sin' ? '' : qs.j;
-          if (pedido === undefined || (pedido && !gr.lista.some(function (x) { return x.id === pedido; }))) pedido = gr.lista[0] ? gr.lista[0].id : '';
+          gr = await grupos(todas);
+          // Al abrir «Planta», el Director ve el estado de todo el personal; puede elegir el grupo de un jefe
+          var pedido = qs.j === 'sin' ? '' : qs.j === 'todos' || qs.j === undefined ? TODOS : qs.j;
+          if (pedido && pedido !== TODOS && !gr.lista.some(function (x) { return x.id === pedido; })) pedido = TODOS;
           g = pedido;
           var sel = gr.lista.find(function (x) { return x.id === g; });
-          gNombre = sel ? sel.nombre : '';
-          var s = AP.select('grupo', gr.lista.map(function (x) { return [x.id, x.nombre + (x.cargo ? ' — ' + x.cargo : '') + ' (' + x.n + ')']; }).concat([['sin', 'Personal propio sin jefe inmediato (' + gr.sinJefe + ')']]), g || 'sin');
-          s.addEventListener('change', function () { g = s.value === 'sin' ? '' : s.value; AP.go(ruta(tab)); });
+          gNombre = g === TODOS ? 'Todo el personal' : sel ? sel.nombre : '';
+          var nTodos = todas.filter(function (p) { return p.Tipo === 'Personal propio' || !!p.JefeId; }).length;
+          var s = AP.select('grupo', [['todos', 'Todo el personal (todos los jefes) (' + nTodos + ')']].concat(gr.lista.map(function (x) { return [x.id, x.nombre + (x.cargo ? ' — ' + x.cargo : '') + ' (' + x.n + ')']; }),
+            [['sin', 'Personal propio sin jefe inmediato (' + gr.sinJefe + ')']]), g === TODOS ? 'todos' : g || 'sin', { style: { minWidth: 'min(24rem, 100%)' } });
+          s.addEventListener('change', function () { g = s.value === 'todos' ? TODOS : s.value === 'sin' ? '' : s.value; AP.go(ruta(tab)); });
           grupoBox.replaceChildren(h('div', { class: 'filters' }, AP.field('Personal a cargo de (jefe inmediato)', s),
-            h('small', { class: 'muted' }, gr.lista.length ? 'Cada Jefe de Producción ve y programa solo a su grupo. El jefe inmediato se asigna en la ficha de cada persona (Personas).' : 'Aún no hay personas con jefe inmediato asignado. Asígnelo en la ficha de cada persona (Personas).')));
+            h('small', { class: 'muted' }, gr.lista.length ? '«Todo el personal» muestra a todos los grupos juntos. Para programar turnos, horarios y permisos, elija el grupo de un jefe: cada Jefe de Producción ve y programa solo al suyo. El jefe inmediato se asigna en la ficha de cada persona (Personas).' : 'Aún no hay personas con jefe inmediato asignado. Asígnelo en la ficha de cada persona (Personas).')));
         }
         pintarTabs();
-        if (tab === 'semana') semana();
+        var PORGRUPO = { semana: 'La programación semanal', turnos: 'Los turnos y su asignación', horarios: 'Los horarios fijos', permisos: 'El registro de permisos' };
+        if (g === TODOS && PORGRUPO[tab]) elegirGrupo(PORGRUPO[tab]);
+        else if (tab === 'semana') semana();
         else if (tab === 'turnos') turnos();
         else if (tab === 'horarios') horariosFijos();
         else if (tab === 'permisos') permisos();
@@ -1208,13 +1232,13 @@
         // Si una consulta secundaria falla, el personal se muestra igual, con el aviso correspondiente
         var avisos = [];
         var falla = function (txt) { return function (e) { avisos.push(txt + ' no se pudo consultar' + (e && e.offline ? ' (sin conexión)' : e && e.message ? ': ' + e.message : '') + '.'); return []; }; };
-        var r = await Promise.all([D.semanas(hoy, J().addYmd(hoy, 7), g).catch(falla('La programación semanal')), D.horarios().catch(falla('Los horarios')), D.ausencias().catch(falla('Las ausencias')),
+        var r = await Promise.all([D.semanas(hoy, J().addYmd(hoy, 7), gq()).catch(falla('La programación semanal')), D.horarios().catch(falla('Los horarios')), D.ausencias().catch(falla('Las ausencias')),
           D.movimientos(U.fromLocal(ayer, '00:00'), null, per).catch(falla('Los ingresos y salidas de portería')), D.permisos(U.addDays(new Date(), -1).toISOString(), per).catch(falla('Los permisos'))]);
         if (r[3].avisoLegado || r[4].avisoLegado) avisos.push(AVISO_LEGADO);
         var ctx = { semanas: J().indexarSemanas(r[0], per), horarios: r[1] };
-        AP.Planta.tablero(box, per, ctx, r[3], r[2], { aviso: avisos.join(' '),
+        AP.Planta.tablero(box, per, ctx, r[3], r[2], { aviso: avisos.join(' '), jefe: g === TODOS ? jefeDe : null,
           uniformes: puedeUniforme() && (esJefe() || AP.Session.can('editar')) ? function () { AP.Planta.uniformes(per, miPersonal); } : null,
-          onRow: function (f) { AP.Planta.ficha(f.p, { estado: f.e, ctx: ctx, ausencias: r[2], permisos: r[4], jefeNombre: gNombre, despues: miPersonal }); } });
+          onRow: function (f) { AP.Planta.ficha(f.p, { estado: f.e, ctx: ctx, ausencias: r[2], permisos: r[4], jefeNombre: g === TODOS ? jefeDe(f.p) : gNombre, despues: miPersonal }); } });
       } catch (e) { box.replaceChildren(errBox(e)); }
     }
 
@@ -1685,7 +1709,7 @@
         try {
           var a = desde.value, b = hasta.value > hoy ? hoy : hasta.value;
           var per = await personal();
-          var r = await Promise.all([D.semanas(a, b, g), D.horarios().catch(function () { return []; }), D.ausencias(70).catch(function () { return []; }),
+          var r = await Promise.all([D.semanas(a, b, gq()), D.horarios().catch(function () { return []; }), D.ausencias(70).catch(function () { return []; }),
             D.movimientos(U.fromLocal(J().addYmd(a, -1), '00:00'), new Date(U.fromLocal(J().addYmd(b, 1), '23:59').getTime() + 59999), per),
             D.permisos(U.fromLocal(a, '00:00').toISOString(), per).catch(function () { return []; })]);
           var ctx = { semanas: J().indexarSemanas(r[0], per), horarios: r[1] };
@@ -1804,7 +1828,7 @@
         }));
       }
       try {
-        var crudo = await D.cambios(90, g);
+        var crudo = await D.cambios(90, gq());
         datos = crudo.slice().sort(function (a, b) { return a.FechaHora < b.FechaHora ? 1 : -1; });
         Array.from(new Set(datos.map(function (c) { return c.Tipo; }).filter(Boolean))).sort().forEach(function (t) { fTipo.appendChild(h('option', { value: t }, t)); });
         box.replaceChildren(
