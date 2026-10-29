@@ -1,5 +1,5 @@
 AVO PAK S.A.S. — CONTROL DE ACCESO
-Ajuste del 28 de octubre de 2026 (etiqueta de caché b9). La versión de la aplicación sigue siendo 1.0.0. Manual de uso: revisión 06.
+Ajuste del 28 de octubre de 2026 (etiqueta de caché b10). La versión de la aplicación sigue siendo 1.0.0. Manual de uso: revisión 07.
 No cambian las reglas de Firebase: no hay que publicar nada en la consola.
 
 QUÉ CAMBIA
@@ -20,6 +20,10 @@ QUÉ CAMBIA
    ese día o se le asignan horas extra; «Ajustar a mano» activa el pincel para cambiar muchas casillas. Filtro por turno,
    resumen de quién tiene turno y quién no, columna de horas extra y aviso cuando la semana está vacía, con un botón para ir a
    la semana programada más próxima.
+5. Planta del Director: al abrir «Planta», el Director (y Gobierno Corporativo) ve el estado de todo el personal, de todos los
+   jefes juntos: tarjetas (en planta, no han llegado, ya salieron…), tabla con el jefe inmediato de cada persona, filtro por
+   jefe y Excel. Estadísticas y registro de cambios también de todos los grupos. Para programar turnos, horarios y permisos
+   se elige arriba el grupo de un jefe. En Talento Humano, «Estado en planta» también muestra y filtra por jefe inmediato.
 
 ARCHIVOS QUE CAMBIAN
 index.html, sw.js, LEEME-ACTUALIZACION.txt, css/app.css y, en la carpeta js: jornada.js, horarios.js, views-planta.js,

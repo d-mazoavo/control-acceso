@@ -220,7 +220,7 @@
         var r = [per, r0[0], r0[1], r0[2], r0[3]];
         var ctx = { semanas: J().indexarSemanas(r[1], r[0]), horarios: r[2] };
         var fc = null;
-        AP.Planta.tablero(box, r[0], ctx, r[4], r[3], { clases: true, claseDef: 'operativas', aviso: avisos.join(' '),
+        AP.Planta.tablero(box, r[0], ctx, r[4], r[3], { clases: true, claseDef: 'operativas', aviso: avisos.join(' '), jefe: function (p) { return jefeDe(p, r[0]); },
           uniformes: ED ? function () { AP.Planta.uniformes(per, estado); } : null,
           onRow: async function (f) {
             try { if (!fc) fc = await contextoFicha(r[0]); } catch (e) { fc = { ausencias: r[3], permisos: [] }; }

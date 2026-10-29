@@ -11,7 +11,7 @@
   AP.MANUAL = {
     titulo: 'Instructivo de uso de la aplicación Control de Acceso',
     codigo: 'Por asignar (Dirección de Calidad)',
-    version: '06',
+    version: '07',
     fecha: '2026-10-28',
     appVersion: '1.0.0',
     secciones: [
@@ -166,7 +166,7 @@
         ] }
       ] },
       { id: 'planta', titulo: 'Personal a cargo y programación de planta (Jefe de Producción)', roles: ['Jefe de Producción', 'Administrador', 'Gobierno Corporativo'], bloques: [
-        { p: 'El Jefe de Producción ve únicamente a las personas habilitadas que lo tienen como jefe inmediato en su ficha (si el Director inhabilita a una persona, sale de sus listas). Su usuario debe estar vinculado a su propia ficha en Personas (lo hace el Director en Usuarios). El Director y Gobierno Corporativo eligen arriba el grupo de cada jefe.' },
+        { p: 'El Jefe de Producción ve únicamente a las personas habilitadas que lo tienen como jefe inmediato en su ficha (si el Director inhabilita a una persona, sale de sus listas). Su usuario debe estar vinculado a su propia ficha en Personas (lo hace el Director en Usuarios). El Director y Gobierno Corporativo, al abrir «Planta», ven el estado de todo el personal (todos los jefes juntos), con el jefe inmediato de cada persona y filtro por jefe; para programar turnos, horarios y permisos eligen arriba el grupo de un jefe.' },
         { h: 'Mi personal' },
         { p: 'Muestra a cada persona a cargo con su número de uniforme, su turno de hoy y su estado según la portería (en planta, fuera, no ha llegado, ya salió, con ausencia), con filtros por área, cargo, estado y texto, y descarga en Excel. «Ficha» abre los datos de la persona (solo consulta), su programación de los próximos 7 días, sus permisos y sus ausencias, y permite cambiar su número de uniforme. «Números de uniforme» permite registrar o corregir varios a la vez.' },
         { p: 'Si una consulta secundaria no responde (por ejemplo, sin conexión), el personal se muestra igual con un aviso. Los ingresos y salidas registrados antes de la actualización de octubre de 2026 pueden no aparecer: la pantalla lo advierte.' },
@@ -296,7 +296,8 @@
       { version: '03', fecha: '2026-10-24', descripcion: 'Consultas del Jefe de Producción y de Talento Humano sin índices compuestos; número de uniforme (Director, jefe inmediato y Talento Humano); jefe inmediato para cualquier tipo de persona; el Jefe de Producción solo ve personal habilitado; horarios fijos asignados por el jefe; Talento Humano con permisos y consulta de las personas con jefe inmediato y con todo lo programado por persona; búsqueda de Personas solo por los datos de la persona; «Usuarios» al final del menú; traducción completa de la pantalla al inglés.' },
       { version: '04', fecha: '2026-10-26', descripcion: 'El ingreso en un día no programado o de descanso, de cualquier persona con horario (personal propio, contratistas y demás), lo decide el Director de Seguridad Integral: el vigilante envía la solicitud y la persona no ingresa mientras no se apruebe. Se eliminó en ese caso la opción de registrar el ingreso pendiente de verificación.' },
       { version: '05', fecha: '2026-10-27', descripcion: 'Los permisos solicitados por el jefe inmediato se envían a Recursos Humanos («Por autorizar») y solo se aplican en portería cuando se autorizan; catálogo de motivos de permisos y licencias con su clase de remuneración, fundamento y soporte; licencias de día completo que crean la ausencia al autorizarse; las tarjetas de «Estado en planta» muestran a las personas de cada situación.' },
-      { version: '06', fecha: '2026-10-28', descripcion: '«Turnos y asignación» muestra, por periodo, quiénes están en cada turno (filtrable y descargable) y permite quitar del turno o cambiar de turno; al asignar, la lista indica lo que cada persona ya tiene programado y ofrece fechas rápidas; horas extra antes o después del turno, con motivo, límite de referencia (art. 167A CST) y efecto en portería; la programación semanal se abre en consulta, se edita por día con un clic o a mano con el pincel, filtra por turno y avisa cuando la semana está vacía.' }
+      { version: '06', fecha: '2026-10-28', descripcion: '«Turnos y asignación» muestra, por periodo, quiénes están en cada turno (filtrable y descargable) y permite quitar del turno o cambiar de turno; al asignar, la lista indica lo que cada persona ya tiene programado y ofrece fechas rápidas; horas extra antes o después del turno, con motivo, límite de referencia (art. 167A CST) y efecto en portería; la programación semanal se abre en consulta, se edita por día con un clic o a mano con el pincel, filtra por turno y avisa cuando la semana está vacía.' },
+      { version: '07', fecha: '2026-10-28', descripcion: 'Al abrir «Planta», el Director y Gobierno Corporativo ven el estado de todo el personal (todos los jefes inmediatos juntos), con el jefe de cada persona, filtro por jefe, tarjetas que filtran y descarga en Excel; estadísticas y registro de cambios de todos los grupos. «Estado en planta» de Talento Humano también muestra y filtra por jefe inmediato.' }
     ]
   };
 })();
