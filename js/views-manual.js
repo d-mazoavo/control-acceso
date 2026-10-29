@@ -12,7 +12,7 @@
   function valores() {
     var c = AP.Horario ? AP.Horario.cfg() : {}, j = (AP.CFG && AP.CFG.jornada) || {};
     return { pendiente: c.minutosPendiente, pendienteMenos1: (c.minutosPendiente || 1) - 1, antelacion: c.minutosAntelacionTurno, horasMaxSinSalida: c.horasMaxSinSalida,
-      diurno: j.inicioDiurno || '06:00', nocturno: j.inicioNocturno || '19:00', maxSemanal: j.maximaSemanal || 42, horasPin: AP.CFG.horasVigenciaPinTemporal || 72,
+      diurno: j.inicioDiurno || '06:00', nocturno: j.inicioNocturno || '19:00', maxSemanal: j.maximaSemanal || 42, maxExtraDia: j.maxExtraDia || 2, maxExtraSemana: j.maxExtraSemana || 12, horasPin: AP.CFG.horasVigenciaPinTemporal || 72,
       horasMaxTurno: AP.CFG.horasMaxTurno || 13, minSinSincronizar: AP.CFG.minutosAlertaSinSincronizar || 30 };
   }
   function txt(t) { var v = valores(); return String(t == null ? '' : t).replace(/\{(\w+)\}/g, function (m, k) { return v[k] != null ? String(v[k]) : m; }); }

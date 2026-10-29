@@ -553,6 +553,11 @@ details.card > summary { margin: -2px 0; }
 .pl-c.pl-t6 { background: color-mix(in srgb, var(--pl-6) 26%, var(--card)); color: var(--ink); border-color: color-mix(in srgb, var(--pl-6) 55%, transparent); }
 .pl-c.pl-t7 { background: color-mix(in srgb, var(--pl-7) 26%, var(--card)); color: var(--ink); border-color: color-mix(in srgb, var(--pl-7) 55%, transparent); }
 .pl-c.pl-D { background: var(--pg-X); color: var(--pg-ink); border-color: transparent; }
+.pl-c { position: relative; }
+.pl-c sup.pl-x { position: absolute; top: -6px; right: -6px; min-width: 18px; padding: 1px 3px; border-radius: 8px; background: var(--warn); color: var(--warn-bg); font: 700 .62rem/1.2 var(--font); }
+.pl-grid .pl-c.pl-clic:hover { outline: 2px solid var(--brand); outline-offset: 1px; }
+.pick-list label .pill { flex: none; max-width: 55%; white-space: normal; text-align: right; }
+.pick-list label .grow small { white-space: normal; }
 .pl-c.pl-pas { opacity: .72; }
 .pl-c.pl-hoy { box-shadow: 0 0 0 2px var(--brand); }
 .pl-c.pl-aus { background-image: repeating-linear-gradient(45deg, transparent 0 4px, color-mix(in srgb, var(--deny) 30%, transparent) 4px 6px); }

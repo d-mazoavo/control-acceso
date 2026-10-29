@@ -357,7 +357,7 @@
             });
             var conTurno = det.filter(function (d) { return d.t && d.t.e; });
             return { p: p, det: det, turnos: conTurno.length, desc: det.filter(function (d) { return d.t && d.t.cod === 'D'; }).length,
-              horas: conTurno.reduce(function (s0, d) { return s0 + J().horasTurno(d.t); }, 0), sinProg: det.filter(function (d) { return !d.t; }).length,
+              horas: conTurno.reduce(function (s0, d) { return s0 + J().horasTurno(d.t); }, 0), extra: conTurno.reduce(function (s0, d) { return s0 + J().horasExtra(d.t); }, 0), sinProg: det.filter(function (d) { return !d.t; }).length,
               aus: det.filter(function (d) { return d.a; }).length, planta: det.some(function (d) { return d.t && d.t.fuente === 'planta'; }), fijo: det.some(function (d) { return d.t && d.t.fuente === 'horario'; }) };
           }).filter(function (f) { return f.p.Estado === 'Habilitado' || f.planta; });
           rango = [desde.value, hasta.value];
@@ -374,7 +374,7 @@
         AP.modal({ title: f.p.Title + ' — ' + fDia(rango[0]) + ' a ' + fDia(rango[1]), size: 'wide', body: h('div', { class: 'stack' },
           h('p', { class: 'muted small' }, [f.p.NumDoc, f.p.Cargo, f.p.Area, f.p.JefeId ? 'Jefe inmediato: ' + jefeDe(f.p, per) : 'Sin jefe inmediato'].filter(Boolean).join(' · ')),
           tabla([['Día', function (d) { return DIAS_L[J().dow(d.y)] + ' ' + fDia(d.y) + (J().festivo(d.y) ? ' (festivo)' : ''); }], ['Turno u horario', function (d) { return turnoTxt(d.t); }],
-            ['Hora', function (d) { return horaTxt(d.t); }], ['Fuente', function (d) { return fuenteTxt(d.t); }], ['Ausencia registrada', function (d) { return d.a ? d.a.Tipo : ''; }]], f.det)) });
+            ['Hora', function (d) { return horaTxt(d.t) + (d.t && (d.t.xa || d.t.xd) ? ' · ' + J().extraTxt(d.t) : ''); }], ['Fuente', function (d) { return fuenteTxt(d.t); }], ['Ausencia registrada', function (d) { return d.a ? d.a.Tipo : ''; }]], f.det)) });
       }
       function pintar() {
         if (!filas) return;
@@ -389,6 +389,7 @@
             ['Días con turno', function (f) { return String(f.turnos); }, 'num'],
             ['Descansos', function (f) { return String(f.desc); }, 'num'],
             ['Horas programadas', function (f) { return fh(f.horas); }, 'num'],
+            ['Horas extra programadas', function (f) { return f.extra ? fh(f.extra) : '—'; }, 'num'],
             ['Días sin programación', function (f) { return String(f.sinProg); }, 'num'],
             ['Fuente', function (f) { return [f.planta ? 'Programación semanal' : '', f.fijo ? 'Horario fijo' : ''].filter(Boolean).join(' y ') || '—'; }],
             ['', function (f) { return h('button', { class: 'btn small', type: 'button', onclick: function () { detalle(f); } }, AP.icon('eye', 16), 'Día por día'); }]
@@ -404,10 +405,12 @@
         AP.exportarHojas('Programacion_por_persona_' + rango[0] + '_a_' + rango[1], [
           { sheet: 'Resumen por persona', rows: l, cols: [['Persona', function (f) { return f.p.Title; }, 30], ['Documento', function (f) { return f.p.NumDoc; }, 15], ['Número de uniforme', function (f) { return f.p.NumUniforme; }, 11],
             ['Cargo', function (f) { return f.p.Cargo; }, 22], ['Área', function (f) { return f.p.Area; }, 16], ['Jefe inmediato', function (f) { return jefeDe(f.p, per); }, 28], ['Días con turno', function (f) { return f.turnos; }, 10],
-            ['Descansos', function (f) { return f.desc; }, 10], ['Horas programadas', function (f) { return Math.round(f.horas * 100) / 100; }, 11], ['Días sin programación', function (f) { return f.sinProg; }, 11], ['Días con ausencia', function (f) { return f.aus; }, 10]] },
+            ['Descansos', function (f) { return f.desc; }, 10], ['Horas programadas', function (f) { return Math.round(f.horas * 100) / 100; }, 11], ['Horas extra programadas', function (f) { return Math.round(f.extra * 100) / 100; }, 11], ['Días sin programación', function (f) { return f.sinProg; }, 11], ['Días con ausencia', function (f) { return f.aus; }, 10]] },
           { sheet: 'Detalle por día', rows: det, cols: [['Persona', function (x) { return x.f.p.Title; }, 30], ['Documento', function (x) { return x.f.p.NumDoc; }, 15], ['Jefe inmediato', function (x) { return jefeDe(x.f.p, per); }, 28],
             ['Fecha', function (x) { return x.d.y; }, 11], ['Día', function (x) { return DIAS_L[J().dow(x.d.y)]; }, 10], ['Festivo', function (x) { return J().festivo(x.d.y) || ''; }, 16],
             ['Turno u horario', function (x) { return turnoTxt(x.d.t); }, 30], ['Entrada', function (x) { return x.d.t && x.d.t.e ? x.d.t.e : ''; }, 8], ['Salida', function (x) { return x.d.t && x.d.t.s ? x.d.t.s : ''; }, 8],
+            ['Horas extra', function (x) { return x.d.t ? Math.round(J().horasExtra(x.d.t) * 100) / 100 : 0; }, 9], ['Detalle de horas extra', function (x) { return x.d.t ? J().extraTxt(x.d.t).replace('Horas extra: ', '') : ''; }, 34],
+            ['Motivo de las horas extra', function (x) { return x.d.t && x.d.t.xm || ''; }, 30],
             ['Fuente', function (x) { return fuenteTxt(x.d.t); }, 30], ['Ausencia registrada', function (x) { return x.d.a ? x.d.a.Tipo : ''; }, 26]] }
         ], [['Periodo', rango[0] + ' a ' + rango[1]], ['Jefe inmediato', AP.textoOpcion(fJefe)], ['Filtro', q.value || 'ninguno'], ['Generado por', AP.Session.user.nombre], ['Fecha', U.fDateTime(new Date())],
           ['Fuente', 'Programación semanal de planta (AP_ProgPlanta), horarios (AP_Horarios) y ausencias (AP_Ausencias)']]);
@@ -719,6 +722,7 @@
             ['Dom./fest. diurnas', function (r) { return fh(r.tot.dfDiurnas); }, 'num'],
             ['Dom./fest. nocturnas', function (r) { return fh(r.tot.dfNocturnas); }, 'num'],
             ['Programadas', function (r) { return r.programadas ? fh(r.programadas) : '—'; }, 'num'],
+            ['Extra programadas', function (r) { return r.extraProg ? fh(r.extraProg) : '—'; }, 'num'],
             ['Novedades', function (r) { return h('div', null, r.tardes ? AP.pill(r.tardes + ' tarde', 'warn') : null, r.incompletos ? AP.pill(r.incompletos + ' incompleto(s)', 'deny') : null, r.diasAus ? AP.pill(r.diasAus + ' día(s) de ausencia', 'muted') : null); }]
           ], l, detalle),
           h('p', { class: 'muted small' }, 'Horas entre la entrada y la salida registradas en portería (permanencia en planta). Diurnas de ' + ((AP.CFG.jornada || {}).inicioDiurno || '06:00') + ' a ' + ((AP.CFG.jornada || {}).inicioNocturno || '19:00') +
@@ -747,7 +751,7 @@
             ['Cargo', function (r) { return r.p.Cargo; }, 20], ['Área', function (r) { return r.p.Area; }, 16], ['Días con registro', function (r) { return r.diasConRegistro; }, 10],
             ['Horas en planta', function (r) { return n2(r.tot.total); }, 11], ['Diurnas', function (r) { return n2(r.tot.diurnas); }, 10], ['Nocturnas', function (r) { return n2(r.tot.nocturnas); }, 10],
             ['Dominical/festiva diurnas', function (r) { return n2(r.tot.dfDiurnas); }, 12], ['Dominical/festiva nocturnas', function (r) { return n2(r.tot.dfNocturnas); }, 12],
-            ['Horas programadas', function (r) { return n2(r.programadas); }, 11], ['Días programados', function (r) { return r.diasProg; }, 10], ['Llegadas tarde', function (r) { return r.tardes; }, 9],
+            ['Horas programadas', function (r) { return n2(r.programadas); }, 11], ['Horas extra programadas', function (r) { return n2(r.extraProg); }, 11], ['Días programados', function (r) { return r.diasProg; }, 10], ['Llegadas tarde', function (r) { return r.tardes; }, 9],
             ['Registros incompletos', function (r) { return r.incompletos; }, 11], ['Días de ausencia (TH)', function (r) { return r.diasAus; }, 11]] },
           { sheet: 'Detalle por día', rows: filasDia, cols: [['Fecha', function (x) { return x.d.fecha; }, 11], ['Día', function (x) { return ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'][J().dow(x.d.fecha)]; }, 10],
             ['Festivo', function (x) { return J().festivo(x.d.fecha) || ''; }, 18], ['Persona', function (x) { return x.r.p.Title; }, 30], ['Documento', function (x) { return x.r.p.NumDoc; }, 15], ['Área', function (x) { return x.r.p.Area; }, 16],

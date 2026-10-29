@@ -66,7 +66,8 @@
   }
 
   // ---------- Programación: turno de una persona en una fecha ----------
-  // ctx = { semanas: { 'AAAA-MM-DD(lunes)': { token: { d: {fecha: código}, turnos } } }, horarios: [...] }
+  // ctx = { semanas: { 'AAAA-MM-DD(lunes)': { token: { d: {fecha: código}, x: {fecha: horas extra}, turnos } } }, horarios: [...] }
+  // Horas extra de un día: x[fecha] = { a: minutos antes del turno, d: minutos después del turno, m: motivo }
   // Una semana puede tener varios registros (uno por jefe inmediato): se combinan. Si se pasan las personas, la
   // programación de un jefe solo se toma para quienes lo tienen como jefe inmediato (igual que en portería).
   function indexarSemanas(docs, personas) {
@@ -78,7 +79,7 @@
         var x = datos[pid];
         if (!x || !x.t) return;
         if (w.JefeId && porToken && porToken[x.t] && (porToken[x.t].JefeId || '') !== w.JefeId) return;
-        porTok[x.t] = { d: x.d || {}, turnos: turnos, pid: pid, jefe: w.JefeId || '' };
+        porTok[x.t] = { d: x.d || {}, x: x.x || {}, turnos: turnos, pid: pid, jefe: w.JefeId || '' };
       });
     });
     return idx;
@@ -87,8 +88,9 @@
     var w = ctx.semanas && ctx.semanas[lunes(ymd)], x = w && w[token];
     if (x) {
       var cod = x.d[ymd] || '';
-      var t = cod && cod !== 'D' ? x.turnos[cod] : null;
-      return { fuente: 'planta', cod: cod, nombre: t ? (t.n || cod) : cod === 'D' ? 'Descanso' : '', e: t ? t.e : null, s: t ? t.s : null };
+      var t = cod && cod !== 'D' ? x.turnos[cod] : null, ex = t && x.x ? x.x[ymd] : null;
+      return { fuente: 'planta', cod: cod, nombre: t ? (t.n || cod) : cod === 'D' ? 'Descanso' : '', e: t ? t.e : null, s: t ? t.s : null,
+        xa: ex ? Number(ex.a) || 0 : 0, xd: ex ? Number(ex.d) || 0 : 0, xm: ex ? ex.m || '' : '' };
     }
     var wd = String(dow(ymd));
     var hz = (ctx.horarios || []).filter(function (h0) {
@@ -98,12 +100,28 @@
     if (hz) return { fuente: 'horario', cod: '', nombre: hz.Turno || 'Horario', e: hz.HoraEntrada, s: hz.HoraSalida, libre: hz.Modalidad === 'Libre' };
     return null;
   }
+  // Rango del turno con sus horas extra (antes de la entrada y después de la salida)
   function rangoTurno(ymd, t) {
     if (!t || !t.e || !t.s) return null;
     var a = toMin(t.e), b = toMin(t.s);
-    return { ini: U.fromLocal(ymd, t.e), fin: U.fromLocal(b <= a ? addYmd(ymd, 1) : ymd, t.s) };
+    var ini = U.fromLocal(ymd, t.e), fin = U.fromLocal(b <= a ? addYmd(ymd, 1) : ymd, t.s);
+    return { ini: new Date(ini.getTime() - (t.xa || 0) * 60000), fin: new Date(fin.getTime() + (t.xd || 0) * 60000), iniOrd: ini, finOrd: fin };
   }
   function horasTurno(t) { if (!t || !t.e || !t.s) return 0; var m = toMin(t.s) - toMin(t.e); if (m <= 0) m += 1440; return m / 60; }
+  function horasExtra(t) { return t ? ((t.xa || 0) + (t.xd || 0)) / 60 : 0; }
+  // «2 h», «1 h 30 min», «45 min»
+  function durTxt(min) { min = Math.round(min || 0); var h0 = Math.floor(min / 60), m0 = min % 60; return (h0 ? h0 + ' h' : '') + (h0 && m0 ? ' ' : '') + (m0 ? m0 + ' min' : '') || '0 h'; }
+  // Hora (HH:MM) desplazada en minutos, dentro del día
+  function hmMas(hm, min) { var v = ((toMin(hm) + min) % 1440 + 1440) % 1440; return String(Math.floor(v / 60)).padStart(2, '0') + ':' + String(v % 60).padStart(2, '0'); }
+  // «+2 h extra después (hasta 21:30)»
+  function extraTxt(t, corto) {
+    if (!t || !(t.xa || t.xd)) return '';
+    var p = [];
+    if (t.xa) p.push(corto ? durTxt(t.xa) + ' antes' : durTxt(t.xa) + ' antes (desde las ' + hmMas(t.e, -t.xa) + ')');
+    if (t.xd) p.push(corto ? durTxt(t.xd) + ' después' : durTxt(t.xd) + ' después (hasta las ' + hmMas(t.s, t.xd) + ')');
+    return 'Horas extra: ' + p.join(' y ');
+  }
+  function turnoTxt(t) { return t && t.e ? t.nombre + ' ' + t.e + '–' + t.s + (t.xa || t.xd ? ' + ' + durTxt((t.xa || 0) + (t.xd || 0)) + ' extra' : '') : t && t.cod === 'D' ? 'Descanso' : ''; }
 
   // ---------- Movimientos de una persona → intervalos en planta ----------
   function clave(m) { return m.Token || ('DOC:' + U.normDoc(m.NumDoc)); }
@@ -162,18 +180,18 @@
         } else { d.estados.push(iv.estado); if (iv.estado !== 'En planta') incompletos++; }
       });
       // Programado en cada día del rango y ausencias registradas por Talento Humano
-      var programadas = 0, diasProg = 0, diasAus = 0, y0 = desdeYmd;
+      var programadas = 0, extraProg = 0, diasProg = 0, diasAus = 0, y0 = desdeYmd;
       var aus = (ausencias || []).filter(function (a) { return a.Token === p.Token && a.Estado !== 'Anulada'; });
       while (y0 <= hastaYmd) {
         var t = ctx ? turnoDe(ctx, p.Token, y0) : null;
-        if (t && t.e) { programadas += horasTurno(t); diasProg++; if (dias[y0]) dias[y0].turno = t.nombre + ' ' + t.e + '–' + t.s; else if (y0 < U.ymd()) dias[y0] = { fecha: y0, entradas: [], salidas: [], total: 0, diurnas: 0, nocturnas: 0, dfDiurnas: 0, dfNocturnas: 0, estados: ['Programado sin registro de ingreso'], novedades: [], turno: t.nombre + ' ' + t.e + '–' + t.s }; }
+        if (t && t.e) { programadas += horasTurno(t); extraProg += horasExtra(t); diasProg++; if (dias[y0]) dias[y0].turno = turnoTxt(t); else if (y0 < U.ymd()) dias[y0] = { fecha: y0, entradas: [], salidas: [], total: 0, diurnas: 0, nocturnas: 0, dfDiurnas: 0, dfNocturnas: 0, estados: ['Programado sin registro de ingreso'], novedades: [], turno: turnoTxt(t) }; }
         var a = aus.find(function (x) { return U.ymd(x.Desde) <= y0 && U.ymd(x.Hasta) >= y0; });
         if (a) { diasAus++; dias[y0] = dias[y0] || { fecha: y0, entradas: [], salidas: [], total: 0, diurnas: 0, nocturnas: 0, dfDiurnas: 0, dfNocturnas: 0, estados: [], novedades: [] }; dias[y0].ausencia = a.Tipo; }
         y0 = addYmd(y0, 1);
       }
       var lista = Object.keys(dias).sort().map(function (k) { return dias[k]; });
       return { p: p, dias: lista, tot: tot, diasConRegistro: lista.filter(function (d) { return d.entradas.length; }).length, incompletos: incompletos, tardes: tardes,
-        programadas: programadas, diasProg: diasProg, diasAus: diasAus };
+        programadas: programadas, extraProg: extraProg, diasProg: diasProg, diasAus: diasAus };
     });
   }
 
@@ -184,21 +202,22 @@
     var maxH = ((AP.Horario && AP.Horario.cfg().horasMaxSinSalida) || 14) * 3600000;
     var t = turnoDe(ctx, p.Token, hoy), r = rangoTurno(hoy, t);
     var a = (ausencias || []).find(function (x) { return x.Token === p.Token && x.Estado !== 'Anulada' && new Date(x.Desde) <= ahora && ahora <= new Date(x.Hasta); });
-    var turnoTxt = t && t.e ? t.nombre + ' ' + t.e + '–' + t.s : t && t.cod === 'D' ? 'Descanso' : '';
+    var turnoTx = turnoTxt(t);
     if (ult && ult.Sentido === 'Ingreso' && ahora - new Date(ult.FechaHora) < maxH) {
-      return { k: 'dentro', txt: 'En planta desde ' + U.fTime(ult.FechaHora) + (U.ymd(ult.FechaHora) !== hoy ? ' (' + U.fDate(ult.FechaHora) + ')' : ''), kind: 'ok', turno: turnoTxt, nov: ult.Novedad || '' };
+      return { k: 'dentro', txt: 'En planta desde ' + U.fTime(ult.FechaHora) + (U.ymd(ult.FechaHora) !== hoy ? ' (' + U.fDate(ult.FechaHora) + ')' : ''), kind: 'ok', turno: turnoTx, nov: ult.Novedad || '' };
     }
-    if (a) return { k: 'ausente', txt: (a.Tipo || 'Ausencia') + ' hasta ' + U.fDate(a.Hasta), kind: 'muted', turno: turnoTxt };
+    if (a) return { k: 'ausente', txt: (a.Tipo || 'Ausencia') + ' hasta ' + U.fDate(a.Hasta), kind: 'muted', turno: turnoTx };
     var salioHoy = ult && ult.Sentido === 'Salida' && U.ymd(ult.FechaHora) === hoy;
     if (r) {
       var ant = ((AP.Horario && AP.Horario.cfg().minutosAntelacionTurno) || 30) * 60000;
       // Salió durante o después de su turno de hoy
-      if (salioHoy && new Date(ult.FechaHora) >= new Date(r.ini.getTime() - ant)) return { k: 'salio', txt: 'Salió a las ' + U.fTime(ult.FechaHora), kind: 'muted', turno: turnoTxt, nov: ult.Novedad || '' };
-      if (ahora < new Date(r.ini.getTime() - ant)) return { k: 'programado', txt: 'Programado desde las ' + t.e, kind: 'brand', turno: turnoTxt };
-      if (ahora <= r.fin) return { k: 'falta', txt: 'No ha llegado (turno desde las ' + t.e + ')', kind: 'deny', turno: turnoTxt };
-      return { k: 'noasistio', txt: 'Sin ingreso registrado en su turno', kind: 'warn', turno: turnoTxt };
+      if (salioHoy && new Date(ult.FechaHora) >= new Date(r.ini.getTime() - ant)) return { k: 'salio', txt: 'Salió a las ' + U.fTime(ult.FechaHora), kind: 'muted', turno: turnoTx, nov: ult.Novedad || '' };
+      var desde = U.fTime(r.ini);
+      if (ahora < new Date(r.ini.getTime() - ant)) return { k: 'programado', txt: 'Programado desde las ' + desde, kind: 'brand', turno: turnoTx };
+      if (ahora <= r.fin) return { k: 'falta', txt: 'No ha llegado (turno desde las ' + desde + ')', kind: 'deny', turno: turnoTx };
+      return { k: 'noasistio', txt: 'Sin ingreso registrado en su turno', kind: 'warn', turno: turnoTx };
     }
-    if (salioHoy) return { k: 'salio', txt: 'Salió a las ' + U.fTime(ult.FechaHora), kind: 'muted', turno: turnoTxt, nov: ult.Novedad || '' };
+    if (salioHoy) return { k: 'salio', txt: 'Salió a las ' + U.fTime(ult.FechaHora), kind: 'muted', turno: turnoTx, nov: ult.Novedad || '' };
     if (t && t.cod === 'D') return { k: 'descanso', txt: 'Descanso', kind: 'muted', turno: 'Descanso' };
     return { k: 'sin', txt: 'Sin turno hoy', kind: 'muted', turno: '' };
   }
@@ -266,6 +285,7 @@
     CORTE: CORTE, meses: meses, movsPorDia: movsPorDia, porMeses: porMeses,
     addYmd: addYmd, dow: dow, lunes: lunes, toMin: toMin, festivos: festivos, festivo: festivo, domOFest: domOFest, pascua: pascua,
     clasificar: clasificar, indexarSemanas: indexarSemanas, turnoDe: turnoDe, rangoTurno: rangoTurno, horasTurno: horasTurno,
+    horasExtra: horasExtra, durTxt: durTxt, hmMas: hmMas, extraTxt: extraTxt, turnoTxt: turnoTxt,
     agrupar: agrupar, movsDe: movsDe, intervalos: intervalos, compendio: compendio, estadoAhora: estadoAhora, clave: clave
   };
 })();
