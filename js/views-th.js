@@ -43,6 +43,21 @@
   function enAmbito(p) { return p.Tipo === 'Personal propio' || !!p.JefeId; }
   function conAviso(l, de) { if (de && de.avisoLegado) l.avisoLegado = true; return l; }
   var D = {
+    // Todas las personas habilitadas, para registrar permisos y novedades de asistencia de todo el personal. Si las reglas
+    // de Firebase aún no lo permiten, se usa el personal del ámbito y se avisa.
+    todos: async function () {
+      var l;
+      try {
+        l = AP.Session.rol === 'Talento Humano'
+          ? await AP.B.consulta('AP_Personas', [['Estado', '==', 'Habilitado']], { exclude: ['Observaciones'] })
+          : await AP.B.listAll('AP_Personas', { exclude: ['Foto', 'Observaciones'] });
+      } catch (e) {
+        if (!(e && (e.status === 403 || e.code === 'permission-denied'))) throw e;
+        l = await D.personal();
+        AP.toast('Por ahora solo aparece el personal propio y el que tiene jefe inmediato: falta publicar las reglas nuevas de Firebase para registrar a todo el personal.', 'warn', 9000);
+      }
+      return l.filter(function (p) { return p.Estado === 'Habilitado'; }).sort(porNombre);
+    },
     personal: async function () {
       var l;
       if (completo()) l = (await AP.B.listAll('AP_Personas', { exclude: ['Foto', 'Observaciones'] })).filter(enAmbito);
@@ -250,7 +265,7 @@
           ['Tipo', function (p) { return p.Tipo; }],
           ['Vigencia', function (p) { return AP.CAT.permisosSinFin.indexOf(p.Tipo) >= 0 ? 'Desde ' + U.fDateTime(p.Desde) + ' (sin hora final)' : U.fDateTime(p.Desde) + ' → ' + U.fDateTime(p.Hasta); }],
           ['Autoriza', function (p) { return p.Estado === 'Por autorizar' ? 'Solicita: ' + (p.SolicitadoPorNombre || p._createdBy || '') : p.AutorizadoPor; }],
-          ['Motivo', function (p) { return p.Motivo ? h('div', null, p.Motivo, p.Remunerado ? h('small', { class: 'block muted' }, p.Remunerado) : null) : ''; }],
+          ['Motivo', function (p) { return p.Motivo ? h('div', null, p.Motivo, p.Remunerado ? h('small', { class: 'block muted' }, p.Remunerado) : null, p.SolicitudEmpleador ? h('small', { class: 'block muted' }, 'Lo solicita: ' + p.SolicitudEmpleador) : null) : ''; }],
           ['Registró', function (p) { return h('small', { class: 'muted' }, p._createdBy || ''); }],
           ['Estado', function (p) { var e = estadoDe(p); return h('div', null, AP.pill(e, KIND[e]), (p.MotivoAnulacion || p.MotivoDecision) ? h('small', { class: 'block muted' }, p.MotivoAnulacion || p.MotivoDecision) : null); }],
           ['', function (p) { return p.Estado === 'Por autorizar' && AP.puedeDecidirPermiso() ? h('button', { class: 'btn small primary', type: 'button', onclick: async function () { if (await AP.decidirPermiso(p)) cargar(); } }, 'Decidir') : ED && AP.permisoActivo(p) && new Date(p.Hasta).getTime() >= Date.now() ? h('button', { class: 'btn small danger-outline', type: 'button', onclick: function () { anular(p); } }, 'Anular') : null; }]
@@ -267,9 +282,10 @@
         } catch (e) { out.replaceChildren(errBox(e)); }
       }
       async function registrar() {
-        try { if (!per.length) per = await D.personal(); } catch (e) { return AP.toast(e.message, 'error'); }
-        var hab = per.filter(function (p) { return p.Estado === 'Habilitado'; });
-        var r = await AP.crearPermiso({ th: AP.Session.rol === 'Talento Humano', personas: hab, todas: AP.Session.can('editar') ? undefined : hab });
+        // Todo el personal registrado: el de contratistas y demás terceros queda como autorización de acceso pedida por su empleador
+        var hab;
+        try { hab = await D.todos(); } catch (e) { return AP.toast(e.message, 'error'); }
+        var r = await AP.crearPermiso({ th: AP.Session.rol === 'Talento Humano', terceros: true, personas: hab, todas: AP.Session.can('editar') ? undefined : hab });
         if (r) cargar();
       }
       function anular(p) {
@@ -459,33 +475,46 @@
         try { datos = await D.ausencias(120); pintar(); } catch (e) { out.replaceChildren(errBox(e)); }
       }
       async function registrar() {
-        try { if (!personal) personal = (await D.personal()).filter(function (p) { return p.Estado === 'Habilitado'; }); }
+        try { if (!personal) personal = await D.todos(); }
         catch (e) { return AP.toast(e.message, 'error'); }
         AP.modal({ title: 'Registrar ausencia', size: 'wide', body: function (close) {
           var sel = null;
           var buscar = h('input', { type: 'search', placeholder: 'Nombre, documento, cargo o área', autocomplete: 'off' });
           var res = h('div', { class: 'list anf-res' }), vista = h('div', { class: 'stack sm' });
+          // Personal de contratistas y demás terceros: Avo Pak no le concede vacaciones ni licencias; solo registra la novedad
+          // que informa su empleador (no asiste), para el control de acceso
+          function esTercero(p) { return p && p.Tipo !== 'Personal propio'; }
+          function pintarTipo() {
+            var t = esTercero(sel), v = tipo.value;
+            tipo.replaceChildren.apply(tipo, (t ? [AP.CAT.ausenciaTercero] : AP.CAT.tiposAusencia.filter(function (x) { return x !== AP.CAT.ausenciaTercero; })).map(function (x) { return h('option', { value: x }, x); }));
+            tipo.value = t ? AP.CAT.ausenciaTercero : (v && v !== AP.CAT.ausenciaTercero ? v : 'Vacaciones');
+            avisoTercero.style.display = t ? '' : 'none';
+            det.placeholder = t ? 'Obligatorio: empresa empleadora y quién informó la novedad (p. ej., Seguridad XYZ Ltda., supervisor Juan Pérez)' : 'Opcional: número de solicitud o referencia interna. Sin diagnósticos ni datos de salud.';
+          }
           function pintarSel() {
-            if (sel) vista.replaceChildren(h('div', { class: 'sel-persona' }, AP.icon('user', 22), h('div', null, h('strong', null, sel.Title), h('small', { class: 'block muted' }, [sel.NumDoc, sel.TipoPersonal, sel.Cargo, sel.Area].filter(Boolean).join(' · '))),
+            if (typeof tipo !== 'undefined' && tipo) pintarTipo();
+            if (sel) vista.replaceChildren(h('div', { class: 'sel-persona' }, AP.icon('user', 22), h('div', null, h('strong', null, sel.Title), h('small', { class: 'block muted' }, [sel.NumDoc, esTercero(sel) ? (sel.Tipo || 'Tercero') + (sel.Empresa ? ' de ' + sel.Empresa : '') : sel.TipoPersonal, sel.Cargo, sel.Area].filter(Boolean).join(' · '))),
               h('button', { class: 'btn small', type: 'button', onclick: function () { sel = null; buscar.value = ''; res.replaceChildren(); pintarSel(); } }, 'Cambiar')));
             else vista.replaceChildren(buscar, res);
           }
           buscar.addEventListener('input', U.debounce(function () {
             var t = U.fold(buscar.value), d = U.normDoc(buscar.value);
             if (t.length < 2) { res.replaceChildren(); return; }
-            var l = personal.filter(function (p) { return U.fold([p.Title, p.Cargo, p.Area].join(' ')).indexOf(t) >= 0 || (d.length >= 3 && U.normDoc(p.NumDoc).indexOf(d) >= 0); }).slice(0, 8);
+            var l = personal.filter(function (p) { return U.fold([p.Title, p.Cargo, p.Area, p.Empresa].join(' ')).indexOf(t) >= 0 || (d.length >= 3 && U.normDoc(p.NumDoc).indexOf(d) >= 0); }).slice(0, 8);
             res.replaceChildren.apply(res, l.length ? l.map(function (p) {
               return h('button', { class: 'list-item', type: 'button', onclick: function () { sel = p; pintarSel(); } }, AP.icon('user', 20),
-                h('div', null, h('strong', null, p.Title), h('small', null, [p.NumDoc, p.TipoPersonal, p.Cargo, p.Area].filter(Boolean).join(' · '))));
-            }) : [h('p', { class: 'muted small' }, 'No aparece en el personal habilitado (personal propio o con jefe inmediato).')]);
+                h('div', null, h('strong', null, p.Title), h('small', null, [p.NumDoc, esTercero(p) ? (p.Tipo || 'Tercero') + (p.Empresa ? ' de ' + p.Empresa : '') : p.TipoPersonal, p.Cargo, p.Area].filter(Boolean).join(' · '))));
+            }) : [h('p', { class: 'muted small' }, 'No aparece entre las personas habilitadas.')]);
           }, 200));
-          pintarSel();
-          var tipo = AP.select('Tipo', AP.CAT.tiposAusencia, 'Vacaciones');
+          var tipo = AP.select('Tipo', AP.CAT.tiposAusencia.filter(function (x) { return x !== AP.CAT.ausenciaTercero; }), 'Vacaciones');
           var desde = AP.input('Desde', U.ymd(), { type: 'date' }), hasta = AP.input('Hasta', U.ymd(), { type: 'date' });
           var det = AP.textarea('Detalle', '', { rows: 2, placeholder: 'Opcional: número de solicitud o referencia interna. Sin diagnósticos ni datos de salud.' });
+          var avisoTercero = h('div', { class: 'banner info span2', style: { display: 'none' } }, AP.icon('building', 18), h('span', null, 'Esta persona no es trabajadora de Avo Pak: no se le registran vacaciones ni licencias (las concede su empleador). Se registra solo la novedad que informa su empleador, para que la portería sepa que no asiste (art. 23 del Código Sustantivo del Trabajo: evita indicios de subordinación).'));
+          pintarSel();
           var btn = h('button', { class: 'btn primary', type: 'button', onclick: async function () {
             if (!sel) return AP.toast('Elija a la persona.', 'warn');
             if (!desde.value || !hasta.value || hasta.value < desde.value) return AP.toast('Revise las fechas: «hasta» no puede ser anterior a «desde».', 'warn');
+            if (esTercero(sel) && det.value.trim().length < 6) return AP.toast('Escriba la empresa empleadora y quién informó la novedad.', 'warn');
             if (RE_SALUD.test(det.value)) return AP.toast('El detalle parece contener información de salud (dato sensible, art. 5 Ley 1581 de 2012). Use «Ausencia justificada (reservada)» sin describir la causa.', 'warn', 9000);
             var cruce = datos.find(function (a) { return a.Token === sel.Token && a.Estado !== 'Anulada' && U.ymd(a.Desde) <= hasta.value && U.ymd(a.Hasta) >= desde.value; });
             if (cruce && !(await AP.confirm('Ausencia que se cruza', sel.Title + ' ya tiene registrada «' + cruce.Tipo + '» del ' + U.fDate(cruce.Desde) + ' al ' + U.fDate(cruce.Hasta) + '. ¿Registrar de todas formas?', 'Registrar'))) return;
@@ -505,7 +534,7 @@
           } }, AP.icon('check', 18), 'Registrar ausencia');
           return h('div', { class: 'stack' },
             AP.field('Persona *', vista),
-            h('div', { class: 'form-grid' }, AP.field('Tipo *', tipo, null, 'span2'), AP.field('Desde *', desde), AP.field('Hasta (inclusive) *', hasta), AP.field('Detalle', det, null, 'span2')),
+            h('div', { class: 'form-grid' }, avisoTercero, AP.field('Tipo *', tipo, null, 'span2'), AP.field('Desde *', desde), AP.field('Hasta (inclusive) *', hasta), AP.field('Detalle', det, null, 'span2')),
             h('p', { class: 'note small' }, 'En esas fechas la portería no deja ingresar a la persona sin aprobación del Director de Seguridad Integral (al vigilante solo se le muestra «ausencia registrada», sin el tipo). ' +
               'Incapacidades, licencias de maternidad o paternidad y demás asuntos de salud: registre «Ausencia justificada (reservada)», sin diagnóstico; el soporte se conserva en Talento Humano (dato sensible, art. 5 Ley 1581 de 2012).'),
             h('div', { class: 'row gap wrap end' }, h('button', { class: 'btn', type: 'button', onclick: function () { close(); } }, 'Cancelar'), btn));
@@ -529,7 +558,7 @@
         } });
       }
       box.replaceChildren(
-        h('div', { class: 'banner info' }, AP.icon('calendar', 18), h('span', null, 'Vacaciones, permisos de día completo, licencias y demás ausencias del personal propio y de las personas con jefe inmediato asignado. En esas fechas no se permite el ingreso: si la persona llega, el vigilante envía la solicitud al Director de Seguridad Integral, que verifica y aprueba o rechaza. ' +
+        h('div', { class: 'banner info' }, AP.icon('calendar', 18), h('span', null, 'Vacaciones, permisos de día completo, licencias y demás ausencias de todo el personal propio; del personal de contratistas y demás terceros, solo la novedad «no asiste» que informa su empleador. En esas fechas no se permite el ingreso: si la persona llega, el vigilante envía la solicitud al Director de Seguridad Integral, que verifica y aprueba o rechaza. ' +
           'Una ausencia no se borra: se anula con motivo y queda en el registro de cambios.')),
         h('div', { class: 'filters' }, fEst, fTipo, q, AP.btnExcel(function () {
           var l = filtradas();

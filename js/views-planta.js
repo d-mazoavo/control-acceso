@@ -1424,7 +1424,7 @@
           ['Tipo', function (p) { return p.Tipo; }],
           ['Vigencia', function (p) { return AP.CAT.permisosSinFin.indexOf(p.Tipo) >= 0 ? 'Desde ' + U.fDateTime(p.Desde) + ' (sin hora final)' : U.fDateTime(p.Desde) + ' → ' + U.fDateTime(p.Hasta); }],
           ['Autoriza', function (p) { return p.Estado === 'Por autorizar' ? 'Pendiente de Recursos Humanos' : p.DecididoPorNombre || p.AutorizadoPor; }],
-          ['Motivo', function (p) { return p.Motivo ? h('div', null, p.Motivo, p.Remunerado ? h('small', { class: 'block muted' }, p.Remunerado) : null) : ''; }],
+          ['Motivo', function (p) { return p.Motivo ? h('div', null, p.Motivo, p.Remunerado ? h('small', { class: 'block muted' }, p.Remunerado) : null, p.SolicitudEmpleador ? h('small', { class: 'block muted' }, 'Lo solicita: ' + p.SolicitudEmpleador) : null) : ''; }],
           ['Detalle', function (p) { return p.Detalle; }],
           ['Estado', function (p) { var e = estadoDe(p); return h('div', null, AP.pill(e, KIND[e]), (p.MotivoAnulacion || p.MotivoDecision) ? h('small', { class: 'block muted' }, p.MotivoAnulacion || p.MotivoDecision) : null); }],
           ['', function (p) { return ED && (AP.permisoActivo(p) || p.Estado === 'Por autorizar') && new Date(p.Hasta).getTime() >= Date.now() ? h('button', { class: 'btn small danger-outline', type: 'button', onclick: function () { anular(p); } }, p.Estado === 'Por autorizar' ? 'Cancelar solicitud' : 'Anular') : null; }]

@@ -137,7 +137,9 @@
         ['Mes', 'text', IDX], ['AmbitoTH', 'bool', IDX],
         // Motivo del permiso (catálogo legal), clase de remuneración, soporte y decisión de Recursos Humanos
         ['Motivo', 'text'], ['Remunerado', 'text'], ['BaseLegal', 'text'], ['Soporte', 'text'], ['SolicitadoPor', 'text'], ['SolicitadoPorNombre', 'text'],
-        ['DecididoPor', 'text'], ['DecididoPorNombre', 'text'], ['FechaDecision', 'datetime'], ['MotivoDecision', 'text'], ['AusenciaId', 'text']
+        ['DecididoPor', 'text'], ['DecididoPorNombre', 'text'], ['FechaDecision', 'datetime'], ['MotivoDecision', 'text'], ['AusenciaId', 'text'],
+        // Personal de contratistas: empresa empleadora y persona que pidió la autorización de acceso (no es permiso laboral)
+        ['SolicitudEmpleador', 'text']
       ]
     },
     AP_Solicitudes: {
@@ -249,7 +251,11 @@
     // Ausencias que registra Talento Humano. Incapacidades, licencias de maternidad o paternidad y demás asuntos de salud se
     // registran como «Ausencia justificada (reservada)», sin diagnóstico (dato sensible, art. 5 Ley 1581 de 2012).
     tiposAusencia: ['Vacaciones', 'Permiso remunerado (día completo)', 'Permiso no remunerado (día completo)', 'Licencia (luto, calamidad u otra legal)',
-      'Ausencia justificada (reservada)', 'Suspensión', 'Otra'],
+      'Ausencia justificada (reservada)', 'Suspensión', 'Otra', 'No asiste (novedad informada por su empleador)'],
+    // Personal que no es de Avo Pak (contratistas, conductores y demás): Avo Pak no le concede permisos laborales ni vacaciones;
+    // solo registra lo que informa su empleador para el control de acceso (evita indicios de subordinación, art. 23 CST)
+    ausenciaTercero: 'No asiste (novedad informada por su empleador)',
+    motivoAccesoTercero: 'Autorización de acceso solicitada por su empleador',
     rolesPin: ['Vigilante', 'Supervisor', 'Rondero'],
     motivosBaja: ['Retiro del servicio informado por el contratista', 'Cambio de puesto o rotación informado por el contratista',
       'Terminación del contrato de vigilancia', 'Retiro o cambio de cargo del trabajador de Avo Pak', 'Credencial comprometida (PIN conocido por terceros)', 'Otro'],
