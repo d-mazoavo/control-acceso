@@ -294,7 +294,7 @@
         var fig = h('figure', null, h('div', { class: 'ph' }, 'Cargando…'), h('figcaption', null, f.etiqueta || 'Fotografía'));
         gal.appendChild(fig);
         AP.B.fileUrl(f.ruta).then(function (u) {
-          if (!u) { fig.firstChild.textContent = 'No disponible'; return; }
+          if (!u) { fig.firstChild.textContent = /^AP_Rondas\//.test(f.ruta || '') ? 'Ya no está en la nube: búsquela en el archivo fotográfico del mes' : 'No disponible'; return; }
           fig.replaceChild(h('a', { href: u, target: '_blank', rel: 'noopener' }, h('img', { src: u, alt: f.etiqueta || 'Fotografía de los elementos' })), fig.firstChild);
         }).catch(function () { fig.firstChild.textContent = 'No disponible'; });
       });

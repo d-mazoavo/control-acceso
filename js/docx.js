@@ -178,7 +178,7 @@
     this.media.forEach(function (m) { files.push({ name: 'word/' + m.archivo, data: m.bytes }); });
     return zip(files, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
   };
-  AP.Docx = { Doc: Doc, run: run, par: par, tabla: tabla, campo: campo, x: x, ANCHO: ANCHO, VERDE: VERDE, GRIS: GRIS };
+  AP.Docx = { Doc: Doc, run: run, par: par, tabla: tabla, campo: campo, x: x, zip: zip, ANCHO: ANCHO, VERDE: VERDE, GRIS: GRIS };
 
   // ---------------- Informe de inspección de vehículo de carga ----------------
   function jsonDe(s) { try { var a = JSON.parse(s || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }

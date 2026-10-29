@@ -35,7 +35,7 @@
   Session.soloModulo = function () { return Session.rol === 'Jefe de Producción' || Session.rol === 'Talento Humano'; };
   // Pantalla de inicio de cada perfil
   Session.inicio = function () {
-    if (Session.can('rondas') && !Session.can('porteria')) return '/rondas';
+    if (Session.rol === 'Rondero') return '/rondas';
     if (Session.rol === 'Jefe de Producción') return '/consola/planta';
     if (Session.rol === 'Talento Humano') return '/consola/th';
     if (Session.can('consola') && (!Session.can('porteria') || !U.isMobile())) return '/consola/panel';
@@ -75,7 +75,7 @@
     if (Session.dispositivo && !Session.turno) return AP.Views.pin();
     var path = r.path;
     // El rondero solo usa las pantallas de rondas (y el manual de uso)
-    if (Session.can('rondas') && !Session.can('porteria') && path.indexOf('/ronda') !== 0 && path !== '/manual-uso') path = '/rondas';
+    if (Session.rol === 'Rondero' && path.indexOf('/ronda') !== 0 && path !== '/manual-uso') path = '/rondas';
     // Las pantallas de portería son solo para quienes operan la portería
     if (!Session.can('porteria') && !Session.can('historial') && path.indexOf('/consola') !== 0 && path.indexOf('/ronda') !== 0 && ['/manual-uso', '/imprimir', '/imprimir-puntos'].indexOf(path) < 0) path = Session.inicio();
     if (path === '/' || path === '' || path === '/instalar') path = Session.inicio();
@@ -144,6 +144,8 @@
     ['/consola/novedades', 'alert', 'Novedades', 'ver'],
     ['/consola/elementos', 'package', 'Elementos', 'ver'],
     ['/consola/rondas', 'route', 'Rondas', 'ver'],
+    ['/rondas', 'qr', 'Pasar ronda', 'rondas'],
+    ['/consola/informe-mensual', 'file', 'Informe mensual', 'admin'],
     ['/consola/programacion', 'calendar', 'Programación', 'ver'],
     ['/consola/bitacora', 'file', 'Bitácora', 'ver'],
     ['/consola/instalacion', 'settings', 'Instalación', 'admin'],
@@ -256,6 +258,7 @@
       }
       var errs = AP.Sync.outbox.filter(function (o) { return o.error; }).length;
       if (errs) box.appendChild(h('div', { class: 'banner deny' }, AP.icon('alert', 18), h('span', null, errs + ' registro(s) no se han podido enviar. Revise "Mi turno" o avise al supervisor.')));
+      if (consola && AP.InformeMensual) { var av = AP.InformeMensual.aviso(); if (av) box.appendChild(av); }
       if (s.skew != null && Math.abs(s.skew) > 180) {
         box.appendChild(h('div', { class: 'banner warn' }, AP.icon('clock', 18), h('span', null, 'La hora del celular difiere ' + Math.round(Math.abs(s.skew) / 60) + ' min de la hora del servidor. Ajuste la fecha y hora automáticas.')));
       }

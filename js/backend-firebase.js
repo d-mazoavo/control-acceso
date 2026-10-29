@@ -605,6 +605,28 @@
       return { bytes: arr, type: d.Tipo || 'image/jpeg' };
     },
 
+    // Libera de la base de datos una fotografía de ronda ya archivada por el Director (el registro conserva su huella SHA-256).
+    // Requiere la regla de borrado de AP_Archivos (solo Administrador y solo fotografías de rondas).
+    borrarArchivo: async function (relPath) {
+      if (!/^AP_Rondas\//.test(relPath)) throw err('api', 'Solo se pueden liberar fotografías de rondas.');
+      await op(function () { return db.collection('AP_Archivos').doc(relPath.replace(/\//g, '|')).delete(); });
+    },
+    // Firma escaneada del usuario para los informes: archivo con nombre no adivinable y ruta guardada en su ficha
+    guardarFirma: async function (blob) {
+      if (!cuenta) throw err('authRequired', 'Debe iniciar sesión.');
+      var ruta = 'Firmas/' + U.uuid() + (/png/.test(blob.type) ? '.png' : '.jpg');
+      await FB.upload(ruta, blob);
+      await FB.update('AP_Vigilantes', cuenta.vigilanteId, { FirmaRuta: ruta });
+      perfil = Object.assign({}, perfil, { FirmaRuta: ruta });
+      await guardarSesion();
+      if (AP.Session && AP.Session.user) AP.Session.user.perfil = perfil;
+      return ruta;
+    },
+    miFirma: async function () {
+      var r = perfil && perfil.FirmaRuta;
+      return r ? FB.fileData(r) : null;
+    },
+
     // Sin servidor de correo: se comparte la imagen (WhatsApp, correo del celular) o se descarga y se abre el correo.
     sendMail: async function (msg) {
       var texto = String(msg.html || '').replace(/<br\s*\/?>/gi, '\n').replace(/<\/(p|tr|div|table)>/gi, '\n').replace(/<[^>]+>/g, ' ')

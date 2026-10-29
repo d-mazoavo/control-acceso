@@ -613,3 +613,24 @@ details.card > summary { margin: -2px 0; }
 .ficha-ro .kv-grid { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
 @media (max-width: 700px) { .ficha-ro .kv-grid { grid-template-columns: 1fr; } }
 .chk-dias { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+
+/* Cámara en vivo para fotografías de evidencia (rondas y novedades): sin galería */
+body.cam-abierta { overflow: hidden; }
+.cam-page { position: fixed; inset: 0; z-index: 85; background: #000; color: #fff; overflow: hidden; }
+.cam-video, .cam-preview { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; }
+.cam-msg { background: rgba(0,0,0,.6); padding: 8px 14px; border-radius: 12px; text-align: center; max-width: 520px; }
+.cam-msg.err { background: var(--solid-deny); }
+.cam-shutter { width: 76px; height: 76px; border-radius: 50%; border: 5px solid #fff; background: rgba(255,255,255,.28); cursor: pointer; }
+.cam-shutter:active { background: rgba(255,255,255,.6); }
+.cam-shutter:disabled { opacity: .4; }
+.icon-btn.light.on { background: #f5c400; color: #000; }
+.foto-lugar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.foto-lugar img { width: 132px; height: 99px; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); background: #000; }
+.foto-lugar.falta { border: 2px dashed var(--warn); border-radius: 12px; padding: 12px; }
+.scan-cta.alt { background: var(--card); color: var(--ink); border: 2px solid var(--warn); }
+.scan-cta.alt .scan-ico { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
+.firma-prev { max-width: 260px; max-height: 110px; background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 6px; }
+.graf-img { width: 100%; height: auto; display: block; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+.medidor { height: 14px; border-radius: 999px; background: var(--line); overflow: hidden; }
+.medidor span { display: block; height: 100%; background: var(--brand); border-radius: 999px; }
+.medidor.warn span { background: var(--warn); } .medidor.deny span { background: var(--deny); }

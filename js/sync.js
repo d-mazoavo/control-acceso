@@ -197,7 +197,7 @@
           it.uploaded[ph.name] = done;
           await AP.Store.outboxPut(it);
         }
-        fotos.push({ nombre: ph.name, etiqueta: ph.label, ruta: done.path, sha256: ph.sha256 });
+        fotos.push({ nombre: ph.name, etiqueta: ph.label, ruta: done.path, sha256: ph.sha256, bytes: ph.bytes || (ph.data && ph.data.byteLength) || 0, tipo: ph.tipo || '' });
       }
       if (fotos.length) f.Fotos = JSON.stringify(fotos);
       if (it.attempts > 0) {
@@ -243,7 +243,7 @@
       var B = AP.B, S = AP.Store;
       var errs = {};
       // El rondero solo necesita los puntos de control y su propio perfil (minimización de datos, Ley 1581 de 2012)
-      if (AP.Session.can('rondas') && !AP.Session.can('porteria')) {
+      if (AP.Session.rol === 'Rondero') {
         try {
           var pts = await B.listAll('AP_PuntosRonda');
           Sync.puntos = pts; await S.set('c:puntos', pts);
@@ -341,6 +341,12 @@
         Sync.planta = r3[0]; Sync.turnosPlanta = r3[1]; Sync.ausencias = r3[2];
         await S.set('c:planta', Sync.planta); await S.set('c:turnosPlanta', Sync.turnosPlanta); await S.set('c:ausencias', Sync.ausencias);
       } catch (e) { if (e.offline || e.authRequired) throw e; console.warn('[AP] Planta y ausencias:', e.message); }
+
+      // Puntos de control: también los descargan el Director, el Analista y el Supervisor, que pueden pasar ronda
+      if (AP.Session.can('rondas')) {
+        try { var ptsR = await B.listAll('AP_PuntosRonda'); Sync.puntos = ptsR; await S.set('c:puntos', ptsR); }
+        catch (e) { if (e.offline || e.authRequired) throw e; console.warn('[AP] Puntos de ronda:', e.message); }
+      }
 
       Sync.reindex();
       Sync.state.pullErrors = errs;

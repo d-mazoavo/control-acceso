@@ -114,7 +114,7 @@
     if (!t) { AP.render(); return; }
     var r = AP.Pin.resumenTurno(t);
     // Rondero: el cierre muestra y deja constancia del cumplimiento de la ronda del turno
-    var ronda = AP.Session.can('rondas') && !AP.Session.can('porteria') && AP.Rondas && AP.Rondas.resumenTurno ? await AP.Rondas.resumenTurno(t) : null;
+    var ronda = AP.Session.rol === 'Rondero' && AP.Rondas && AP.Rondas.resumenTurno ? await AP.Rondas.resumenTurno(t) : null;
     var ok = await new Promise(function (res) {
       AP.modal({
         title: 'Cerrar turno',

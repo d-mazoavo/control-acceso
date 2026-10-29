@@ -1,34 +1,36 @@
 AVO PAK S.A.S. — CONTROL DE ACCESO
-Ajuste del 28 de octubre de 2026 (etiqueta de caché b10). La versión de la aplicación sigue siendo 1.0.0. Manual de uso: revisión 07.
-No cambian las reglas de Firebase: no hay que publicar nada en la consola.
+Ajuste del 28 de octubre de 2026 (etiqueta de caché b11). La versión de la aplicación sigue siendo 1.0.0. Manual de uso: revisión 08.
+Hay UNA regla nueva de Firebase (solo para liberar espacio de fotos): se publica una vez en la consola (ver al final).
 
 QUÉ CAMBIA
-1. Turnos y asignación: arriba se elige el periodo (por defecto, esta y la próxima semana). Cada turno muestra cuántas personas
-   tiene hoy y en el periodo; al oprimir «N personas» aparece abajo la lista de quienes están en ese turno, con los días, las
-   horas y las horas extra. La lista se filtra por turno, área, cargo y texto (también «Sin turno en el periodo» y «Con horas
-   extra») y se descarga en Excel. Marcando personas se les asignan horas extra, se cambian de turno o se quitan del turno.
-2. Asignar personas: la lista indica lo que cada persona ya tiene programado en las fechas elegidas («Ya en T6 todos esos días»,
-   «Sin turno», otro turno o descanso) y se puede filtrar. Hay fechas rápidas (resto de esta semana, próxima semana, próximas
-   2 o 4 semanas). Antes, la asignación quedaba por defecto en la semana siguiente y no se veía en la semana actual ni en
-   «Personas hoy»: por eso parecía que no se había guardado.
-3. Horas extra: se asignan al turno programado del día, antes de la entrada, después de la salida o ambas, con motivo
-   obligatorio. Límite de referencia: 2 horas diarias y 12 semanales (art. 167A del Código Sustantivo del Trabajo). El jefe no
-   puede superarlo; el Director solo confirmándolo, y queda señalado en el registro de cambios. La portería amplía el horario
-   de ingreso y de permanencia; la llegada tarde se mide contra la entrada del turno y la salida se autoriza desde la salida
-   del turno. Talento Humano las ve en «Programación de turnos» y en «Horas según portería», y salen en los Excel.
-4. Programación semanal: se abre en consulta (un clic ya no pinta por accidente). Al oprimir una casilla se cambia el turno de
-   ese día o se le asignan horas extra; «Ajustar a mano» activa el pincel para cambiar muchas casillas. Filtro por turno,
-   resumen de quién tiene turno y quién no, columna de horas extra y aviso cuando la semana está vacía, con un botón para ir a
-   la semana programada más próxima.
-5. Planta del Director: al abrir «Planta», el Director (y Gobierno Corporativo) ve el estado de todo el personal, de todos los
-   jefes juntos: tarjetas (en planta, no han llegado, ya salieron…), tabla con el jefe inmediato de cada persona, filtro por
-   jefe y Excel. Estadísticas y registro de cambios también de todos los grupos. Para programar turnos, horarios y permisos
-   se elige arriba el grupo de un jefe. En Talento Humano, «Estado en planta» también muestra y filtra por jefe inmediato.
+1. Rondas con foto obligatoria del lugar: al leer el QR del punto se abre la cámara de la aplicación; sin la foto no se registra
+   la marcación. La foto se toma en el momento (no hay forma de elegir una imagen de la galería ni de leer el QR desde una foto
+   guardada), lleva impresos la fecha, la hora, el lugar y el usuario, se comprime y su huella SHA-256 queda en el registro.
+   «Sin QR» también exige la foto. Botón de linterna en los celulares que lo permiten.
+2. «Reportar novedad»: botón aparte del QR para reportar lo que se encuentre en cualquier lugar (lugar escrito, tipo,
+   descripción y al menos una foto tomada en el momento).
+3. También pasan ronda el Director, el Analista («Pasar ronda» en el menú de la consola) y el Supervisor («Pasar ronda» en la
+   portería). El rondero y el supervisor llevan la ronda por turno; el Director y el Analista, por día.
+4. Consola › Rondas › «Novedades y verificación»: el Director registra la verificación de cada novedad (fecha, resultado, lo
+   que constató y acciones) sin modificar el registro de quien reportó, y genera el informe de la novedad en PDF o Word, en
+   español o en inglés, dirigido a la Asamblea General de Accionistas y a la Gerencia General, con su firma escaneada.
+5. Consola › «Informe mensual» (solo el Director): informe de seguridad del mes con indicadores y gráficas de ingresos, rondas
+   y novedades con su verificación, resumen y conclusiones con borrador automático y recomendaciones; Word o PDF, español o
+   inglés, con la firma escaneada (se carga una vez en esa pantalla). Desde el último día de cada mes el panel lo recuerda.
+6. Consola › Rondas › «Fotografías y espacio»: espacio aproximado de las fotos, archivo fotográfico mensual en ZIP (fotos,
+   índice con la huella SHA-256 verificada y LEEME) y «Liberar espacio de ese mes», que borra de la nube solo las fotos de
+   marcaciones sin novedad de un mes ya archivado. Los registros, las huellas y las fotos de novedades se conservan.
 
 ARCHIVOS QUE CAMBIAN
-index.html, sw.js, LEEME-ACTUALIZACION.txt, css/app.css y, en la carpeta js: jornada.js, horarios.js, views-planta.js,
-views-th.js, views-manual.js, manual.js e i18n-en.js. Ya están publicados en GitHub: no hay que subir nada.
+index.html, sw.js, LEEME-ACTUALIZACION.txt, css/app.css y, en la carpeta js: camara.js, graficas.js, informes.js y
+views-informes.js (nuevos), vendor/jspdf.umd.min.js (nuevo), views-rondas.js, views-porteria.js, app.js, sync.js, schema.js,
+backend-firebase.js, docx.js, ui.js, views-turno.js, manual.js e i18n-en.js. Ya están publicados en GitHub: no hay que subir nada.
 
 ACTUALIZAR LA APLICACIÓN EN CADA EQUIPO
 - Computador: abra https://d-mazoavo.github.io/control-acceso/ y oprima Ctrl+F5 (o Ctrl+Mayús+R).
-- Celulares: cierre la aplicación por completo y ábrala de nuevo.
+- Celulares: cierre la aplicación por completo y ábrala de nuevo. La primera vez que tome una foto, el celular pide permiso
+  para usar la cámara: oprima «Permitir».
+
+REGLA NUEVA DE FIREBASE (una sola vez; solo hace falta para «Liberar espacio»)
+El archivo de reglas no se sube a GitHub. El Director lo recibe aparte y lo publica en: consola de Firebase › Firestore
+Database › pestaña «Reglas» › borrar todo › pegar el archivo completo › «Publicar». Todo lo demás funciona sin este paso.
