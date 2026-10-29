@@ -116,6 +116,7 @@
         lista.replaceChildren(AP.empty('pin', 'No hay puntos de control', AP.Sync.state.lastPull ? 'El Director de Seguridad Integral aún no ha registrado puntos de ronda.' : 'Conéctese a internet para descargar los puntos de control.'));
         return;
       }
+      if (!rondero) return pintarSupervision(pts, hechas);
       var c = cumplimiento(pts, hechas), T = c.tot;
       var kind = T.pct >= 100 ? 'ok' : T.pct >= 70 ? 'warn' : 'deny';
       var kpi = function (n, l, k) { return h('div', { class: 'kpi ' + (k || '') }, h('strong', null, String(n)), h('span', null, l)); };
@@ -142,6 +143,27 @@
             h('small', null, [p.Ubicacion, meta].filter(Boolean).join(' · ')),
             h('small', null, u ? 'Última: ' + U.fTime(u.FechaHora) + (u.Novedad ? ' · con novedad' : '') + (!f.completo && !f.disponible ? ' · la próxima cuenta desde las ' + U.fTime(f.proxima) + ' (faltan ' + fmtMin(Math.ceil((f.proxima - ahora) / 60000)) + ')' : '') : 'Sin revistar en este turno')),
           h('div', { class: 'stack xs end' }, estado,
+            h('a', { class: 'btn small ghost', href: '#/ronda-punto?id=' + encodeURIComponent(p.id) + '&manual=1', title: 'Úselo solo si el código QR del punto está dañado o no se puede leer' }, 'Sin QR')));
+      })));
+    }
+    // Director, Analista y Supervisor: revistas de supervisión, sin metas ni cumplimiento (el cumplimiento es del rondero)
+    function pintarSupervision(pts, hechas) {
+      var nov = hechas.filter(function (x) { return x.Novedad; }).length;
+      resumen.replaceChildren(h('section', { class: 'card stack sm' },
+        h('div', { class: 'row between wrap gap' }, h('h3', null, t ? 'Revistas de supervisión del turno' : 'Revistas de supervisión de hoy'), AP.pill('Sin cumplimiento', 'muted')),
+        h('p', { class: 'muted small' }, 'Sus marcaciones quedan registradas con la foto del lugar, pero no cuentan para el cumplimiento de la ronda: el cumplimiento solo se exige al rondero.'),
+        h('div', { class: 'kpis kpis-sm' },
+          h('div', { class: 'kpi' }, h('strong', null, String(hechas.filter(function (x) { return x.PuntoId; }).length)), h('span', null, 'Puntos revisados')),
+          h('div', { class: 'kpi ' + (nov ? 'warn' : '') }, h('strong', null, String(nov)), h('span', null, 'Novedades reportadas')))));
+      lista.replaceChildren(h('div', { class: 'list' }, pts.map(function (p) {
+        var ms = hechas.filter(function (x) { return x.PuntoId === p.id; }).sort(function (a, b) { return a.FechaHora < b.FechaHora ? -1 : 1; });
+        var u = ms[ms.length - 1];
+        return h('div', { class: 'list-item static ronda-pt' + (u ? ' ok' : '') },
+          h('span', { class: 'dot ' + (u ? (u.Novedad ? 'warn' : 'ok') : '') }),
+          h('div', null, h('strong', null, (p.Orden ? p.Orden + '. ' : '') + p.Title),
+            h('small', null, p.Ubicacion || ''),
+            h('small', null, u ? 'Revisado a las ' + U.fTime(u.FechaHora) + (ms.length > 1 ? ' (' + ms.length + ' veces)' : '') + (u.Novedad ? ' · con novedad' : '') : 'Sin revisar')),
+          h('div', { class: 'stack xs end' },
             h('a', { class: 'btn small ghost', href: '#/ronda-punto?id=' + encodeURIComponent(p.id) + '&manual=1', title: 'Úselo solo si el código QR del punto está dañado o no se puede leer' }, 'Sin QR')));
       })));
     }
@@ -291,9 +313,9 @@
         var lista = [lugar].concat(nov ? fotos : []);
         var photos = [];
         for (var i = 0; i < lista.length; i++) photos.push(await fotoParaEnvio(lista[i]));
-        // ¿Cuenta para la meta? (intervalo mínimo desde la última revista válida del punto en la ronda)
-        var previas = (await AP.Rondas.locales()).filter(function (x) { return deSesion(x) && x.PuntoId === p.id; });
-        var antes = cumplimiento([p], previas).filas[0];
+        // ¿Cuenta para la meta? (intervalo mínimo desde la última revista válida del punto en la ronda). Solo para el rondero.
+        var previas = esRondero() ? (await AP.Rondas.locales()).filter(function (x) { return deSesion(x) && x.PuntoId === p.id; }) : [];
+        var antes = esRondero() ? cumplimiento([p], previas).filas[0] : null;
         await AP.Sync.enqueue('ronda', f, photos);
         await AP.Rondas.guardarLocal({ IdLocal: f.IdLocal, PuntoId: p.id, Title: p.Title, FechaHora: f.FechaHora, TurnoId: f.TurnoId, Sesion: sesionActual(), Novedad: nov });
         var noCuenta = antes && !antes.completo && antes.proxima && new Date(f.FechaHora) < antes.proxima;
@@ -318,7 +340,8 @@
         h('div', null, h('strong', null, p.Title), h('span', null, manual ? 'Marcación SIN lectura del código QR: queda señalada para revisión del Director.' : 'Código leído. Tome la foto del lugar y registre el estado del punto.'))),
       h('section', { class: 'card stack sm' }, h('h3', null, 'Foto del lugar *'), lugarBox),
       h('section', { class: 'card stack sm' }, kv('Ubicación', p.Ubicacion), kv('Instrucciones', p.Instrucciones), kv('Hora', U.fTime(new Date())),
-        kv('Meta del turno', meta(p).veces > 1 ? meta(p).veces + ' revistas, con ' + fmtMin(meta(p).intervalo) + ' como mínimo entre una y otra' : '1 revista')),
+        esRondero() ? kv('Meta del turno', meta(p).veces > 1 ? meta(p).veces + ' revistas, con ' + fmtMin(meta(p).intervalo) + ' como mínimo entre una y otra' : '1 revista')
+          : kv('Revista', 'De supervisión: no cuenta para el cumplimiento del rondero')),
       manual ? h('section', { class: 'card stack sm' }, AP.field('Justificación *', just)) : null,
       h('section', { class: 'card stack' }, h('h3', null, 'Estado del punto'), estado, novBox),
       h('div', { class: 'actions-sticky' }, h('button', { class: 'btn big block primary', type: 'button', onclick: registrar }, AP.icon('check', 22), 'Registrar marcación')));
@@ -404,13 +427,19 @@
       }) : h('tr', null, h('td', { colspan: cols.length, class: 'center muted' }, 'Sin registros')))));
   }
   function fotosDe(x) { try { var a = JSON.parse(x.Fotos || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+  // Revista de supervisión: la hecha por el Director, el Analista o el Supervisor (no cuenta para el cumplimiento)
+  function esSupervision(x) { return !!x.Rol && x.Rol !== 'Rondero'; }
+  AP.Rondas.esSupervision = esSupervision;
 
   AP.route('/consola/rondas', function (qs) {
-    if (!AP.Session.can('ver')) { AP.go('/'); return; }
-    var ED = AP.Session.can('editar');   // Gobierno Corporativo: solo consulta
+    if (!AP.Session.consulta()) { AP.go('/'); return; }
+    var ED = AP.Session.can('editar');   // Gobierno Corporativo, Analista y Supervisor: solo consulta
     var tab = qs.t || 'cumplimiento';
     var content = h('div', { class: 'stack' });
-    var tabs = h('div', { class: 'tabs' }, [['cumplimiento', 'Cumplimiento por turno'], ['marcaciones', 'Marcaciones'], ['novedades', 'Novedades y verificación'], ['fotos', 'Fotografías y espacio'], ['puntos', 'Puntos de control y metas']].map(function (t) {
+    // «Fotografías y espacio» (archivo y liberación) solo para el Director y Gobierno Corporativo
+    var VER = AP.Session.can('ver');
+    if (tab === 'fotos' && !VER) tab = 'cumplimiento';
+    var tabs = h('div', { class: 'tabs' }, [['cumplimiento', 'Cumplimiento por turno'], ['marcaciones', 'Marcaciones'], ['novedades', 'Novedades y verificación'], VER ? ['fotos', 'Fotografías y espacio'] : null, ['puntos', 'Puntos de control y metas']].filter(Boolean).map(function (t) {
       return h('a', { class: t[0] === tab ? 'on' : '', href: '#/consola/rondas?t=' + t[0] }, t[1]);
     }));
     var box = h('div', { class: 'stack' });
@@ -473,21 +502,12 @@
           var ev = r[0], marcas = r[1], pts = r[2].filter(function (p) { return p.Activo !== false; });
           var cierres = {};
           ev.forEach(function (e) { if (/^(Fin|Cierre)/.test(e.Evento || '')) cierres[e.TurnoId] = e; });
-          var conMarcas = new Set(marcas.map(function (m) { return m.TurnoId; }));
-          turnos = ev.filter(function (e) { return e.Evento === 'Inicio de turno' && (e.Rol === 'Rondero' || conMarcas.has(e.TurnoId)) && e.FechaHora <= new Date(b.getTime() + 59999).toISOString(); }).map(function (e) {
+          // El cumplimiento solo se exige al rondero: las revistas de supervisión (Director, Analista, Supervisor) no se cuentan
+          turnos = ev.filter(function (e) { return e.Evento === 'Inicio de turno' && e.Rol === 'Rondero' && e.FechaHora <= new Date(b.getTime() + 59999).toISOString(); }).map(function (e) {
             var c = cierres[e.TurnoId];
             var ms = marcas.filter(function (m) { return m.TurnoId === e.TurnoId && m.PuntoId; });
-            return { nombre: e.Title + (e.Rol && e.Rol !== 'Rondero' ? ' (' + e.Rol + ')' : ''), usuario: e.VigilanteUsuario, inicio: U.toDate(e.FechaHora), fin: c ? U.toDate(c.FechaHora) : null, abierto: !c, c: cumplimiento(pts, ms) };
-          });
-          // Director y Analista: su ronda se cuenta por día
-          var porDia = {};
-          marcas.filter(function (m) { return !m.TurnoId && m.PuntoId && new Date(m.FechaHora) >= a && new Date(m.FechaHora) <= b; })
-            .forEach(function (m) { var k = U.ymd(m.FechaHora) + '|' + (m.RonderoUsuario || ''); (porDia[k] = porDia[k] || []).push(m); });
-          Object.keys(porDia).forEach(function (k) {
-            var ms = porDia[k].sort(function (x, y) { return x.FechaHora < y.FechaHora ? -1 : 1; });
-            turnos.push({ nombre: ms[0].Rondero + ' (ronda del día' + (ms[0].Rol ? ', ' + (ms[0].Rol === 'Administrador' ? 'Director' : ms[0].Rol) : '') + ')', usuario: ms[0].RonderoUsuario, inicio: U.toDate(ms[0].FechaHora), fin: U.toDate(ms[ms.length - 1].FechaHora), abierto: false, c: cumplimiento(pts, ms) });
-          });
-          turnos.sort(function (x, y) { return x.inicio < y.inicio ? 1 : -1; });
+            return { nombre: e.Title, usuario: e.VigilanteUsuario, inicio: U.toDate(e.FechaHora), fin: c ? U.toDate(c.FechaHora) : null, abierto: !c, c: cumplimiento(pts, ms) };
+          }).sort(function (x, y) { return x.inicio < y.inicio ? 1 : -1; });
           pintar();
         } catch (e) { out.replaceChildren(errBox(e)); }
       }
@@ -509,7 +529,7 @@
     function marcaciones() {
       var desde = AP.input('desde', U.ymd(U.addDays(new Date(), -7)), { type: 'date' });
       var hasta = AP.input('hasta', U.ymd(), { type: 'date' });
-      var fNov = AP.select('nov', [['', 'Todas las marcaciones'], ['si', 'Solo con novedad'], ['no', 'Solo sin novedad'], ['manual', 'Solo sin lectura de QR'], ['reporte', 'Solo reportes de novedad (sin punto)']], '');
+      var fNov = AP.select('nov', [['', 'Todas las marcaciones'], ['si', 'Solo con novedad'], ['no', 'Solo sin novedad'], ['manual', 'Solo sin lectura de QR'], ['reporte', 'Solo reportes de novedad (sin punto)'], ['rondero', 'Solo del rondero'], ['supervision', 'Solo revistas de supervisión']], '');
       var fPunto = AP.select('punto', [['', 'Todos los puntos']], '');
       var q = AP.buscador('Buscar punto, rondero, novedad o descripción', pintar);
       var out = h('div', { class: 'stack' });
@@ -528,6 +548,8 @@
           if (fNov.value === 'no' && x.Novedad) return false;
           if (fNov.value === 'manual' && (x.Origen === 'QR' || x.Origen === 'Reporte de novedad')) return false;
           if (fNov.value === 'reporte' && x.Origen !== 'Reporte de novedad') return false;
+          if (fNov.value === 'rondero' && esSupervision(x)) return false;
+          if (fNov.value === 'supervision' && !esSupervision(x)) return false;
           if (fPunto.value && x.PuntoId !== fPunto.value) return false;
           return AP.coincide(x, q.value, ['Title', 'Rondero', 'RonderoUsuario', 'TipoNovedad', 'Descripcion', 'Origen']);
         }).sort(function (a, b) { return a.FechaHora < b.FechaHora ? 1 : -1; });
@@ -550,7 +572,7 @@
           tabla([
             ['Fecha y hora', function (x) { return U.fDateTime(x.FechaHora); }],
             ['Punto', function (x) { return h('strong', null, x.Title); }],
-            ['Rondero', function (x) { return x.Rondero; }],
+            ['Registró', function (x) { return h('div', null, x.Rondero || '', esSupervision(x) ? h('small', { class: 'block muted' }, 'Supervisión · ' + (x.Rol === 'Administrador' ? 'Director' : x.Rol)) : null); }],
             ['Lectura', function (x) { return x.Origen === 'QR' ? AP.pill('QR', 'ok') : x.Origen === 'Reporte de novedad' ? AP.pill('Reporte', 'brand') : AP.pill('Sin QR', 'warn'); }],
             ['Novedad', function (x) { return x.Novedad ? h('div', null, AP.pill(x.TipoNovedad || 'Novedad', 'deny'), h('small', { class: 'block' }, x.Descripcion || '')) : AP.pill('Sin novedad', 'muted'); }],
             ['Fotos', function (x) { var n = fotosDe(x).length; return n ? String(n) + (x.FotoLugar ? ' (con lugar)' : '') : h('span', { class: 'txt-warn' }, 'Sin foto'); }]

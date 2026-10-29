@@ -94,6 +94,7 @@
         tile('badge', 'Autoridad', 'Visita de autoridad', '/manual?cat=Autoridad'),
         tile('truck', 'Vehículo de carga', 'Inspección y precintos', '/carga'),
         AP.Session.can('rondas') ? tile('route', 'Pasar ronda', 'Puntos de control y novedades', '/rondas') : null,
+        AP.Session.can('consulta') && !AP.Session.can('consola') ? tile('list', 'Consultas', 'Rondas, novedades, planta, permisos, elementos y programación', '/consola/rondas') : null,
         tile('history', 'Mi turno', AP.Sync.pendingCount() ? AP.Sync.pendingCount() + ' por enviar' : 'Registros del celular', '/turno')),
       solIng,
       solicitudes,
