@@ -1,5 +1,5 @@
 AVO PAK S.A.S. — CONTROL DE ACCESO
-Ajuste del 28 de octubre de 2026 (etiqueta de caché b12). La versión de la aplicación sigue siendo 1.0.0. Manual de uso: revisión 09.
+Ajuste del 29 de octubre de 2026 (etiqueta de caché b13). La versión de la aplicación sigue siendo 1.0.0. Manual de uso: revisión 10.
 Hay reglas nuevas de Firebase: se publican una vez en la consola (ver al final). Sin ellas, el Analista y el Supervisor no
 pueden abrir algunas consultas y el Director no puede liberar espacio de fotos.
 
@@ -28,12 +28,16 @@ QUÉ CAMBIA
    consola; el Supervisor, con «Consultas» en la portería. El motivo de los permisos de salud, maternidad o paternidad les
    aparece como reservado (dato sensible, art. 5 de la Ley 1581 de 2012) y no ven el registro de cambios de planta, la bitácora
    ni «Fotografías y espacio». En el panel del Analista aparecen las marcaciones de ronda del día.
+8. Talento Humano registra permisos y vacaciones o ausencias de todo el personal propio, tenga o no jefe inmediato. De los
+   contratistas, conductores y demás terceros registra solo la autorización de acceso que pide su empleador (sin el catálogo
+   de permisos laborales y con la empresa y la persona que la solicita) o la novedad «No asiste (novedad informada por su
+   empleador)»: Avo Pak no les concede permisos laborales ni vacaciones (art. 23 del Código Sustantivo del Trabajo).
 
 ARCHIVOS QUE CAMBIAN
 index.html, sw.js, LEEME-ACTUALIZACION.txt, css/app.css y, en la carpeta js: camara.js, graficas.js, informes.js y
 views-informes.js (nuevos), vendor/jspdf.umd.min.js (nuevo), views-rondas.js, views-porteria.js, app.js, sync.js, schema.js,
 backend-firebase.js, docx.js, ui.js, views-turno.js, views-consola.js, views-consola2.js, views-horarios.js, views-planta.js,
-views-programacion.js, manual.js e i18n-en.js. Ya están publicados en GitHub: no hay que subir nada.
+views-programacion.js, views-th.js, manual.js e i18n-en.js. Ya están publicados en GitHub: no hay que subir nada.
 
 ACTUALIZAR LA APLICACIÓN EN CADA EQUIPO
 - Computador: abra https://d-mazoavo.github.io/control-acceso/ y oprima Ctrl+F5 (o Ctrl+Mayús+R).
@@ -41,6 +45,6 @@ ACTUALIZAR LA APLICACIÓN EN CADA EQUIPO
   para usar la cámara: oprima «Permitir».
 
 REGLAS NUEVAS DE FIREBASE (una sola vez)
-Hacen falta para «Liberar espacio» y para que el Analista y el Supervisor consulten rondas, turnos, verificaciones y la
-programación del servicio. El archivo de reglas no se sube a GitHub. El Director lo recibe aparte y lo publica en: consola de
+Hacen falta para «Liberar espacio», para que el Analista y el Supervisor consulten rondas, turnos, verificaciones y la
+programación del servicio, y para que Talento Humano registre a todo el personal. El archivo de reglas no se sube a GitHub. El Director lo recibe aparte y lo publica en: consola de
 Firebase › Firestore Database › pestaña «Reglas» › borrar todo › pegar el archivo completo › «Publicar».

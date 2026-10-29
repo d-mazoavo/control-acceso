@@ -204,7 +204,9 @@
 
   // =================== PERMISOS ===================
   // opt.jefe: permiso del Jefe de Producción (solo su personal, lista ya filtrada en opt.personas)
-  // opt.th: permiso registrado por Talento Humano (solo personal propio, lista ya filtrada en opt.personas)
+  // opt.th: permiso registrado por Talento Humano (lista ya filtrada en opt.personas)
+  // opt.terceros: si la persona no es personal propio (contratista, conductor u otro), se registra como autorización de acceso
+  // solicitada por su empleador, sin el catálogo de permisos laborales (evita indicios de subordinación, art. 23 CST)
   async function crearPermiso(opt) {
     opt = opt || {};
     var per = opt.personas || await personasHabilitadas();
@@ -239,6 +241,19 @@
             if (m && m.dia) { hastaCampo.style.display = 'none'; ayudaSin.style.display = 'none'; } else pintarTipo();
           }
           motivo.addEventListener('change', pintarMotivo);
+          var solEmp = AP.input('SolicitudEmpleador', '', { placeholder: 'Empresa y persona que lo solicita (p. ej., Seguridad XYZ Ltda., supervisor Juan Pérez)' });
+          var campoSol = AP.field('Lo solicita su empleador *', solEmp, 'Empresa empleadora y persona que pidió la autorización.', 'span2');
+          var campoMot = AP.field('Motivo' + (opt.jefe ? ' *' : ''), motivo, null, 'span2');
+          var avisoTer = h('div', { class: 'banner info span2' }, AP.icon('building', 18), h('span', null, 'Esta persona no es trabajadora de Avo Pak: Avo Pak no le concede permisos laborales. Se registra la autorización de acceso que pide su empleador, para que la portería la aplique (art. 23 del Código Sustantivo del Trabajo: evita indicios de subordinación).'));
+          function personaElegida() { return per.find(function (z) { return (z.Title + ' — ' + (z.NumDoc || '')) === pers.value.trim(); }) || null; }
+          function esTercero(p) { return !!(opt.terceros && p && p.Tipo !== 'Personal propio'); }
+          function pintarTercero() {
+            var p = personaElegida(), t = esTercero(p);
+            avisoTer.style.display = campoSol.style.display = t ? '' : 'none';
+            campoMot.style.display = t ? 'none' : '';
+            if (t) { if (motivo.value) { motivo.value = ''; pintarMotivo(); } if (!solEmp.value && p.Empresa) solEmp.value = p.Empresa + ', '; }
+          }
+          pers.addEventListener('input', pintarTercero); pers.addEventListener('change', pintarTercero);
           var cargo = (AP.Session.user.perfil && AP.Session.user.perfil.Cargo) || (AP.Session.rol === 'Administrador' ? 'Director de Seguridad Integral' : AP.Session.rol);
           var propio = opt.jefe || opt.th;
           var autoriza = AP.autorizaPicker({
@@ -256,10 +271,13 @@
             hastaCampo.previousSibling && (hastaCampo.previousSibling.querySelector('label').textContent = sin ? 'Puede salir desde *' : 'Vigente desde *');
           }
           f.Tipo.addEventListener('change', pintarTipo);
-          setTimeout(function () { pintarTipo(); pintarMotivo(); }, 0);
+          setTimeout(function () { pintarTipo(); pintarMotivo(); pintarTercero(); }, 0);
           var guardar = h('button', { class: 'btn primary', type: 'button', onclick: async function () {
             var p = per.find(function (z) { return (z.Title + ' — ' + (z.NumDoc || '')) === pers.value.trim(); });
             if (!p) return AP.toast('Elija a la persona de la lista (debe estar habilitada).', 'warn');
+            var tercero = esTercero(p);
+            if (tercero && solEmp.value.trim().replace(/[,\s]+$/, '').length < 6) return AP.toast('Escriba la empresa empleadora y la persona que solicita la autorización.', 'warn');
+            if (tercero && motivo.value) { motivo.value = ''; }
             var mot = motDe();
             if (opt.jefe && !motivo.value) return AP.toast('Seleccione el motivo del permiso.', 'warn');
             if (motivo.value === 'Otro' && f.Detalle.value.trim().length < 6) return AP.toast('Describa el motivo en el detalle.', 'warn');
@@ -281,11 +299,12 @@
             try {
               var rec = await AP.B.create('AP_Permisos', Object.assign({ Title: p.Title, Token: p.Token, NumDoc: p.NumDoc, Tipo: tipoFinal, Desde: a.toISOString(), Hasta: b.toISOString(),
                 Estado: opt.jefe ? 'Por autorizar' : 'Vigente', Detalle: f.Detalle.value.trim(),
-                Motivo: motivo.value || undefined, Remunerado: mot ? mot.r : undefined, BaseLegal: mot ? mot.b : undefined, Soporte: mot ? mot.s : undefined,
+                Motivo: tercero ? AP.CAT.motivoAccesoTercero : motivo.value || undefined, Remunerado: mot ? mot.r : undefined, BaseLegal: mot ? mot.b : undefined, Soporte: mot ? mot.s : undefined,
+                SolicitudEmpleador: tercero ? solEmp.value.trim().replace(/[,\s]+$/, '') : undefined,
                 SolicitadoPor: opt.jefe ? AP.Session.user.upn : undefined, SolicitadoPorNombre: opt.jefe ? AP.Session.user.nombre + ' — ' + cargo : undefined, PersonaId: p.id || undefined, TipoPersonal: p.TipoPersonal || undefined, Area: p.Area || undefined,
                 PersonaTipo: p.Tipo || undefined, JefeId: p.JefeId || undefined,
                 // Mes de inicio y ámbito de Talento Humano: consultas sin índices compuestos
-                Mes: U.ymd(a).slice(0, 7), AmbitoTH: (p.Tipo === 'Personal propio' || !!p.JefeId) || undefined }, au));
+                Mes: U.ymd(a).slice(0, 7), AmbitoTH: opt.th ? true : ((p.Tipo === 'Personal propio' || !!p.JefeId) || undefined) }, au));
               await AP.Audit.log(opt.jefe ? 'Solicitud de permiso' : 'Registro de permiso', p.Title + ' — ' + tipoFinal + (motivo.value ? ' (' + motivo.value + ')' : ''), (sinFin ? 'Desde ' + U.fDateTime(a) + ' (sin hora final)' : U.fDateTime(a) + ' a ' + U.fDateTime(b)) + '; autoriza: ' + au.AutorizadoPor + (au.AutorizadoPorDoc ? ' (doc. ' + au.AutorizadoPorDoc + ')' : ''));
               if ((opt.jefe || opt.planta || opt.th) && AP.Planta) await AP.Planta.registrarCambio(opt.jefe ? 'Solicitud de permiso' : 'Permiso', p.Title + ' — ' + tipoFinal, (sinFin ? 'Salida desde ' + U.fDateTime(a) : U.fDateTime(a) + ' a ' + U.fDateTime(b)) + '. ' + f.Detalle.value.trim(), 1, 0, '', '', p.JefeId || '');
               hecho = rec; close(); AP.toast(opt.jefe ? 'Solicitud enviada a Recursos Humanos. El permiso solo se aplica en portería cuando lo autorice.' : 'Permiso registrado. Los celulares de portería lo reciben en su próxima actualización.', 'info', 7000); AP.Sync.run();
@@ -293,7 +312,7 @@
           } }, AP.icon('check', 18), opt.jefe ? 'Enviar a Recursos Humanos' : 'Registrar permiso');
           return h('div', { class: 'stack' }, dl,
             opt.jefe ? h('div', { class: 'banner info' }, AP.icon('key', 18), h('span', null, 'Su solicitud se envía al Jefe de Recursos Humanos, que la autoriza o la rechaza. Mientras no sea autorizada, el permiso no se aplica en portería.')) : null,
-            h('div', { class: 'form-grid' }, AP.field('Persona *', pers, null, 'span2'), AP.field('Motivo' + (opt.jefe ? ' *' : ''), motivo, null, 'span2'), ayudaMot, campoTipo, camposDia,
+            h('div', { class: 'form-grid' }, AP.field('Persona *', pers, null, 'span2'), avisoTer, campoSol, campoMot, ayudaMot, campoTipo, camposDia,
               campoDesde, hastaCampo, ayudaSin,
               opt.jefe ? null : AP.field('Autorizado por *', autoriza, propio ? 'Por defecto, usted. Puede elegir a otro autorizador de la lista.' : 'Búsquelo en la lista de personas registradas (jefe inmediato, Talento Humano, etc.).', 'span2'),
               AP.field('Detalle', f.Detalle, null, 'span2')),
@@ -391,6 +410,7 @@
       ['Desde', function (p) { return U.toDate(p.Desde); }, 17], ['Hasta', function (p) { return AP.CAT.permisosSinFin.indexOf(p.Tipo) >= 0 ? 'Sin hora final' : U.toDate(p.Hasta); }, 17], ['Estado', estadoDe, 12],
       ['Clase de personal', function (p) { return p.TipoPersonal; }, 14], ['Área', function (p) { return p.Area; }, 16],
       ['Autorizado por', function (p) { return p.AutorizadoPor; }, 30], ['Doc. de quien autoriza', function (p) { return p.AutorizadoPorDoc; }, 16],
+      ['Motivo', function (p) { return p.Motivo; }, 30], ['Lo solicita (empleador)', function (p) { return p.SolicitudEmpleador; }, 30],
       ['Detalle', function (p) { return p.Detalle; }, 40], ['Solicitud de portería', function (p) { return p.SolicitudId ? 'Sí' : ''; }, 12],
       ['Anulado por', function (p) { return p.AnuladoPor; }, 16], ['Motivo de anulación', function (p) { return p.MotivoAnulacion; }, 30],
       ['Registrado por', function (p) { return p._createdBy; }, 16], ['Fecha de registro', function (p) { return p._created ? U.toDate(p._created) : ''; }, 17]
@@ -412,7 +432,7 @@
           ['Tipo', function (p) { return p.Tipo; }],
           ['Vigencia', function (p) { return AP.CAT.permisosSinFin.indexOf(p.Tipo) >= 0 ? 'Desde ' + U.fDateTime(p.Desde) + ' (sin hora final)' : U.fDateTime(p.Desde) + ' → ' + U.fDateTime(p.Hasta); }],
           ['Autoriza', function (p) { return p.Estado === 'Por autorizar' ? 'Solicita: ' + (p.SolicitadoPorNombre || p._createdBy || '') : p.AutorizadoPor || ''; }],
-          ['Motivo', function (p) { return p.Motivo ? h('div', null, p.Motivo, p.Remunerado ? h('small', { class: 'block muted' }, p.Remunerado) : null) : ''; }],
+          ['Motivo', function (p) { return p.Motivo ? h('div', null, p.Motivo, p.Remunerado ? h('small', { class: 'block muted' }, p.Remunerado) : null, p.SolicitudEmpleador ? h('small', { class: 'block muted' }, 'Lo solicita: ' + p.SolicitudEmpleador) : null) : ''; }],
           ['Detalle', function (p) { return p.Detalle || ''; }],
           ['Registro', function (p) { return h('small', { class: 'muted' }, (p._created ? U.fDateTime(p._created) : '') + (p._createdBy ? ' · ' + p._createdBy : '')); }],
           ['Estado', function (p) { var e = estadoDe(p); return h('div', null, AP.pill(e, KIND[e]), e === 'Anulado' && (p.MotivoAnulacion || p.MotivoDecision) ? h('small', { class: 'block muted' }, p.MotivoAnulacion || p.MotivoDecision) : null); }],
