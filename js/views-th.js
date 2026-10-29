@@ -1,6 +1,6 @@
 /* Talento Humano: personal propio de Avo Pak y personas con jefe inmediato asignado (consulta, sin modificar sus datos), permisos y ausencias (vacaciones,
  * permisos de día completo, licencias), estado del personal en planta según portería, programación de turnos de los
- * Jefes de Producción (consulta), compendio de horas entre la entrada y la salida registradas en portería (diurnas,
+ * jefes con personal a cargo (consulta), compendio de horas entre la entrada y la salida registradas en portería (diurnas,
  * nocturnas y en domingo o festivo) y estadísticas del personal. Talento Humano registra y anula permisos y ausencias; no
  * los borra. Durante una ausencia la portería no deja ingresar a la persona: el vigilante envía la solicitud al Director
  * de Seguridad Integral, que verifica y aprueba o rechaza. Gobierno Corporativo consulta. */
@@ -208,7 +208,9 @@
           per.avisoReglas ? h('div', { class: 'banner warn' }, AP.icon('alert', 18), h('span', null, 'Solo se muestra el personal propio: las reglas de seguridad de Firebase no están actualizadas y no permiten consultar a las personas de otras empresas con jefe inmediato. Avise al Director de Seguridad Integral para que las publique.')) : null,
           h('div', { class: 'banner info' }, AP.icon('users', 18), h('span', null, 'Personal propio de ' + AP.CFG.empresa + ' y personas de otras empresas que tienen jefe inmediato asignado. Solo consulta: los datos de las personas los registra y modifica únicamente el Director de Seguridad Integral, salvo el número de uniforme. ' +
             'La fotografía no se muestra aquí: se autorizó solo para el cotejo visual en portería (principio de finalidad, art. 4 Ley 1581 de 2012).')),
-          h('div', { class: 'filters' }, fClase, fArea, fCargo, fJefe, fEst, q, ED ? h('button', { class: 'btn', type: 'button', onclick: function () { AP.Planta.uniformes(filtrados(), pintar); } }, AP.icon('edit', 18), 'Números de uniforme') : null, AP.btnExcel(function () {
+          h('div', { class: 'filters' }, fClase, fArea, fCargo, fJefe, fEst, q,
+            ED ? h('button', { class: 'btn primary', type: 'button', onclick: function () { asignarSubalternos(function () { personal(); }); } }, AP.icon('users', 18), 'Asignar subalternos a un jefe') : null,
+            ED ? h('button', { class: 'btn', type: 'button', onclick: function () { AP.Planta.uniformes(filtrados(), pintar); } }, AP.icon('edit', 18), 'Números de uniforme') : null, AP.btnExcel(function () {
             var l = filtrados();
             if (!l.length) return AP.toast('No hay personas con el filtro actual.', 'warn');
             AP.exportar('Personal_talento_humano', [['Persona', function (p) { return p.Title; }, 30], ['Tipo doc.', function (p) { return p.TipoDoc; }, 8], ['Documento', function (p) { return p.NumDoc; }, 15],
@@ -219,6 +221,85 @@
           })), out);
         pintar();
       } catch (e) { box.replaceChildren(errBox(e)); }
+    }
+
+    // ---------- Asignación de subalternos (jefe inmediato) ----------
+    // El Director o Talento Humano eligen al jefe y marcan a las personas que quedan a su cargo. Cada jefe con personal a cargo
+    // solo ve, programa y gestiona a quienes lo tienen como jefe inmediato.
+    async function asignarSubalternos(despues) {
+      var todos;
+      try { todos = await D.todos(); } catch (e) { return AP.toast(e.message, 'error'); }
+      var propios = todos.filter(function (p) { return p.Tipo === 'Personal propio'; });
+      var nombre = function (id) { var j = todos.find(function (x) { return x.id === id; }); return j ? j.Title : ''; };
+      AP.modal({ title: 'Asignar subalternos a un jefe', size: 'wide', body: function (close) {
+        var jefe = null, marcadas = new Set();
+        var lista = h('div', { class: 'stack sm' }), resumen = h('p', { class: 'muted small' });
+        var pick = AP.personaPicker({ fuente: function () { return Promise.resolve(propios); }, placeholder: 'Busque al jefe por nombre, documento o cargo (personal propio)',
+          onSelect: function (p) { jefe = p; marcadas.clear(); if (p) fVer.value = 'este'; pintar(); } });
+        var fVer = AP.select('ver', [['', 'Todas las personas'], ['sin', 'Sin jefe inmediato'], ['este', 'Ya a cargo de este jefe'], ['otro', 'Con otro jefe inmediato']], 'sin');
+        var fTipo = AP.select('tipo', [['propio', 'Solo personal propio'], ['', 'Todo el personal (también contratistas)']], 'propio');
+        var fArea = AP.select('area', [['', 'Todas las áreas']].concat(Array.from(new Set(todos.map(function (p) { return p.Area || ''; }).filter(Boolean))).sort()), '');
+        var q = AP.input('q', '', { type: 'search', placeholder: 'Buscar nombre, documento, cargo o área' });
+        [fVer, fTipo, fArea].forEach(function (s0) { s0.addEventListener('change', pintar); });
+        q.addEventListener('input', U.debounce(pintar, 200));
+        function visibles() {
+          return todos.filter(function (p) {
+            if (jefe && p.id === jefe.id) return false;
+            if (fTipo.value === 'propio' && p.Tipo !== 'Personal propio') return false;
+            if (fArea.value && p.Area !== fArea.value) return false;
+            if (fVer.value === 'sin' && p.JefeId) return false;
+            if (fVer.value === 'este' && (!jefe || p.JefeId !== jefe.id)) return false;
+            if (fVer.value === 'otro' && (!p.JefeId || (jefe && p.JefeId === jefe.id))) return false;
+            return AP.coincide(p, q.value, ['Title', 'NumDoc', 'Cargo', 'Area', 'Empresa']);
+          });
+        }
+        function pintar() {
+          var l = visibles();
+          var aCargo = jefe ? todos.filter(function (p) { return p.JefeId === jefe.id; }).length : 0;
+          resumen.textContent = (jefe ? jefe.Title + ' tiene hoy ' + aCargo + ' persona(s) a cargo. ' : 'Elija primero al jefe. ') + marcadas.size + ' marcada(s) de ' + l.length + ' en la vista.';
+          lista.replaceChildren(h('div', { class: 'pick-list' }, l.slice(0, 300).map(function (p) {
+            var cb = h('input', { type: 'checkbox', checked: marcadas.has(p.id) });
+            cb.addEventListener('change', function () { if (cb.checked) marcadas.add(p.id); else marcadas.delete(p.id); pintar(); });
+            return h('label', { class: 'check' }, cb, h('span', { class: 'grow' }, h('strong', null, p.Title), ' ',
+              h('small', { class: 'muted' }, [p.NumDoc, p.Cargo, p.Area, p.Tipo !== 'Personal propio' ? p.Tipo + (p.Empresa ? ' — ' + p.Empresa : '') : ''].filter(Boolean).join(' · ')),
+              p.JefeId ? AP.pill(jefe && p.JefeId === jefe.id ? 'A cargo de este jefe' : 'Jefe: ' + (nombre(p.JefeId) || p.JefeNombre || '—'), jefe && p.JefeId === jefe.id ? 'ok' : 'muted') : AP.pill('Sin jefe', 'warn')));
+          })), l.length > 300 ? h('p', { class: 'muted small' }, 'Se muestran 300 de ' + l.length + '. Use los filtros para ver las demás.') : null);
+        }
+        async function guardar(quitar) {
+          if (!quitar && !jefe) return AP.toast('Elija primero al jefe.', 'warn');
+          var sel = todos.filter(function (p) { return marcadas.has(p.id) && (quitar ? p.JefeId : p.JefeId !== jefe.id); });
+          if (!sel.length) return AP.toast(quitar ? 'Marque personas que tengan jefe inmediato.' : 'Marque a las personas que quedarán a cargo de ' + jefe.Title + '.', 'warn');
+          var terceros = sel.filter(function (p) { return p.Tipo !== 'Personal propio'; });
+          if (!quitar && terceros.length && !(await AP.confirm('Personal de contratistas', terceros.length + ' de las personas marcadas no son trabajadoras de ' + AP.CFG.empresa + '. Si un jefe de ' + AP.CFG.empresa + ' les programa turnos y les registra permisos, puede leerse como subordinación (contrato realidad, art. 23 del Código Sustantivo del Trabajo). Hágalo solo si es necesario para el control de acceso. ¿Continuar?', 'Continuar', 'danger'))) return;
+          var hechas = 0, errores = [];
+          for (var i = 0; i < sel.length; i++) {
+            var p = sel[i];
+            try {
+              await AP.B.update('AP_Personas', p.id, quitar ? { JefeId: '', JefeNombre: '', AmbitoTH: p.Tipo === 'Personal propio' } : { JefeId: jefe.id, JefeNombre: jefe.Title, AmbitoTH: true });
+              p.JefeId = quitar ? '' : jefe.id; p.JefeNombre = quitar ? '' : jefe.Title; hechas++;
+            } catch (e) {
+              errores.push(p.Title + ': ' + e.message);
+              if (e.status === 403 || /permiso/i.test(e.message || '')) { errores.push('Falta publicar las reglas nuevas de Firebase para que Talento Humano asigne jefes.'); break; }
+            }
+          }
+          if (hechas) await AP.Audit.log(quitar ? 'Retiro de jefe inmediato' : 'Asignación de jefe inmediato', quitar ? hechas + ' persona(s)' : jefe.Title,
+            sel.slice(0, hechas).map(function (p) { return p.Title + ' (' + (p.NumDoc || '') + ')'; }).join('; ').slice(0, 900));
+          marcadas.clear(); pintar();
+          AP.toast((quitar ? 'Se quitó el jefe inmediato a ' : 'Quedaron a cargo de ' + jefe.Title + ': ') + hechas + ' persona(s).' + (errores.length ? ' No se pudo con: ' + errores.slice(0, 3).join(' · ') : ''), errores.length ? 'warn' : 'info', errores.length ? 12000 : 6000);
+        }
+        pintar();
+        return h('div', { class: 'stack' },
+          h('div', { class: 'banner info' }, AP.icon('users', 18), h('span', null, 'Cada jefe con personal a cargo ve, programa y gestiona solo a las personas que tienen a ese jefe como jefe inmediato. Elija al jefe y marque a sus subalternos. El jefe necesita, además, un usuario con el perfil «Jefe con personal a cargo», vinculado a su ficha (lo crea el Director en Usuarios).')),
+          AP.field('Jefe *', pick),
+          h('div', { class: 'filters' }, fVer, fTipo, fArea, q,
+            h('button', { class: 'btn small', type: 'button', onclick: function () { visibles().forEach(function (p) { marcadas.add(p.id); }); pintar(); } }, 'Marcar todas las de la vista'),
+            h('button', { class: 'btn small', type: 'button', onclick: function () { marcadas.clear(); pintar(); } }, 'Desmarcar')),
+          resumen, lista,
+          h('div', { class: 'row gap wrap end' },
+            h('button', { class: 'btn', type: 'button', onclick: function () { close(); if (despues) despues(); } }, 'Cerrar'),
+            h('button', { class: 'btn danger-outline', type: 'button', onclick: function () { guardar(true); } }, 'Quitar el jefe inmediato a las marcadas'),
+            h('button', { class: 'btn primary', type: 'button', onclick: function () { guardar(false); } }, AP.icon('check', 18), 'Dejar a cargo de este jefe')));
+      } });
     }
 
     // ---------- Estado del personal en planta (según portería) ----------
@@ -319,7 +400,7 @@
       cargar();
     }
 
-    // ---------- Programación de turnos de los Jefes de Producción (solo consulta) ----------
+    // ---------- Programación de turnos de los jefes con personal a cargo (solo consulta) ----------
     async function programacion() {
       var modo = qs.m === 'semana' ? 'semana' : 'persona';
       var seg = AP.segmented('modo', [{ value: 'persona', label: 'Todo lo programado, por persona', icon: 'users' }, { value: 'semana', label: 'Semana por jefe inmediato', icon: 'calendar' }], modo,
@@ -334,7 +415,7 @@
         var sel = AP.select('grupo', ids.map(function (k) { return [k, jefes[k].nombre + ' (' + jefes[k].n + ')']; }).concat([['sin', 'Personal propio sin jefe inmediato']]), g || 'sin');
         sel.addEventListener('change', function () { AP.go('/consola/th?t=programacion&m=semana&j=' + encodeURIComponent(sel.value)); });
         var grid = h('div', { class: 'stack' });
-        box.replaceChildren(seg, h('div', { class: 'filters' }, AP.field('Personal a cargo de (jefe inmediato)', sel), h('small', { class: 'muted' }, 'Solo consulta. La programación la hace cada Jefe de Producción con su personal.')), grid);
+        box.replaceChildren(seg, h('div', { class: 'filters' }, AP.field('Personal a cargo de (jefe inmediato)', sel), h('small', { class: 'muted' }, 'Solo consulta. La programación la hace cada jefe con personal a cargo con su personal.')), grid);
         AP.Planta.semana({ box: grid, acciones: null, g: g, gNombre: g ? jefes[g].nombre : '', ED: false, s: qs.s,
           ir: function (ymd) { AP.go('/consola/th?t=programacion&m=semana&j=' + encodeURIComponent(g || 'sin') + '&s=' + ymd); },
           personal: function () { return Promise.resolve(per.filter(function (p) { return g ? p.JefeId === g : !p.JefeId; })); } });
@@ -410,7 +491,7 @@
             ['Fuente', function (f) { return [f.planta ? 'Programación semanal' : '', f.fijo ? 'Horario fijo' : ''].filter(Boolean).join(' y ') || '—'; }],
             ['', function (f) { return h('button', { class: 'btn small', type: 'button', onclick: function () { detalle(f); } }, AP.icon('eye', 16), 'Día por día'); }]
           ], l, detalle),
-          h('p', { class: 'muted small' }, 'Fuente: programación semanal guardada por cada Jefe de Producción, horarios fijos y ausencias registradas. En las semanas en que la persona figura en la programación semanal, esa programación reemplaza su horario fijo.'));
+          h('p', { class: 'muted small' }, 'Fuente: programación semanal guardada por cada jefe con personal a cargo, horarios fijos y ausencias registradas. En las semanas en que la persona figura en la programación semanal, esa programación reemplaza su horario fijo.'));
       }
       function exportar() {
         if (!filas) return AP.toast('Primero consulte la programación.', 'warn');
@@ -432,7 +513,7 @@
           ['Fuente', 'Programación semanal de planta (AP_ProgPlanta), horarios (AP_Horarios) y ausencias (AP_Ausencias)']]);
       }
       box.replaceChildren(seg,
-        h('div', { class: 'banner info' }, AP.icon('calendar', 18), h('span', null, 'Todo lo que cada Jefe de Producción programó a cada persona en el periodo (turnos, descansos y horarios fijos), con las ausencias registradas. Solo consulta.')),
+        h('div', { class: 'banner info' }, AP.icon('calendar', 18), h('span', null, 'Todo lo que cada jefe con personal a cargo programó a cada persona en el periodo (turnos, descansos y horarios fijos), con las ausencias registradas. Solo consulta.')),
         h('div', { class: 'filters' }, AP.field('Desde', desde), AP.field('Hasta', hasta), h('button', { class: 'btn primary', type: 'button', onclick: calcular }, AP.icon('search', 18), 'Consultar'), fJefe, q, AP.btnExcel(exportar)),
         out);
       calcular();
@@ -645,7 +726,7 @@
             h('section', { class: 'card stack sm' }, h('h3', null, 'Permisos por tipo'), barras(cuenta(permisos, function (x) { return x.Tipo; }), 'Permisos'))),
           jefesK.length ? h('section', { class: 'card stack sm' }, h('h3', null, 'Asistencia a turnos programados, por jefe inmediato'), AP.Viz.leyenda(serAsis),
             AP.Viz.hbars(jefesK.map(function (k) { return { label: k, valores: { F: porJefe[k].asis, D: porJefe[k].prog - porJefe[k].asis }, extra: 'Asistencia ' + pct(porJefe[k].asis, porJefe[k].prog) }; }), serAsis, { unidad: 'turnos' })) : null,
-          h('p', { class: 'muted small' }, 'Fuentes: fichas del personal (propio y con jefe inmediato), registros de ingreso y salida en portería, programación de turnos de los Jefes de Producción, permisos y ausencias registradas. ' +
+          h('p', { class: 'muted small' }, 'Fuentes: fichas del personal (propio y con jefe inmediato), registros de ingreso y salida en portería, programación de turnos de los jefes con personal a cargo, permisos y ausencias registradas. ' +
             'La asistencia cuenta los turnos programados ya transcurridos en los que la persona registró ingreso en portería.'));
         out.exportar = function () {
           AP.exportarHojas('Estadisticas_personal_' + d.a + '_a_' + d.b, [

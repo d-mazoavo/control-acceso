@@ -28,7 +28,7 @@
     Administrador: 'Consola completa (único perfil que crea, modifica y borra): usuarios, horarios, permisos, novedades, bitácora, estadísticas y portería.',
     Analista: 'Solo consulta y descarga: panel, personas, visitas, ingresos y salidas e inspecciones. No modifica ni borra.',
     'Gobierno Corporativo': 'Gerencia u órgano de gobierno: consulta y descarga toda la información y las estadísticas. No modifica ni borra.',
-    'Jefe de Producción': 'Ve, consulta y programa al personal que lo tiene como jefe inmediato: turnos, programación semanal, permisos, estado en planta y estadísticas. No borra; cada cambio queda registrado.',
+    'Jefe de Producción': 'Para cualquier jefe con personal a su mando (de planta, de mantenimiento, de calidad…). Ve solo al personal que el Director o Talento Humano le asignan como subalterno (jefe inmediato en la ficha) y lo programa: turnos, programación semanal, permisos, estado en planta y estadísticas. No borra; cada cambio queda registrado.',
     'Talento Humano': 'Consulta el personal propio sin modificarlo; registra permisos, vacaciones y licencias; ve el estado en planta, la programación, las horas según portería y las estadísticas. No borra.',
     Supervisor: 'Portería por turnos e historial de ingresos y salidas.',
     Vigilante: 'Solo portería, por turnos.',
@@ -133,7 +133,7 @@
         h('div', { class: 'row between wrap gap' }, h('h3', null, 'Turnos abiertos ahora (' + l.length + ')'),
           h('small', { class: 'muted' }, 'Si alguien se fue sin cerrar su turno, ciérrelo aquí con «Cerrar turno y sesión»: su celular cierra la sesión al conectarse.')),
         tabla([
-          ['Nombre', function (x) { return h('div', null, h('strong', null, x.v.Title), h('small', { class: 'block muted' }, x.v.Usuario + ' · ' + x.v.Rol)); }],
+          ['Nombre', function (x) { return h('div', null, h('strong', null, x.v.Title), h('small', { class: 'block muted' }, x.v.Usuario + ' · ' + AP.rolNombre(x.v.Rol))); }],
           ['Inició', function (x) { return U.fDateTime(x.ev.FechaHora); }],
           ['Tiempo abierto', function (x) {
             var largo = Date.now() - new Date(x.ev.FechaHora).getTime() > maxH * 3600000;
@@ -151,10 +151,10 @@
       }));
       var rows = usuariosFiltrados();
       var sinVinc = datos.vig.filter(function (v) { return v.Activo !== false && !v.PersonaId && !esYo(v); }).length;
-      tablaBox.replaceChildren(sinVinc ? h('p', { class: 'banner warn' }, AP.icon('alert', 18), h('span', null, sinVinc + ' usuario(s) activo(s) sin persona vinculada. Ábralos y use «Editar datos» para vincularlos con su ficha de Personas (el Jefe de Producción no ve a su personal mientras su usuario no esté vinculado).')) : null, tabla([
+      tablaBox.replaceChildren(sinVinc ? h('p', { class: 'banner warn' }, AP.icon('alert', 18), h('span', null, sinVinc + ' usuario(s) activo(s) sin persona vinculada. Ábralos y use «Editar datos» para vincularlos con su ficha de Personas (el jefe con personal a cargo no ve a su personal mientras su usuario no esté vinculado).')) : null, tabla([
         ['Usuario', function (v) { return h('code', null, v.Usuario); }], ['Nombre', function (v) { return v.Title; }],
         ['Documento', function (v) { return [v.TipoDoc, v.NumDoc].filter(Boolean).join(' '); }], ['Empresa', function (v) { return v.Empresa; }],
-        ['Rol', function (v) { return v.Rol; }], ['Persona', function (v) { return personaDe(v) ? AP.pill('Vinculada', 'ok') : esYo(v) ? '' : AP.pill('Sin vincular', 'warn'); }], ['Clave', estadoPin],
+        ['Perfil', function (v) { return AP.rolNombre(v.Rol); }], ['Persona', function (v) { return personaDe(v) ? AP.pill('Vinculada', 'ok') : esYo(v) ? '' : AP.pill('Sin vincular', 'warn'); }], ['Clave', estadoPin],
         ['Estado', function (v) { return v.Activo === false ? AP.pill('De baja', 'deny') : AP.pill('Activo', 'ok'); }],
         ['Último turno', ultimoTurno],
         ['', function (v) { return h('button', { class: 'btn small', type: 'button', onclick: function () { detalle(v); } }, 'Ver'); }]
@@ -171,7 +171,7 @@
           var activo = v.Activo !== false;
           return h('div', { class: 'stack' },
             h('div', { class: 'kv-grid' },
-              kv('Usuario', v.Usuario), kv('Rol', v.Rol), kv('Persona registrada', personaDe(v) ? personaDe(v).Title + ' (' + (personaDe(v).Tipo || '') + ', ' + (personaDe(v).Estado || '') + ')' : 'Sin vincular'),
+              kv('Usuario', v.Usuario), kv('Perfil', AP.rolNombre(v.Rol)), kv('Persona registrada', personaDe(v) ? personaDe(v).Title + ' (' + (personaDe(v).Tipo || '') + ', ' + (personaDe(v).Estado || '') + ')' : 'Sin vincular'),
               kv('Documento', [v.TipoDoc, v.NumDoc].filter(Boolean).join(' ')), kv('Empresa', v.Empresa),
               kv('Cargo', v.Cargo), kv('Teléfono', v.Telefono),
               kv('Estado', activo ? 'Activo' : 'De baja desde ' + U.fDateTime(v.FechaBaja)),
@@ -257,7 +257,7 @@
     function formUsuario(d0, nuevo) {
       var yo = !nuevo && esYo(d0);
       var usuario = AP.input('Usuario', d0.Usuario, { autocapitalize: 'none', disabled: !nuevo, placeholder: 'p. ej., jperez' });
-      var rol = AP.select('Rol', AP.CAT.roles, d0.Rol || 'Vigilante', { disabled: yo });
+      var rol = AP.select('Rol', AP.CAT.roles.map(function (r) { return [r, AP.rolNombre(r)]; }), d0.Rol || 'Vigilante', { disabled: yo });
       var ayudaRol = h('small', { class: 'muted' }, DESCRIPCION_ROL[d0.Rol || 'Vigilante']);
       rol.addEventListener('change', function () { ayudaRol.textContent = DESCRIPCION_ROL[rol.value] || ''; });
       var tocado = false;
@@ -301,9 +301,9 @@
     // Advertencias sobre la persona elegida (confirmación del Director)
     async function confirmarPersona(p, rolNuevo, excluirId) {
       var dup = datos.vig.find(function (x) { return x.Activo !== false && x.id !== excluirId && (x.PersonaId === p.id || U.normDoc(x.NumDoc) === U.normDoc(p.NumDoc)); });
-      if (dup && !(await AP.confirm('La persona ya tiene usuario', p.Title + ' ya tiene el usuario activo «' + dup.Usuario + '» (' + dup.Rol + '). ¿Continuar de todos modos?', 'Continuar'))) return false;
+      if (dup && !(await AP.confirm('La persona ya tiene usuario', p.Title + ' ya tiene el usuario activo «' + dup.Usuario + '» (' + AP.rolNombre(dup.Rol) + '). ¿Continuar de todos modos?', 'Continuar'))) return false;
       if (p.Estado !== 'Habilitado' && !(await AP.confirm('Persona inhabilitada', p.Title + ' figura INHABILITADA en Personas' + (p.MotivoEstado ? ' (' + p.MotivoEstado + ')' : '') + '. ¿Continuar?', 'Continuar'))) return false;
-      if ((rolNuevo === 'Jefe de Producción' || rolNuevo === 'Talento Humano') && p.Tipo !== 'Personal propio' && !(await AP.confirm('Perfil de personal propio', 'El perfil ' + rolNuevo + ' corresponde a un colaborador de ' + AP.CFG.empresa + ', y ' + p.Title + ' figura como «' + (p.Tipo || '') + '». ¿Continuar?', 'Continuar'))) return false;
+      if ((rolNuevo === 'Jefe de Producción' || rolNuevo === 'Talento Humano') && p.Tipo !== 'Personal propio' && !(await AP.confirm('Perfil de personal propio', 'El perfil ' + AP.rolNombre(rolNuevo) + ' corresponde a un colaborador de ' + AP.CFG.empresa + ', y ' + p.Title + ' figura como «' + (p.Tipo || '') + '». ¿Continuar?', 'Continuar'))) return false;
       return true;
     }
 
@@ -353,7 +353,7 @@
             if (e) return AP.toast(e, 'warn');
             if (v.Rol === 'Administrador' && d.Rol !== 'Administrador' && adminsActivos().length <= 1) return AP.toast('Debe quedar al menos un Administrador activo.', 'warn');
             if (p && p.id !== v.PersonaId && !(await confirmarPersona(p, d.Rol, v.id))) return;
-            if (!esYo(v) && d.Rol !== v.Rol && AP.ROLES_TURNO.indexOf(v.Rol) >= 0 && !(await AP.confirm('Cambio de perfil', 'Al cambiar el perfil de ' + v.Rol + ' a ' + d.Rol + ', si ' + v.Title + ' tiene un turno abierto, su celular lo cerrará y le pedirá ingresar de nuevo con el panel del nuevo perfil.', 'Cambiar perfil'))) return;
+            if (!esYo(v) && d.Rol !== v.Rol && AP.ROLES_TURNO.indexOf(v.Rol) >= 0 && !(await AP.confirm('Cambio de perfil', 'Al cambiar el perfil de ' + AP.rolNombre(v.Rol) + ' a ' + AP.rolNombre(d.Rol) + ', si ' + v.Title + ' tiene un turno abierto, su celular lo cerrará y le pedirá ingresar de nuevo con el panel del nuevo perfil.', 'Cambiar perfil'))) return;
             try {
               await AP.B.editarUsuario(v, d);
               await AP.Audit.log('Modificación de usuario', v.Usuario + ' — ' + (d.Title || v.Title), 'Rol: ' + d.Rol + (d.Rol !== v.Rol ? ' (antes ' + v.Rol + ')' : '') + '; persona: ' + (p ? p.Title + ' (' + p.NumDoc + ')' : 'sin vincular'));
@@ -428,7 +428,7 @@
             } catch (e) { AP.toast('No se pudo cerrar la sesión: ' + e.message, 'error', 8000); btn.disabled = false; btn.lastChild.textContent = 'Cerrar turno y sesión'; }
           } }, AP.icon('logout', 18), 'Cerrar turno y sesión');
           return h('div', { class: 'stack' },
-            h('div', { class: 'kv' }, h('span', null, 'Usuario'), h('strong', null, v.Usuario + ' · ' + v.Rol)),
+            h('div', { class: 'kv' }, h('span', null, 'Usuario'), h('strong', null, v.Usuario + ' · ' + AP.rolNombre(v.Rol))),
             h('div', { class: 'kv' }, h('span', null, 'Turno abierto desde'), h('strong', null, U.fDateTime(ev.FechaHora) + ' (' + U.duracion(ev.FechaHora) + ')')),
             ev.Dispositivo ? h('div', { class: 'kv' }, h('span', null, 'Dispositivo'), h('strong', null, ev.Dispositivo)) : null,
             h('p', { class: 'note' }, 'El turno queda cerrado desde ahora en el registro. El celular de la persona cierra la sesión en cuanto se conecte a internet; ' +
@@ -480,7 +480,7 @@
       var COLS = [
         ['Usuario', function (v) { return v.Usuario; }, 16], ['Nombres y apellidos', function (v) { return v.Title; }, 32],
         ['Tipo doc.', function (v) { return v.TipoDoc; }, 8], ['N.° documento', function (v) { return v.NumDoc; }, 15],
-        ['Empresa', function (v) { return v.Empresa; }, 26], ['Cargo', function (v) { return v.Cargo; }, 20], ['Rol', function (v) { return v.Rol; }, 14],
+        ['Empresa', function (v) { return v.Empresa; }, 26], ['Cargo', function (v) { return v.Cargo; }, 20], ['Perfil', function (v) { return AP.rolNombre(v.Rol); }, 24],
         ['Estado', function (v) { return v.Activo === false ? 'De baja' : 'Activo'; }, 10],
         ['Clave', function (v) { return v.Activo === false ? 'Sin uso' : v.PinTemporal ? 'Temporal' : 'Personal'; }, 10],
         ['Clave vigente desde', function (v) { return U.fDateTime(v.PinTemporal ? v.PinFecha : (v.PinPersonalDesde || v.PinFecha)); }, 18],

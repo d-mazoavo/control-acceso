@@ -177,7 +177,7 @@
       }),
       h('div', { class: 'side-foot' },
         Session.can('porteria') ? h('a', { href: '#/porteria' }, AP.icon('door', 19), h('span', null, AP.t('Ir a portería'))) : null,
-        h('div', { class: 'who' }, AP.icon('user', 16), h('span', null, Session.operador().nombre), h('small', null, Session.rol + (Session.can('editar') || Session.can('planta') || Session.can('th') ? '' : ' · ' + AP.t('Solo consulta').toLowerCase()))),
+        h('div', { class: 'who' }, AP.icon('user', 16), h('span', null, Session.operador().nombre), h('small', null, AP.rolNombre(Session.rol) + (Session.can('editar') || Session.can('planta') || Session.can('th') ? '' : ' · ' + AP.t('Solo consulta').toLowerCase()))),
         AP.selectorIdioma(),
         h('button', { class: 'linkish', type: 'button', onclick: function () { AP.Views.definirPin(); } }, AP.icon('lock', 16), ' ' + AP.t('Cambiar mi contraseña')),
         h('button', { class: 'linkish', type: 'button', onclick: AP.Views.logout }, AP.icon('logout', 16), ' ' + AP.t('Cerrar sesión'))));
@@ -455,7 +455,7 @@
   function cambioDePerfil() {
     var yo = (AP.Sync.vigilantes || []).find(function (x) { return String(x.id) === String(Session.user.vigilanteId); });
     if (!yo || !yo.Rol || !AP.ROLES[yo.Rol] || yo.Rol === Session.rol) return null;
-    return { msg: 'El Director de Seguridad Integral cambió su perfil de ' + Session.rol + ' a ' + yo.Rol + '. Vuelva a ingresar para usar el panel de su nuevo perfil.', salir: true, enviar: true };
+    return { msg: 'El Director de Seguridad Integral cambió su perfil de ' + AP.rolNombre(Session.rol) + ' a ' + AP.rolNombre(yo.Rol) + '. Vuelva a ingresar para usar el panel de su nuevo perfil.', salir: true, enviar: true };
   }
   async function vigilarTurno() {
     if (!Session.user || saliendo) return;
