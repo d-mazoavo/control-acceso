@@ -95,7 +95,9 @@
         // Cierre de la sesión de un vigilante ordenado desde la consola: el celular lo aplica en su próxima actualización
         ['CierreSesion', 'datetime'], ['CierreSesionTurnoId', 'text'], ['CierreSesionPor', 'text'], ['CierreSesionMotivo', 'text'],
         // Persona registrada a la que corresponde el usuario (nombre, documento, empresa y cargo salen de su ficha)
-        ['PersonaId', 'text', IDX]
+        ['PersonaId', 'text', IDX],
+        // Firma escaneada del usuario para los informes (ruta del archivo en la base de datos; solo la ven el usuario y el Director)
+        ['FirmaRuta', 'text']
       ]
     },
     AP_Turnos: {
@@ -164,7 +166,9 @@
       cols: [
         ['IdLocal', 'text', UNQ], ['PuntoId', 'text', IDX], ['Codigo', 'text'], ['Origen', 'text'], ['FechaHora', 'datetime', IDX],
         ['Rondero', 'text'], ['RonderoUsuario', 'text'], ['TurnoId', 'text'], ['Dispositivo', 'text'], ['SinConexion', 'bool'],
-        ['Novedad', 'bool'], ['TipoNovedad', 'text'], ['Descripcion', 'note'], ['Justificacion', 'note'], ['Fotos', 'note'], ['Hash', 'text']
+        ['Novedad', 'bool'], ['TipoNovedad', 'text'], ['Descripcion', 'note'], ['Justificacion', 'note'], ['Fotos', 'note'], ['Hash', 'text'],
+        // Lugar escrito por quien reporta una novedad sin código QR; huella de la foto del lugar; perfil de quien pasó la ronda
+        ['Lugar', 'text'], ['FotoLugar', 'text'], ['Rol', 'text']
       ]
     },
     AP_Programacion: {
@@ -206,7 +210,9 @@
       desc: 'Verificación por el Director de las novedades de puntualidad, salida y lectura (no se edita ni se borra)',
       cols: [
         ['IdLocal', 'text', UNQ], ['MovimientoId', 'text', IDX], ['Novedad', 'text'], ['Resultado', 'text'], ['Nota', 'note'],
-        ['VerificadoPor', 'text'], ['FechaHora', 'datetime', IDX], ['Hash', 'text']
+        ['VerificadoPor', 'text'], ['FechaHora', 'datetime', IDX], ['Hash', 'text'],
+        // Verificación de una novedad de ronda: registro verificado, origen, acciones adoptadas y fecha en que se verificó en sitio
+        ['RondaId', 'text', IDX], ['Origen', 'text'], ['Acciones', 'note'], ['FechaVerificacion', 'datetime']
       ]
     },
     AP_Bitacora: {
@@ -315,9 +321,9 @@
   // consola: entra a la consola · ver: consulta también las pantallas del Director (solo lectura) · editar: crea, modifica y borra
   // (solo el Director) · porteria: opera la portería · planta: programa turnos y permisos de su personal a cargo · th: Talento Humano
   AP.ROLES = {
-    Administrador: { consola: true, porteria: true, admin: true, ver: true, editar: true, estadisticas: true, planta: true, th: true },
-    // Solo consulta y descarga (personas, visitas, ingresos y salidas, inspecciones)
-    Analista: { consola: true },
+    Administrador: { consola: true, porteria: true, admin: true, ver: true, editar: true, estadisticas: true, planta: true, th: true, rondas: true },
+    // Solo consulta y descarga (personas, visitas, ingresos y salidas, inspecciones); también puede pasar ronda
+    Analista: { consola: true, rondas: true },
     // Gerencia u órgano de gobierno: ve y descarga toda la información, sin modificar ni borrar nada
     'Gobierno Corporativo': { consola: true, ver: true, estadisticas: true },
     // Ve, consulta y programa al personal que lo tiene como jefe inmediato (turnos, programación y permisos); no borra;
@@ -326,7 +332,7 @@
     // Consulta el personal propio (sin modificarlo), registra permisos y ausencias (vacaciones, licencias), y consulta el
     // estado en planta, la programación, las horas y las estadísticas del personal
     'Talento Humano': { consola: true, th: true },
-    Supervisor: { consola: false, porteria: true, historial: true },
+    Supervisor: { consola: false, porteria: true, historial: true, rondas: true },
     Vigilante: { consola: false, porteria: true },
     // El rondero solo marca los puntos de control de la ronda: no ve personas, visitas ni movimientos
     Rondero: { consola: false, porteria: false, rondas: true }

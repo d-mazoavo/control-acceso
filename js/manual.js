@@ -11,7 +11,7 @@
   AP.MANUAL = {
     titulo: 'Instructivo de uso de la aplicación Control de Acceso',
     codigo: 'Por asignar (Dirección de Calidad)',
-    version: '07',
+    version: '08',
     fecha: '2026-10-28',
     appVersion: '1.0.0',
     secciones: [
@@ -56,13 +56,13 @@
       ] },
       { id: 'perfiles', titulo: 'Perfiles de usuario y permisos', roles: ['todos'], bloques: [
         { tabla: { cab: ['Perfil', 'Qué puede hacer', 'Qué no puede hacer'], filas: [
-          ['Administrador (Director de Seguridad Integral)', 'Todo: crea, modifica y borra en la consola; administra empresas, cargos y usuarios (único perfil que ve «Usuarios»); aprueba visitas y solicitudes de ingreso; habilita e inhabilita personas; programa horarios y permisos; administra rondas, programación de planta y ausencias; consulta estadísticas; opera la portería.', '—'],
-          ['Analista', 'Consulta y descarga: panel, personas, visitas, ingresos y salidas, inspecciones.', 'Crear, aprobar, modificar o borrar. Operar la portería.'],
+          ['Administrador (Director de Seguridad Integral)', 'Todo: crea, modifica y borra en la consola; administra empresas, cargos y usuarios (único perfil que ve «Usuarios»); aprueba visitas y solicitudes de ingreso; habilita e inhabilita personas; programa horarios y permisos; administra rondas, programación de planta y ausencias; verifica las novedades de ronda; genera los informes de novedad y el informe mensual de seguridad con su firma escaneada; consulta estadísticas; opera la portería; pasa ronda.', '—'],
+          ['Analista', 'Consulta y descarga: panel, personas, visitas, ingresos y salidas, inspecciones. Pasa ronda («Pasar ronda» en el menú).', 'Crear, aprobar, modificar o borrar. Operar la portería.'],
           ['Gobierno Corporativo', 'Consulta y descarga la información, incluidas estadísticas, bitácora, planta y Talento Humano.', 'Crear, aprobar, modificar o borrar. Ver el ítem «Usuarios».'],
           ['Jefe de Producción', 'Ve, consulta y filtra al personal habilitado que lo tiene como jefe inmediato; crea turnos con horario, asigna personas a los turnos, programa la semana, asigna horarios fijos, registra y anula permisos de su personal, actualiza el número de uniforme, consulta su estado en planta y sus estadísticas, y descarga la programación por turnos.', 'Ver visitantes o personal de otros jefes. Modificar los demás datos de las personas. Borrar cualquier registro. Decidir solicitudes de ingreso.'],
           ['Talento Humano', 'Consulta el personal propio y a las personas con jefe inmediato asignado (aunque sean de otra empresa) y la ficha de cada una; registra y anula permisos y ausencias (vacaciones, licencias) de ese personal; actualiza el número de uniforme; ve el estado en planta, todo lo programado a cada persona por los Jefes de Producción, las horas según portería y las estadísticas del personal.', 'Modificar los demás datos de las personas. Ver visitantes. Borrar registros. Modificar la programación.'],
-          ['Supervisor y Vigilante', 'Operan la portería por turnos: leen QR, registran ingresos y salidas, inspecciones, elementos, solicitudes al Director. El supervisor consulta además el historial.', 'Modificar o borrar registros. Autorizar lo que corresponde al Director.'],
-          ['Rondero', 'Marca los puntos de control de la ronda y reporta novedades con fotografía; ve su avance y su cumplimiento.', 'Ver personas, visitas o movimientos.']
+          ['Supervisor y Vigilante', 'Operan la portería por turnos: leen QR, registran ingresos y salidas, inspecciones, elementos, solicitudes al Director. El supervisor consulta además el historial y pasa ronda («Pasar ronda» en la portería).', 'Modificar o borrar registros. Autorizar lo que corresponde al Director.'],
+          ['Rondero', 'Marca los puntos de control de la ronda con la foto del lugar y reporta novedades con fotografía, en un punto o en cualquier lugar; ve su avance y su cumplimiento.', 'Ver personas, visitas o movimientos. Usar fotos de la galería.']
         ] } },
         { p: 'Los permisos se hacen cumplir en el servidor (reglas de seguridad de Firebase): aunque alguien intente una acción por fuera de su perfil, el servidor la rechaza.' }
       ] },
@@ -116,15 +116,18 @@
           '«Mi turno» muestra los registros del celular y lo pendiente por enviar; desde allí se cierra el turno.'
         ] }
       ] },
-      { id: 'rondas', titulo: 'Rondas de seguridad (rondero)', roles: ['Rondero', 'Administrador'], bloques: [
-        { p: 'El panel de rondas muestra el cumplimiento del turno: revistas que cuentan sobre las exigidas, puntos completos, revistas pendientes y novedades reportadas, y por cada punto su avance (por ejemplo, 1/3) y desde qué hora cuenta la siguiente revista.' },
+      { id: 'rondas', titulo: 'Rondas de seguridad (rondero)', roles: ['Rondero', 'Administrador', 'Analista', 'Supervisor'], bloques: [
+        { p: 'Pasan ronda el rondero, el Director de Seguridad Integral, el Analista («Pasar ronda» en el menú de la consola) y el Supervisor («Pasar ronda» en la portería). El panel de rondas muestra el cumplimiento: revistas que cuentan sobre las exigidas, puntos completos, revistas pendientes y novedades reportadas, y por cada punto su avance (por ejemplo, 1/3) y desde qué hora cuenta la siguiente revista. El rondero y el supervisor lo llevan por turno; el Director y el Analista, por día.' },
         { ol: [
           'Oprima «Marcar punto de control» y lea el QR fijado en el punto.',
-          'Elija «Sin novedad» o «Con novedad». Si hay novedad, indique el tipo, descríbala y tome hasta 3 fotografías (sin captar rostros cuando no sea necesario).',
+          'Se abre la cámara: tome la foto del lugar (obligatoria) y oprima «Usar esta foto». Sin esa foto no se puede registrar la marcación.',
+          'Elija «Sin novedad» o «Con novedad». Si hay novedad, indique el tipo, descríbala y, si ayuda, tome hasta 3 fotos del hallazgo (sin captar rostros cuando no sea necesario).',
           'Oprima «Registrar marcación». Si hay novedad, avise de inmediato al Director con el botón de WhatsApp.',
-          'Si el QR del punto está dañado, use «Sin QR» y escriba la justificación: la marcación queda señalada para revisión.',
-          'Al terminar, oprima «Cerrar turno»: se muestra y se registra el porcentaje de cumplimiento de la ronda.'
+          'Si el QR del punto está dañado, use «Sin QR» en el panel y escriba la justificación: la marcación queda señalada para revisión y también exige la foto del lugar.',
+          'Para una novedad fuera de un punto de control, oprima «Reportar novedad»: escriba el lugar, el tipo y qué encontró, tome al menos una foto y oprima «Registrar novedad».',
+          'Al terminar, el rondero oprime «Cerrar turno»: se muestra y se registra el porcentaje de cumplimiento de la ronda.'
         ] },
+        { nota: 'Las fotos se toman en el momento con la cámara de la aplicación: no se puede elegir una foto de la galería ni leer el QR desde una foto guardada. Cada foto lleva impresos la fecha, la hora, el lugar y el usuario, y su huella SHA-256 queda en el registro. En la noche, use el botón de linterna si el celular lo tiene.' },
         { nota: 'Cada punto tiene una meta fijada por el Director: cuántas revistas por turno y el tiempo mínimo entre una y otra. Una revista hecha antes de ese tiempo queda registrada, pero NO cuenta para el cumplimiento; la aplicación lo avisa en el momento.' }
       ] },
       { id: 'consola-director', titulo: 'Consola del Director de Seguridad Integral', roles: ['Administrador'], bloques: [
@@ -159,7 +162,10 @@
         { ul: [
           'Elementos: registre lo que sale, ingresa o debe regresar; el vigilante lo verifica al leer el QR de la persona.',
           'Usuarios (solo el Director lo ve; es el último ítem del menú): para crear un usuario, busque a la persona ya registrada en Personas y asígnele el perfil y el usuario; su nombre, documento, empresa y cargo salen de la ficha. Alta con PIN temporal (se muestra una sola vez), restablecimiento, baja y cierre de turnos abiertos. Los usuarios anteriores se vinculan con «Editar datos». Al cambiar el perfil de un usuario con turno abierto, su celular cierra el turno y le pide ingresar de nuevo.',
-          'Rondas: puntos de control con su QR y su meta (revistas por turno y tiempo mínimo entre revistas), marcaciones y cumplimiento por turno.',
+          'Rondas: puntos de control con su QR y su meta (revistas por turno y tiempo mínimo entre revistas), marcaciones con su foto del lugar y cumplimiento por turno (y por día para el Director y el Analista).',
+          'Rondas › Novedades y verificación: novedades reportadas en los puntos y con «Reportar novedad». Registre la verificación (fecha, resultado, lo que constató y las acciones); no modifica el registro de quien reportó y puede actualizarse. Con el ícono de documento genera el informe de la novedad en PDF o en Word, en español o en inglés, dirigido a la Asamblea General de Accionistas y a la Gerencia General, con los hechos, las fotos, su verificación y su firma escaneada.',
+          'Rondas › Fotografías y espacio: espacio aproximado que ocupan las fotos en la nube (la base de datos gratuita tiene 1 GB para todo). Cada mes descargue el archivo fotográfico del mes anterior (ZIP con las fotos, un índice con la huella SHA-256 verificada de cada una y un LEEME) y guárdelo en un lugar seguro de la empresa; después use «Liberar espacio de ese mes»: se borran de la nube solo las fotos de marcaciones sin novedad; las de novedades, los registros y las huellas se conservan.',
+          'Informe mensual (solo el Director): desde el último día de cada mes el panel le recuerda generar el informe de seguridad del mes, con indicadores y gráficas de ingresos, rondas y novedades con su verificación, resumen ejecutivo y conclusiones (con borrador automático para revisar) y recomendaciones. Se descarga en Word, para ajustarlo, o en PDF, en español o en inglés, con su firma escaneada. La firma se carga una sola vez en esa misma pantalla.',
           'Programación: programación mensual del servicio de vigilancia que remite el contratista, para verificar el cubrimiento.',
           'Instalación: estado de la conexión. Las consultas del Jefe de Producción y de Talento Humano ya no necesitan índices compuestos; los dos índices de la sección «Índices de la base de datos» son opcionales y solo permiten que esos perfiles vean los ingresos y salidas registrados antes de la actualización de octubre de 2026.',
           'Al ingresar, la sesión del Director completa en segundo plano, una vez al día, los datos que necesitan esas consultas (ámbito de Talento Humano, mes y jefe inmediato vigente de permisos, ausencias y horarios recientes). Los ingresos y salidas no se modifican.'
@@ -285,7 +291,7 @@
         { ul: [
           'Los ingresos, salidas, inspecciones, turnos, marcaciones de ronda, verificaciones y la bitácora no se modifican; cada uno queda firmado por el servidor con el usuario y la hora del servidor.',
           'Solo el Director de Seguridad Integral puede borrar registros, y solo en las listas que lo permiten. El registro de cambios de la programación de planta y de las ausencias no lo puede modificar ni borrar nadie.',
-          'Las fotografías de inspecciones y rondas conservan su huella SHA-256.'
+          'Las fotografías de inspecciones y rondas conservan su huella SHA-256. Las fotos de marcaciones sin novedad que el Director libera de la nube quedan en el archivo fotográfico del mes y se verifican con esa huella.'
         ] }
       ] }
     ],
@@ -297,7 +303,8 @@
       { version: '04', fecha: '2026-10-26', descripcion: 'El ingreso en un día no programado o de descanso, de cualquier persona con horario (personal propio, contratistas y demás), lo decide el Director de Seguridad Integral: el vigilante envía la solicitud y la persona no ingresa mientras no se apruebe. Se eliminó en ese caso la opción de registrar el ingreso pendiente de verificación.' },
       { version: '05', fecha: '2026-10-27', descripcion: 'Los permisos solicitados por el jefe inmediato se envían a Recursos Humanos («Por autorizar») y solo se aplican en portería cuando se autorizan; catálogo de motivos de permisos y licencias con su clase de remuneración, fundamento y soporte; licencias de día completo que crean la ausencia al autorizarse; las tarjetas de «Estado en planta» muestran a las personas de cada situación.' },
       { version: '06', fecha: '2026-10-28', descripcion: '«Turnos y asignación» muestra, por periodo, quiénes están en cada turno (filtrable y descargable) y permite quitar del turno o cambiar de turno; al asignar, la lista indica lo que cada persona ya tiene programado y ofrece fechas rápidas; horas extra antes o después del turno, con motivo, límite de referencia (art. 167A CST) y efecto en portería; la programación semanal se abre en consulta, se edita por día con un clic o a mano con el pincel, filtra por turno y avisa cuando la semana está vacía.' },
-      { version: '07', fecha: '2026-10-28', descripcion: 'Al abrir «Planta», el Director y Gobierno Corporativo ven el estado de todo el personal (todos los jefes inmediatos juntos), con el jefe de cada persona, filtro por jefe, tarjetas que filtran y descarga en Excel; estadísticas y registro de cambios de todos los grupos. «Estado en planta» de Talento Humano también muestra y filtra por jefe inmediato.' }
+      { version: '07', fecha: '2026-10-28', descripcion: 'Al abrir «Planta», el Director y Gobierno Corporativo ven el estado de todo el personal (todos los jefes inmediatos juntos), con el jefe de cada persona, filtro por jefe, tarjetas que filtran y descarga en Excel; estadísticas y registro de cambios de todos los grupos. «Estado en planta» de Talento Humano también muestra y filtra por jefe inmediato.' },
+      { version: '08', fecha: '2026-10-28', descripcion: 'Foto obligatoria del lugar en cada marcación de ronda, tomada en el momento con la cámara de la aplicación (sin galería), con fecha, hora, lugar y usuario impresos; «Reportar novedad» fuera de los puntos de control; el Director, el Analista y el Supervisor también pasan ronda; verificación de las novedades de ronda por el Director e informe de cada novedad en PDF o Word, en español o en inglés, con firma escaneada; informe mensual de seguridad con gráficas; archivo fotográfico mensual y liberación de espacio de las fotos de marcaciones sin novedad.' }
     ]
   };
 })();
