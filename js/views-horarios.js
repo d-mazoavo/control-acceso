@@ -51,7 +51,7 @@
             ' minutos o más después, el ingreso queda DENEGADO hasta que usted verifique; entre 1 y ' + (AP.Horario.cfg().minutosPendiente - 1) + ' minutos queda PENDIENTE. ' +
             'La salida antes de la hora de fin exige un permiso suyo; sin él se muestra como NO AUTORIZADA (sin retención física). Las personas sin horario registrado no tienen estas reglas.')),
           h('div', { class: 'banner info' }, AP.icon('calendar', 18), h('span', null,
-            'Operarios: en las semanas que el Jefe de Producción programe en «Planta», esa programación reemplaza el horario de esta pantalla para esos días (con las mismas reglas de puntualidad).')),
+            'Operarios: en las semanas que el jefe con personal a cargo programe en «Planta», esa programación reemplaza el horario de esta pantalla para esos días (con las mismas reglas de puntualidad).')),
           h('div', { class: 'banner info' }, AP.icon('truck', 18), h('span', null,
             'Acceso libre (conductores, contratistas): en los días y horas habilitados la persona entra y sale las veces que necesite, sin control de llegada tarde ni de salida antes de la hora. ' +
             'La llegada sí se controla fuera de ese horario: antes de la hora queda PENDIENTE de su verificación; después del cierre, o en un día no habilitado si es contratista, el ingreso requiere su aprobación.')),
@@ -203,7 +203,7 @@
   });
 
   // =================== PERMISOS ===================
-  // opt.jefe: permiso del Jefe de Producción (solo su personal, lista ya filtrada en opt.personas)
+  // opt.jefe: permiso del jefe con personal a cargo (solo su personal, lista ya filtrada en opt.personas)
   // opt.th: permiso registrado por Talento Humano (lista ya filtrada en opt.personas)
   // opt.terceros: si la persona no es personal propio (contratista, conductor u otro), se registra como autorización de acceso
   // solicitada por su empleador, sin el catálogo de permisos laborales (evita indicios de subordinación, art. 23 CST)
@@ -254,7 +254,7 @@
             if (t) { if (motivo.value) { motivo.value = ''; pintarMotivo(); } if (!solEmp.value && p.Empresa) solEmp.value = p.Empresa + ', '; }
           }
           pers.addEventListener('input', pintarTercero); pers.addEventListener('change', pintarTercero);
-          var cargo = (AP.Session.user.perfil && AP.Session.user.perfil.Cargo) || (AP.Session.rol === 'Administrador' ? 'Director de Seguridad Integral' : AP.Session.rol);
+          var cargo = (AP.Session.user.perfil && AP.Session.user.perfil.Cargo) || (AP.Session.rol === 'Administrador' ? 'Director de Seguridad Integral' : AP.rolNombre(AP.Session.rol));
           var propio = opt.jefe || opt.th;
           var autoriza = AP.autorizaPicker({
             fuente: function () { return Promise.resolve(opt.todas || (propio ? per : AP.B.listAll('AP_Personas', { exclude: ['Foto', 'Observaciones'] }))); },
@@ -344,7 +344,7 @@
             if (j && RE_SALUD.test(j)) return AP.toast('La justificación parece contener información de salud (dato sensible, art. 5 Ley 1581 de 2012). Escriba solo el hecho general.', 'warn', 9000);
             btns.forEach(function (b) { b.disabled = true; });
             try {
-              var cargo = (AP.Session.user.perfil && AP.Session.user.perfil.Cargo) || (AP.Session.rol === 'Administrador' ? 'Director de Seguridad Integral' : AP.Session.rol);
+              var cargo = (AP.Session.user.perfil && AP.Session.user.perfil.Cargo) || (AP.Session.rol === 'Administrador' ? 'Director de Seguridad Integral' : AP.rolNombre(AP.Session.rol));
               var upd = { Estado: aprueba ? 'Vigente' : 'Rechazado', DecididoPor: AP.Session.user.upn, DecididoPorNombre: AP.Session.user.nombre + ' — ' + cargo,
                 FechaDecision: new Date().toISOString(), MotivoDecision: j };
               if (aprueba) { upd.AutorizadoPor = upd.DecididoPorNombre; upd.AutorizadoPorCargo = cargo; }

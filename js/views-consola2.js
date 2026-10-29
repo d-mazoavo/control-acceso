@@ -921,17 +921,17 @@
     }
     var reglas = [
       'Las reglas de seguridad de Firestore (archivo firestore.rules de la entrega) deben estar publicadas en la consola de Firebase: Firestore Database → Reglas.',
-      'Con esas reglas, el servidor exige un usuario activo para leer o escribir. Solo el Administrador (Director de Seguridad Integral) crea, modifica y borra en la consola; el Analista y Gobierno Corporativo solo consultan y descargan; el Jefe de Producción ve y programa solo al personal que lo tiene como jefe inmediato, y Talento Humano consulta el personal propio y registra permisos y ausencias, sin borrar nada.',
+      'Con esas reglas, el servidor exige un usuario activo para leer o escribir. Solo el Administrador (Director de Seguridad Integral) crea, modifica y borra en la consola; el Analista y Gobierno Corporativo solo consultan y descargan; el jefe con personal a cargo ve y programa solo al personal que lo tiene como jefe inmediato, y Talento Humano consulta el personal propio y registra permisos y ausencias, sin borrar nada.',
       'Los registros de ingresos, salidas, inspecciones, turnos, verificaciones y bitácora no pueden modificarse ni borrarse por nadie, y cada uno queda firmado por el servidor con el usuario que lo hizo y la hora del servidor.',
       'Cuando un usuario se da de baja o se le restablece el PIN, su sesión anterior deja de tener acceso de inmediato.',
       'Si vuelve a publicar las reglas, use siempre la última versión entregada.'
     ];
-    // Desde el ajuste del 23-oct-2026 el Jefe de Producción y Talento Humano consultan solo con igualdades (sin índices
+    // Desde el ajuste del 23-oct-2026 el jefe con personal a cargo y Talento Humano consultan solo con igualdades (sin índices
     // compuestos). Estos dos índices son opcionales: solo permiten que vean los ingresos y salidas registrados antes.
     var indicesBox = h('div', { class: 'stack sm' }, h('p', { class: 'muted small' }, 'Oprima «Verificar índices» para ver su estado.'));
     var ayer = new Date(Date.now() - 864e5);
     var INDICES = [
-      ['Ingresos y salidas anteriores a la actualización (Jefe de Producción)', 'AP_Movimientos', 'JefeId + FechaHora', [['JefeId', '==', 'indice'], ['FechaHora', '>=', ayer]]],
+      ['Ingresos y salidas anteriores a la actualización (jefe con personal a cargo)', 'AP_Movimientos', 'JefeId + FechaHora', [['JefeId', '==', 'indice'], ['FechaHora', '>=', ayer]]],
       ['Ingresos y salidas anteriores a la actualización (Talento Humano)', 'AP_Movimientos', 'Categoria + FechaHora', [['Categoria', 'in', ['Personal propio', 'Personal propio sin carné']], ['FechaHora', '>=', ayer]]]
     ];
     async function verificarIndices() {
@@ -954,7 +954,7 @@
       h('section', { class: 'card stack' }, h('h3', null, '2. Seguridad en el servidor'),
         h('ol', { class: 'steps' }, reglas.map(function (p) { return h('li', null, p); }))),
       h('section', { class: 'card stack' }, h('h3', null, '2a. Índices de la base de datos'),
-        h('p', { class: 'small' }, 'Opcional. El Jefe de Producción y Talento Humano ya no necesitan índices compuestos: sus consultas funcionan sin crearlos. Estos dos índices solo permiten que vean los ingresos y salidas registrados antes de la actualización de octubre de 2026; si no se crean, esas pantallas funcionan igual y muestran un aviso. Los índices creados en entregas anteriores pueden dejarse o borrarse.'),
+        h('p', { class: 'small' }, 'Opcional. El jefe con personal a cargo y Talento Humano ya no necesitan índices compuestos: sus consultas funcionan sin crearlos. Estos dos índices solo permiten que vean los ingresos y salidas registrados antes de la actualización de octubre de 2026; si no se crean, esas pantallas funcionan igual y muestran un aviso. Los índices creados en entregas anteriores pueden dejarse o borrarse.'),
         indicesBox, h('div', { class: 'row gap wrap' }, h('button', { class: 'btn', type: 'button', onclick: verificarIndices }, AP.icon('search', 18), 'Verificar índices'))),
       h('section', { class: 'card stack' }, h('h3', null, '3. Este dispositivo'),
         h('div', { class: 'kv' }, h('span', null, 'Identificador'), h('strong', null, U.deviceId())),
@@ -1584,7 +1584,7 @@
       ['Clase de personal', 'Solo personal propio: ' + AP.CAT.tiposPersonal.join(' | ') + '.'],
       ['Empresa / NIT empresa', 'Obligatorio: la empresa debe estar creada en «Empresas». Se busca por NIT (o por el nombre exacto). Personal propio sin empresa: se vincula a ' + AP.CFG.empresa + ' si está creada.'],
       ['Cargo', 'Opcional: debe existir en «Cargos» con el mismo nombre. Si está vacío, la persona queda sin cargo.'],
-      ['Documento jefe inmediato', 'Opcional, para cualquier tipo de persona: número de documento del jefe inmediato, que debe estar registrado como persona. El Jefe de Producción ve y programa a quienes lo tienen como jefe inmediato.'],
+      ['Documento jefe inmediato', 'Opcional, para cualquier tipo de persona: número de documento del jefe inmediato, que debe estar registrado como persona. El jefe con personal a cargo ve y programa a quienes lo tienen como jefe inmediato.'],
       ['Número de uniforme', 'Opcional.'],
       ['Regla', 'Si el número de documento ya existe, la fila actualiza a esa persona; si no, se crea con una credencial QR nueva.']
     ];

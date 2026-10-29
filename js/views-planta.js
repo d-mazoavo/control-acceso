@@ -1,6 +1,6 @@
-/* Planta: personal a cargo de cada Jefe de Producción (las personas que lo tienen como jefe inmediato en su ficha),
+/* Planta: personal a cargo de cada jefe con personal a cargo (las personas que lo tienen como jefe inmediato en su ficha),
  * turnos con horario, asignación de personas a turnos, programación semanal, permisos, estado en planta, estadísticas y
- * registro de cambios. El Jefe de Producción crea y modifica, nunca borra; cada cambio queda registrado. El Director de
+ * registro de cambios. El jefe con personal a cargo crea y modifica, nunca borra; cada cambio queda registrado. El Director de
  * Seguridad Integral está por encima: ve y programa a cualquier grupo y puede inhabilitar a cualquier persona. Gobierno
  * Corporativo consulta. La portería aplica a esta programación las mismas reglas de puntualidad. */
 (function () {
@@ -142,7 +142,7 @@
     }
   };
 
-  // ---------- Ficha de consulta de una persona (Jefe de Producción y Talento Humano: sin modificar nada) ----------
+  // ---------- Ficha de consulta de una persona (jefe con personal a cargo y Talento Humano: sin modificar nada) ----------
   // info: { estado, ctx, ausencias, permisos, jefeNombre }
   AP.Planta.ficha = function (p, info) {
     info = info || {};
@@ -1207,7 +1207,7 @@
             [['sin', 'Personal propio sin jefe inmediato (' + gr.sinJefe + ')']]), g === TODOS ? 'todos' : g || 'sin', { style: { minWidth: 'min(24rem, 100%)' } });
           s.addEventListener('change', function () { g = s.value === 'todos' ? TODOS : s.value === 'sin' ? '' : s.value; AP.go(ruta(tab)); });
           grupoBox.replaceChildren(h('div', { class: 'filters' }, AP.field('Personal a cargo de (jefe inmediato)', s),
-            h('small', { class: 'muted' }, gr.lista.length ? '«Todo el personal» muestra a todos los grupos juntos. Para programar turnos, horarios y permisos, elija el grupo de un jefe: cada Jefe de Producción ve y programa solo al suyo. El jefe inmediato se asigna en la ficha de cada persona (Personas).' : 'Aún no hay personas con jefe inmediato asignado. Asígnelo en la ficha de cada persona (Personas).')));
+            h('small', { class: 'muted' }, gr.lista.length ? '«Todo el personal» muestra a todos los grupos juntos. Para programar turnos, horarios y permisos, elija el grupo de un jefe: cada jefe con personal a cargo ve y programa solo al suyo. El jefe inmediato se asigna en la ficha de cada persona (Personas).' : 'Aún no hay personas con jefe inmediato asignado. Asígnelo en la ficha de cada persona (Personas).')));
         }
         pintarTabs();
         var PORGRUPO = { semana: 'La programación semanal', turnos: 'Los turnos y su asignación', horarios: 'Los horarios fijos', permisos: 'El registro de permisos' };
@@ -1813,13 +1813,13 @@
       var out = h('div');
       [fTipo, fDia].forEach(function (s) { s.addEventListener('change', pintar); });
       var COLS = [['Fecha', function (c) { return U.toDate(c.FechaHora); }, 17], ['Usuario (verificado por el servidor)', function (c) { return c._createdBy; }, 16], ['Nombre', function (c) { return c.UsuarioNombre; }, 26],
-        ['Perfil', function (c) { return c.Rol; }, 18], ['Tipo de cambio', function (c) { return c.Tipo; }, 24], ['Referencia', function (c) { return c.Referencia; }, 28], ['Cambios', function (c) { return Number(c.Cambios) || 0; }, 9],
+        ['Perfil', function (c) { return AP.rolNombre(c.Rol); }, 24], ['Tipo de cambio', function (c) { return c.Tipo; }, 24], ['Referencia', function (c) { return c.Referencia; }, 28], ['Cambios', function (c) { return Number(c.Cambios) || 0; }, 9],
         ['En días ya iniciados', function (c) { return Number(c.MismoDia) || 0; }, 12], ['Motivo', function (c) { return c.Motivo; }, 36], ['Detalle', function (c) { return c.Detalle; }, 90]];
       function filtrados() { return datos.filter(function (c) { return (!fTipo.value || c.Tipo === fTipo.value) && (!fDia.value || Number(c.MismoDia) > 0) && AP.coincide(c, q.value, ['UsuarioNombre', 'Usuario', 'Referencia', 'Detalle', 'Motivo', 'Tipo']); }); }
       function pintar() {
         out.replaceChildren(tabla([
           ['Fecha', function (c) { return U.fDateTime(c.FechaHora); }],
-          ['Usuario', function (c) { return h('div', null, c.UsuarioNombre || '', h('small', { class: 'block muted' }, (c._createdBy || '') + (c.Rol ? ' · ' + c.Rol : ''))); }],
+          ['Usuario', function (c) { return h('div', null, c.UsuarioNombre || '', h('small', { class: 'block muted' }, (c._createdBy || '') + (c.Rol ? ' · ' + AP.rolNombre(c.Rol) : ''))); }],
           ['Cambio', function (c) { return h('div', null, h('strong', null, c.Tipo), h('small', { class: 'block muted' }, c.Referencia || '')); }],
           ['Cantidad', function (c) { return h('div', null, String(c.Cambios || 0), Number(c.MismoDia) ? h('small', { class: 'block' }, AP.pill(c.MismoDia + ' en días ya iniciados', 'warn')) : null); }],
           ['Motivo', function (c) { return c.Motivo || ''; }]

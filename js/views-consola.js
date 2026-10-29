@@ -532,7 +532,7 @@
             if (c.Area && !areaIn.value.trim()) areaIn.value = c.Area;
             if (c.TipoPersonal && !claseSel.value) claseSel.value = c.TipoPersonal;
           });
-          // Jefe inmediato (para cualquier tipo de persona): persona registrada del personal propio. El Jefe de Producción ve y
+          // Jefe inmediato (para cualquier tipo de persona): persona registrada del personal propio. El jefe con personal a cargo ve y
           // programa a quienes lo tienen como jefe.
           var jefe0 = full.JefeId ? personas.find(function (x) { return x.id === full.JefeId; }) || { id: full.JefeId, Title: full.JefeNombre || 'Jefe registrado' } : null;
           var jefePick = AP.personaPicker({
@@ -557,7 +557,7 @@
             AP.field('Tipo de vehículo', AP.select('VehiculoTipo', AP.CAT.vehiculos, full.VehiculoTipo)),
             AP.field('Clase de personal', claseSel, 'Personal propio. Talento Humano ve en planta a los operarios y al personal operativo.'),
             AP.field('Número de uniforme', I('NumUniforme', full.NumUniforme, { maxlength: 20 }), 'También lo pueden actualizar el jefe inmediato y Talento Humano.'),
-            AP.field('Jefe inmediato', jefePick, 'Para cualquier tipo de persona (también contratistas). El Jefe de Producción ve, consulta y programa a quienes lo tienen como jefe inmediato, y Talento Humano los incluye en su consulta.', 'span2'),
+            AP.field('Jefe inmediato', jefePick, 'Para cualquier tipo de persona (también contratistas). El jefe con personal a cargo ve, consulta y programa a quienes lo tienen como jefe inmediato, y Talento Humano los incluye en su consulta.', 'span2'),
             AP.field('Estado', AP.select('Estado', ['Habilitado', 'Inhabilitado'], full.Estado)),
             AP.field('Motivo del estado', I('MotivoEstado', full.MotivoEstado)),
             h('div', { class: 'field span2 stack sm' },

@@ -204,7 +204,7 @@
       AP.exportarHojas('Estadisticas_' + data.d0 + '_a_' + data.d1, hojas, [['Periodo', data.d0 + ' a ' + data.d1],
         ['Filtro', [fCat.value, fArea.value, fEmp.value].filter(Boolean).join(' · ') || 'ninguno'],
         ['Nota', 'Las horas en planta son el tiempo entre la entrada y la salida registradas en portería; no equivalen a horas trabajadas para nómina.'],
-        ['Generado por', AP.Session.user.nombre + ' (' + AP.Session.rol + ')'], ['Fecha', U.fDateTime(new Date())], ['Fuente', 'Colecciones AP_Movimientos, AP_Solicitudes, AP_Inspecciones, AP_Rondas y AP_Visitas']]);
+        ['Generado por', AP.Session.user.nombre + ' (' + AP.rolNombre(AP.Session.rol) + ')'], ['Fecha', U.fDateTime(new Date())], ['Fuente', 'Colecciones AP_Movimientos, AP_Solicitudes, AP_Inspecciones, AP_Rondas y AP_Visitas']]);
     }
     consultar();
   });

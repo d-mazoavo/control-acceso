@@ -394,7 +394,7 @@
       return cache;
     }
     function texto(nombre, cargo) { return nombre + (cargo ? ' — ' + cargo : ''); }
-    function miCargo() { return (AP.Session.user.perfil && AP.Session.user.perfil.Cargo) || (AP.Session.rol === 'Administrador' ? 'Director de Seguridad Integral' : AP.Session.rol); }
+    function miCargo() { return (AP.Session.user.perfil && AP.Session.user.perfil.Cargo) || (AP.Session.rol === 'Administrador' ? 'Director de Seguridad Integral' : AP.rolNombre(AP.Session.rol)); }
     function fijar(p, yo) {
       if (yo) {
         hid.AutorizadoPor.value = texto(AP.Session.user.nombre, miCargo());

@@ -348,4 +348,9 @@
   };
   // Roles que trabajan por turnos (abren turno al ingresar y lo cierran al salir; ingresan con PIN)
   AP.ROLES_TURNO = ['Vigilante', 'Supervisor', 'Rondero'];
+  // Nombre con el que se muestra cada perfil. El perfil «Jefe de Producción» se llama ahora «Jefe con personal a cargo»: lo
+  // usa cualquier jefe (de planta, de mantenimiento, de calidad…) que programe a su personal. El nombre interno no cambia,
+  // para no tocar las cuentas ni las reglas de seguridad ya publicadas.
+  AP.ROL_NOMBRE = { 'Jefe de Producción': 'Jefe con personal a cargo', Administrador: 'Administrador (Director de Seguridad Integral)' };
+  AP.rolNombre = function (r) { return AP.ROL_NOMBRE[r] || r || ''; };
 })();
