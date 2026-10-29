@@ -104,7 +104,7 @@
         B.listRange('AP_Visitas', 'FechaFin', U.addDays(hoy0, -1), null),
         B.listAll('AP_Personas', { exclude: ['Foto', 'Observaciones'] }),
         B.listRange('AP_Inspecciones', 'FechaHora', hoy0, null).catch(function () { return []; }),
-        AP.Session.can('ver') ? B.listRange('AP_Rondas', 'FechaHora', hoy0, null).catch(function () { return []; }) : Promise.resolve([]),
+        AP.Session.consulta() ? B.listRange('AP_Rondas', 'FechaHora', hoy0, null).catch(function () { return []; }) : Promise.resolve([]),
         AP.Session.can('ver') ? AP.Sync.pullSolicitudes().catch(function () { return AP.Sync.solicitudes || []; }) : Promise.resolve([])
       ]);
       var movs = res[0], vis = res[1], pers = res[2], insp = res[3], rondas = res[4], solic = res[5];
@@ -279,11 +279,11 @@
             ], insp, 'Sin inspecciones registradas hoy.');
           }),
           AP.Session.can('ver') ? kpi(solic.filter(function (x) { return x.Estado === 'Pendiente'; }).length, 'Ingresos por decidir', 'inbox', solic.some(function (x) { return x.Estado === 'Pendiente'; }) ? 'deny' : '', '/consola/solicitudes') : null,
-          AP.Session.can('ver') ? kpi(rondas.length, 'Marcaciones de ronda hoy', 'route', rondas.some(function (x) { return x.Novedad; }) ? 'warn' : '', null, function () {
+          AP.Session.consulta() ? kpi(rondas.length, 'Marcaciones de ronda hoy', 'route', rondas.some(function (x) { return x.Novedad; }) ? 'warn' : '', null, function () {
             modalLista('Marcaciones de ronda de hoy (' + rondas.length + ')', [
               ['Hora', function (x) { return U.fTime(x.FechaHora); }],
               ['Punto', function (x) { return x.Title; }],
-              ['Rondero', function (x) { return x.Rondero; }],
+              ['Registró', function (x) { return x.Rondero + (x.Rol && x.Rol !== 'Rondero' ? ' (supervisión)' : ''); }],
               ['Lectura', function (x) { return x.Origen; }],
               ['Novedad', function (x) { return x.Novedad ? [x.TipoNovedad, x.Descripcion].filter(Boolean).join(' — ') : 'Sin novedad'; }]
             ], rondas.slice().sort(function (a, b) { return a.FechaHora < b.FechaHora ? 1 : -1; }), 'Sin marcaciones de ronda hoy.');

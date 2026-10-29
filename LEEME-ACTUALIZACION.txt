@@ -1,6 +1,7 @@
 AVO PAK S.A.S. — CONTROL DE ACCESO
-Ajuste del 28 de octubre de 2026 (etiqueta de caché b11). La versión de la aplicación sigue siendo 1.0.0. Manual de uso: revisión 08.
-Hay UNA regla nueva de Firebase (solo para liberar espacio de fotos): se publica una vez en la consola (ver al final).
+Ajuste del 28 de octubre de 2026 (etiqueta de caché b12). La versión de la aplicación sigue siendo 1.0.0. Manual de uso: revisión 09.
+Hay reglas nuevas de Firebase: se publican una vez en la consola (ver al final). Sin ellas, el Analista y el Supervisor no
+pueden abrir algunas consultas y el Director no puede liberar espacio de fotos.
 
 QUÉ CAMBIA
 1. Rondas con foto obligatoria del lugar: al leer el QR del punto se abre la cámara de la aplicación; sin la foto no se registra
@@ -10,7 +11,8 @@ QUÉ CAMBIA
 2. «Reportar novedad»: botón aparte del QR para reportar lo que se encuentre en cualquier lugar (lugar escrito, tipo,
    descripción y al menos una foto tomada en el momento).
 3. También pasan ronda el Director, el Analista («Pasar ronda» en el menú de la consola) y el Supervisor («Pasar ronda» en la
-   portería). El rondero y el supervisor llevan la ronda por turno; el Director y el Analista, por día.
+   portería), como revistas de supervisión: exigen la foto del lugar, pero no tienen meta ni cumplimiento. El cumplimiento
+   solo se exige al rondero (panel, «Cumplimiento por turno» e informe mensual).
 4. Consola › Rondas › «Novedades y verificación»: el Director registra la verificación de cada novedad (fecha, resultado, lo
    que constató y acciones) sin modificar el registro de quien reportó, y genera el informe de la novedad en PDF o Word, en
    español o en inglés, dirigido a la Asamblea General de Accionistas y a la Gerencia General, con su firma escaneada.
@@ -21,16 +23,24 @@ QUÉ CAMBIA
    índice con la huella SHA-256 verificada y LEEME) y «Liberar espacio de ese mes», que borra de la nube solo las fotos de
    marcaciones sin novedad de un mes ya archivado. Los registros, las huellas y las fotos de novedades se conservan.
 
+7. El Analista y el Supervisor consultan, sin modificar ni verificar: rondas (cumplimiento, marcaciones, novedades y puntos),
+   elementos, programación del servicio, novedades de portería, planta y permisos. El Analista los ve en el menú de la
+   consola; el Supervisor, con «Consultas» en la portería. El motivo de los permisos de salud, maternidad o paternidad les
+   aparece como reservado (dato sensible, art. 5 de la Ley 1581 de 2012) y no ven el registro de cambios de planta, la bitácora
+   ni «Fotografías y espacio». En el panel del Analista aparecen las marcaciones de ronda del día.
+
 ARCHIVOS QUE CAMBIAN
 index.html, sw.js, LEEME-ACTUALIZACION.txt, css/app.css y, en la carpeta js: camara.js, graficas.js, informes.js y
 views-informes.js (nuevos), vendor/jspdf.umd.min.js (nuevo), views-rondas.js, views-porteria.js, app.js, sync.js, schema.js,
-backend-firebase.js, docx.js, ui.js, views-turno.js, manual.js e i18n-en.js. Ya están publicados en GitHub: no hay que subir nada.
+backend-firebase.js, docx.js, ui.js, views-turno.js, views-consola.js, views-consola2.js, views-horarios.js, views-planta.js,
+views-programacion.js, manual.js e i18n-en.js. Ya están publicados en GitHub: no hay que subir nada.
 
 ACTUALIZAR LA APLICACIÓN EN CADA EQUIPO
 - Computador: abra https://d-mazoavo.github.io/control-acceso/ y oprima Ctrl+F5 (o Ctrl+Mayús+R).
 - Celulares: cierre la aplicación por completo y ábrala de nuevo. La primera vez que tome una foto, el celular pide permiso
   para usar la cámara: oprima «Permitir».
 
-REGLA NUEVA DE FIREBASE (una sola vez; solo hace falta para «Liberar espacio»)
-El archivo de reglas no se sube a GitHub. El Director lo recibe aparte y lo publica en: consola de Firebase › Firestore
-Database › pestaña «Reglas» › borrar todo › pegar el archivo completo › «Publicar». Todo lo demás funciona sin este paso.
+REGLAS NUEVAS DE FIREBASE (una sola vez)
+Hacen falta para «Liberar espacio» y para que el Analista y el Supervisor consulten rondas, turnos, verificaciones y la
+programación del servicio. El archivo de reglas no se sube a GitHub. El Director lo recibe aparte y lo publica en: consola de
+Firebase › Firestore Database › pestaña «Reglas» › borrar todo › pegar el archivo completo › «Publicar».

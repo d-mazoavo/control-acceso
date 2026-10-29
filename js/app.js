@@ -29,6 +29,11 @@
     return { nombre: u.nombre, upn: u.upn, usuario: u.usuario };
   };
   Session.can = function (p) { return !!Session.perms[p]; };
+  // Consulta (solo lectura) de rondas, elementos, programación, novedades, planta y permisos: Director, Gobierno
+  // Corporativo, Analista y Supervisor
+  Session.consulta = function () { return Session.can('ver') || Session.can('consulta'); };
+  // El cumplimiento de la ronda solo se exige al rondero; las revistas de los demás perfiles son de supervisión
+  Session.rondero = function () { return Session.rol === 'Rondero'; };
   // Consola con lectura del panel, personas, visitas, historial e inspecciones (Director, Analista, Gobierno Corporativo)
   Session.lectura = function () { return Session.rol === 'Administrador' || Session.rol === 'Analista' || Session.rol === 'Gobierno Corporativo'; };
   // Perfiles que solo usan su módulo (Jefe de Producción, Talento Humano): no descargan los datos de portería
@@ -154,8 +159,10 @@
     // Usuarios: solo el Director de Seguridad Integral (último ítem del menú)
     ['/consola/vigilantes', 'badge', 'Usuarios', 'admin']
   ];
+  var CONSULTA = ['/consola/rondas', '/consola/elementos', '/consola/programacion', '/consola/novedades', '/consola/planta', '/consola/permisos'];
   function navPermitido(n) {
     if (n[0] === '/consola/historial' && Session.can('historial')) return true;   // el supervisor consulta el historial
+    if (Session.can('consulta') && CONSULTA.indexOf(n[0]) >= 0) return true;      // Analista y Supervisor: solo consulta
     if ((n[0] === '/consola/planta' || n[0] === '/consola/th') && Session.can('ver')) return true;   // Gobierno Corporativo consulta
     return n[3] === 'lectura' ? Session.lectura() : Session.can(n[3]);
   }

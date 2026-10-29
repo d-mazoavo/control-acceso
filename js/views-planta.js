@@ -1153,11 +1153,13 @@
 
   // =================== PANTALLA DE PLANTA ===================
   AP.route('/consola/planta', function (qs) {
-    if (!AP.Session.can('planta') && !AP.Session.can('ver')) { AP.go('/'); return; }
+    if (!AP.Session.can('planta') && !AP.Session.consulta()) { AP.go('/'); return; }
     var ED = puedeEditar();
     var tab = qs.t || 'personal';
     var content = h('div', { class: 'stack' });
-    var TABS = [['personal', esJefe() ? 'Mi personal' : 'Estado del personal'], ['semana', 'Programación semanal'], ['turnos', 'Turnos y asignación'], ['horarios', 'Horarios fijos'], ['permisos', 'Permisos'], ['estadisticas', 'Estadísticas'], ['cambios', 'Registro de cambios']];
+    var TABS = [['personal', esJefe() ? 'Mi personal' : 'Estado del personal'], ['semana', 'Programación semanal'], ['turnos', 'Turnos y asignación'], ['horarios', 'Horarios fijos'], ['permisos', 'Permisos'], ['estadisticas', 'Estadísticas'], ['cambios', 'Registro de cambios']]
+      // El registro de cambios no se muestra en los perfiles de solo consulta (Analista y Supervisor)
+      .filter(function (t) { return t[0] !== 'cambios' || !AP.Session.can('consulta') || AP.Session.can('ver'); });
     var box = h('div', { class: 'stack' }, AP.spinner('Cargando…'));
     var acciones = h('div', { class: 'row gap wrap' });
     var grupoBox = h('div');
@@ -1433,7 +1435,7 @@
         try {
           ops = await personal();
           var crudoP = await D.permisos(U.addDays(new Date(), -30).toISOString(), ops);
-          datos = crudoP.slice().sort(function (a, b) { return a.Desde < b.Desde ? 1 : -1; });
+          datos = crudoP.map(AP.reservarPermiso).sort(function (a, b) { return a.Desde < b.Desde ? 1 : -1; });
           ahora = Date.now(); pintar();
           if (crudoP.avisoLegado) out.prepend(h('div', { class: 'banner warn' }, AP.icon('alert', 18), h('span', null, AVISO_LEGADO)));
         } catch (e) { out.replaceChildren(errBox(e)); }

@@ -25,7 +25,7 @@
   function errBox(e) { return AP.empty(e && e.offline ? 'offline' : 'alert', e && e.offline ? 'Sin conexión con el servidor' : 'No fue posible cargar la información', e && e.message); }
 
   AP.route('/consola/programacion', function (qs) {
-    if (!AP.Session.can('ver')) { AP.go('/'); return; }
+    if (!AP.Session.consulta()) { AP.go('/'); return; }
     var ED = AP.Session.can('editar');   // Gobierno Corporativo: solo consulta
     var mes = /^\d{4}-\d{2}$/.test(qs.m || '') ? qs.m : U.ymd().slice(0, 7);
     var N = diasMes(mes);
@@ -49,7 +49,9 @@
 
     async function cargar() {
       try {
-        var r = await Promise.all([AP.B.listAll('AP_Vigilantes'), AP.B.findBy('AP_Programacion', 'Mes', mes)]);
+        // El Analista y el Supervisor (solo consulta) no leen la lista de usuarios: ven a las personas tal como quedaron guardadas
+        var verUsuarios = AP.Session.can('ver');
+        var r = await Promise.all([verUsuarios ? AP.B.listAll('AP_Vigilantes') : Promise.resolve(null), AP.B.findBy('AP_Programacion', 'Mes', mes)]);
         var usuarios = r[0];
         doc = r[1].filter(function (x) { return !x._borrado; })[0] || null;
         var guardado = { personas: [] };
@@ -63,6 +65,7 @@
         }
         var porId = {};
         (guardado.personas || []).forEach(function (p) { porId[p.id] = p; });
+        if (!usuarios) usuarios = (guardado.personas || []).map(function (p) { return { id: p.id, Title: p.nombre, Usuario: p.usuario, Rol: p.rol, Empresa: p.empresa, NumDoc: p.doc, Activo: true }; });
         filas = usuarios.filter(function (v) { return AP.CAT.rolesProgramables.indexOf(v.Rol) >= 0 && (v.Activo !== false || porId[v.id]); })
           .map(function (v) {
             var g = porId[v.id], dias = [];

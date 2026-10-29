@@ -322,8 +322,9 @@
   // (solo el Director) · porteria: opera la portería · planta: programa turnos y permisos de su personal a cargo · th: Talento Humano
   AP.ROLES = {
     Administrador: { consola: true, porteria: true, admin: true, ver: true, editar: true, estadisticas: true, planta: true, th: true, rondas: true },
-    // Solo consulta y descarga (personas, visitas, ingresos y salidas, inspecciones); también puede pasar ronda
-    Analista: { consola: true, rondas: true },
+    // Solo consulta y descarga (personas, visitas, ingresos y salidas, inspecciones, y en consulta: rondas, elementos,
+    // programación, novedades, planta y permisos); pasa ronda como revista de supervisión (sin cumplimiento)
+    Analista: { consola: true, rondas: true, consulta: true },
     // Gerencia u órgano de gobierno: ve y descarga toda la información, sin modificar ni borrar nada
     'Gobierno Corporativo': { consola: true, ver: true, estadisticas: true },
     // Ve, consulta y programa al personal que lo tiene como jefe inmediato (turnos, programación y permisos); no borra;
@@ -332,7 +333,9 @@
     // Consulta el personal propio (sin modificarlo), registra permisos y ausencias (vacaciones, licencias), y consulta el
     // estado en planta, la programación, las horas y las estadísticas del personal
     'Talento Humano': { consola: true, th: true },
-    Supervisor: { consola: false, porteria: true, historial: true, rondas: true },
+    // Además de la portería: historial y, en consulta, rondas, elementos, programación, novedades, planta y permisos;
+    // pasa ronda como revista de supervisión (sin cumplimiento)
+    Supervisor: { consola: false, porteria: true, historial: true, rondas: true, consulta: true },
     Vigilante: { consola: false, porteria: true },
     // El rondero solo marca los puntos de control de la ronda: no ve personas, visitas ni movimientos
     Rondero: { consola: false, porteria: false, rondas: true }

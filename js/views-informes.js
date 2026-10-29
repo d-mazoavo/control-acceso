@@ -506,15 +506,14 @@
       var ms = d.rondas.filter(function (m) { return m.TurnoId === e.TurnoId && m.PuntoId; });
       return { inicio: e.FechaHora, nombre: e.Title, c: AP.Rondas.cumplimiento(pts, ms) };
     });
-    var otras = {};
-    d.rondas.filter(function (m) { return !m.TurnoId && m.PuntoId; }).forEach(function (m) { var k = U.ymd(m.FechaHora) + '|' + (m.RonderoUsuario || ''); (otras[k] = otras[k] || []).push(m); });
-    Object.keys(otras).forEach(function (k) { var ms = otras[k]; rondasT.push({ inicio: ms[0].FechaHora, nombre: ms[0].Rondero, c: AP.Rondas.cumplimiento(pts, ms), dia: true }); });
+    // Revistas de supervisión (Director, Analista, Supervisor): se informan aparte y no cuentan para el cumplimiento
+    var sup = d.rondas.filter(function (m) { return AP.Rondas.esSupervision(m); });
     var cumpProm = rondasT.length ? Math.round(rondasT.reduce(function (a, x) { return a + x.c.tot.pct; }, 0) / rondasT.length) : null;
     var cumpDia = {};
     rondasT.forEach(function (x) { var k = Number(U.ymd(x.inicio).slice(8, 10)); (cumpDia[k] = cumpDia[k] || []).push(x.c.tot.pct); });
     var porPunto = pts.map(function (p) {
       var conMeta = rondasT.filter(function (x) { var f = x.c.filas.find(function (y) { return y.p.id === p.id; }); return f && f.completo; }).length;
-      return { p: p, marcas: d.rondas.filter(function (m) { return m.PuntoId === p.id; }).length, cumplidas: conMeta, rondas: rondasT.length };
+      return { p: p, marcas: d.rondas.filter(function (m) { return m.PuntoId === p.id && !AP.Rondas.esSupervision(m); }).length, sup: sup.filter(function (m) { return m.PuntoId === p.id; }).length, cumplidas: conMeta, rondas: rondasT.length };
     }).sort(function (a, b) { return pct(a.cumplidas, a.rondas) - pct(b.cumplidas, b.rondas) || b.marcas - a.marcas; });
     var novR = d.rondas.filter(function (x) { return x.Novedad; }).sort(function (a, b) { return a.FechaHora < b.FechaHora ? -1 : 1; });
     var verif = novR.filter(function (x) { return ultima(d.ver, x); });
@@ -527,7 +526,7 @@
       novTipo: function (en) { return cuenta(d.movs.filter(function (m) { return m.Novedad; }), function (m) { return tipoNov(String(m.Novedad).split(' | ')[0], en); }); },
       sol: d.sol, solAp: d.sol.filter(function (x) { return x.Estado === 'Aprobada'; }).length, solRe: d.sol.filter(function (x) { return x.Estado === 'Rechazada'; }).length,
       insp: d.insp, inspNC: d.insp.filter(function (i) { return i.Resultado === 'No conforme'; }).length,
-      rondas: d.rondas, rondasPrev: d.rondasPrev, rondasT: rondasT, cumpProm: cumpProm, cumpDia: cumpDia, porPunto: porPunto, pts: pts,
+      rondas: d.rondas, rondasPrev: d.rondasPrev, rondasT: rondasT, sup: sup.filter(function (m) { return m.PuntoId; }).length, cumpProm: cumpProm, cumpDia: cumpDia, porPunto: porPunto, pts: pts,
       sinQR: d.rondas.filter(function (x) { return x.PuntoId && x.Origen !== 'QR'; }).length, reportes: d.rondas.filter(function (x) { return x.Origen === 'Reporte de novedad'; }).length,
       novR: novR, verif: verif.length, fotos: fotos, peso: peso
     };
@@ -556,8 +555,8 @@
     var T = I().tr(en ? 'en' : 'es'), mes = I().nombreMes(d.ym, en ? 'en' : 'es');
     var res = T('Durante ' + mes.toLowerCase() + ' se registraron ' + n0(c.ing.length) + ' ingresos permitidos en portería (' + variacion(c.ing.length, c.ingP.length) + '), de ' + n0(c.personas) + ' personas distintas, ' + n0(c.visit) + ' de ellos de visitantes. Se negaron ' + n0(c.negados.length) + ' ingresos y se registraron ' + n0(c.nov.length) + ' novedades de portería. ',
       'During ' + mes + ', ' + n0(c.ing.length) + ' authorized entries were recorded at the gate (' + variacion(c.ing.length, c.ingP.length, true) + '), by ' + n0(c.personas) + ' different people, ' + n0(c.visit) + ' of them visitors. ' + n0(c.negados.length) + ' entries were denied and ' + n0(c.nov.length) + ' gate exceptions were recorded. ') +
-      T('En las rondas de seguridad se hicieron ' + n0(c.rondas.length) + ' marcaciones' + (c.cumpProm != null ? ', con un cumplimiento promedio de ' + c.cumpProm + ' % en ' + c.rondasT.length + ' rondas' : '') + '; se reportaron ' + n0(c.novR.length) + ' novedades, de las cuales ' + n0(c.verif) + ' están verificadas por esta Dirección.',
-        'Security patrols made ' + n0(c.rondas.length) + ' checkpoint check-ins' + (c.cumpProm != null ? ', with an average compliance of ' + c.cumpProm + ' % over ' + c.rondasT.length + ' patrols' : '') + '; ' + n0(c.novR.length) + ' incidents were reported, ' + n0(c.verif) + ' of which have been verified by this Department.');
+      T('En las rondas de seguridad el rondero hizo ' + n0(c.rondas.length - c.reportes - c.sup) + ' marcaciones' + (c.cumpProm != null ? ', con un cumplimiento promedio de ' + c.cumpProm + ' % en ' + c.rondasT.length + ' turnos de ronda' : '') + (c.sup ? ', y se hicieron ' + n0(c.sup) + ' revistas de supervisión' : '') + '; se reportaron ' + n0(c.novR.length) + ' novedades, de las cuales ' + n0(c.verif) + ' están verificadas por esta Dirección.',
+        'During security patrols the patrol guard made ' + n0(c.rondas.length - c.reportes - c.sup) + ' checkpoint check-ins' + (c.cumpProm != null ? ', with an average compliance of ' + c.cumpProm + ' % over ' + c.rondasT.length + ' patrol shifts' : '') + (c.sup ? ', and ' + n0(c.sup) + ' supervisory checks were made' : '') + '; ' + n0(c.novR.length) + ' incidents were reported, ' + n0(c.verif) + ' of which have been verified by this Department.');
     var bajos = c.porPunto.filter(function (x) { return x.rondas && pct(x.cumplidas, x.rondas) < 80; }).slice(0, 3).map(function (x) { return x.p.Title; });
     var con = [];
     if (c.cumpProm != null && c.cumpProm < 90) con.push(T('El cumplimiento promedio de las rondas (' + c.cumpProm + ' %) está por debajo de la meta' + (bajos.length ? '; los puntos con menor cumplimiento son: ' + bajos.join(', ') : '') + '.', 'Average patrol compliance (' + c.cumpProm + ' %) is below target' + (bajos.length ? '; the checkpoints with the lowest compliance are: ' + bajos.join(', ') : '') + '.'));
@@ -598,16 +597,17 @@
     if (nt.length) B.push({ t: 'tabla', cabecera: true, anchos: [7, 2], filas: [[T('Novedad de portería', 'Gate exception'), { t: T('Registros', 'Records'), align: 'right' }]].concat(nt.map(function (x) { return [x.k, { t: n0(x.n), align: 'right' }]; })) });
     // 3. Rondas
     B.push({ t: 'h', texto: T('Rondas de seguridad', 'Security patrols') });
-    B.push({ t: 'kpis', cols: 4, items: [[n0(c.rondasT.length), T('Rondas (turnos y días)', 'Patrols (shifts and days)')], [n0(c.pts.length), T('Puntos de control activos', 'Active checkpoints')],
-      [n0(c.rondas.length - c.reportes), T('Marcaciones en puntos', 'Checkpoint check-ins')], [n0(c.sinQR), T('Sin lectura de QR', 'Without QR read'), c.sinQR ? 'mal' : ''],
-      [n0(c.fotos), T('Fotografías del lugar y de novedades', 'Place and incident photographs')], [n0(c.reportes), T('Reportes de novedad sin punto', 'Incident reports outside checkpoints')],
+    B.push({ t: 'kpis', cols: 4, items: [[n0(c.rondasT.length), T('Turnos de ronda', 'Patrol shifts')], [n0(c.pts.length), T('Puntos de control activos', 'Active checkpoints')],
+      [n0(c.rondas.length - c.reportes - c.sup), T('Marcaciones del rondero', 'Patrol guard check-ins')], [n0(c.sup), T('Revistas de supervisión (Director, Analista, Supervisor)', 'Supervisory checks (Director, Analyst, Supervisor)')],
+      [n0(c.sinQR), T('Sin lectura de QR', 'Without QR read'), c.sinQR ? 'mal' : ''],
+      [n0(c.reportes), T('Reportes de novedad sin punto', 'Incident reports outside checkpoints')],
       [c.cumpProm == null ? '—' : c.cumpProm + ' %', T('Cumplimiento promedio', 'Average compliance'), c.cumpProm != null && c.cumpProm < 90 ? 'mal' : ''], [c.rondasPrev.length ? (c.rondas.length >= c.rondasPrev.length ? '+' : '') + Math.round((c.rondas.length - c.rondasPrev.length) / c.rondasPrev.length * 100) + ' %' : '—', T('Marcaciones frente al mes anterior', 'Check-ins vs. previous month')]] });
-    B.push({ t: 'p', texto: T('Cada marcación exige la foto del lugar, tomada en el momento con la cámara de la aplicación (sin galería). El cumplimiento de una ronda es el porcentaje de revistas que cuentan frente a las exigidas por punto (meta y tiempo mínimo entre revistas fijados por la Dirección).',
-      'Each check-in requires a photograph of the place, taken on the spot with the application camera (no gallery). Patrol compliance is the percentage of valid rounds against those required per checkpoint (target and minimum interval set by the Department).') });
+    B.push({ t: 'p', texto: T('Cada marcación exige la foto del lugar, tomada en el momento con la cámara de la aplicación (sin galería). El cumplimiento se exige solo al rondero: es el porcentaje de revistas que cuentan frente a las exigidas por punto en cada turno de ronda (meta y tiempo mínimo entre revistas fijados por la Dirección). Las revistas de supervisión del Director, el Analista y el Supervisor se registran con su foto, pero no cuentan para el cumplimiento.',
+      'Each check-in requires a photograph of the place, taken on the spot with the application camera (no gallery). Compliance applies only to the patrol guard: it is the percentage of valid rounds against those required per checkpoint in each patrol shift (target and minimum interval set by the Department). Supervisory checks by the Director, the Analyst and the Supervisor are recorded with their photo but do not count toward compliance.') });
     if (img('cump')) B.push({ t: 'graf', titulo: T('Cumplimiento promedio de las rondas por día', 'Average patrol compliance per day'), img: img('cump') });
     if (img('puntos')) B.push({ t: 'graf', titulo: T('Marcaciones por punto de control', 'Check-ins per checkpoint'), img: img('puntos') });
-    if (c.porPunto.length) B.push({ t: 'tabla', cabecera: true, anchos: [5, 1.6, 2.2, 1.6], size: 8.5, filas: [[T('Punto de control', 'Checkpoint'), { t: T('Marcaciones', 'Check-ins'), align: 'right' }, { t: T('Rondas con meta cumplida', 'Patrols meeting target'), align: 'right' }, { t: '%', align: 'right' }]]
-      .concat(c.porPunto.map(function (x) { var p = pct(x.cumplidas, x.rondas); return [x.p.Title, { t: n0(x.marcas), align: 'right' }, { t: x.cumplidas + ' / ' + x.rondas, align: 'right' }, { t: x.rondas ? p + ' %' : '—', align: 'right', color: x.rondas && p < 80 ? '#B3261E' : null, b: x.rondas && p < 80 }]; })) });
+    if (c.porPunto.length) B.push({ t: 'tabla', cabecera: true, anchos: [4.2, 1.8, 1.8, 2, 1.2], size: 8.5, filas: [[T('Punto de control', 'Checkpoint'), { t: T('Marcaciones del rondero', 'Patrol guard check-ins'), align: 'right' }, { t: T('Revistas de supervisión', 'Supervisory checks'), align: 'right' }, { t: T('Turnos con meta cumplida', 'Shifts meeting target'), align: 'right' }, { t: '%', align: 'right' }]]
+      .concat(c.porPunto.map(function (x) { var p = pct(x.cumplidas, x.rondas); return [x.p.Title, { t: n0(x.marcas), align: 'right' }, { t: n0(x.sup), align: 'right' }, { t: x.cumplidas + ' / ' + x.rondas, align: 'right' }, { t: x.rondas ? p + ' %' : '—', align: 'right', color: x.rondas && p < 80 ? '#B3261E' : null, b: x.rondas && p < 80 }]; })) });
     // 4. Novedades y verificación
     B.push({ t: 'h', texto: T('Novedades de seguridad y su verificación', 'Security incidents and their verification') });
     if (c.novR.length) {
@@ -722,7 +722,7 @@
       vista.replaceChildren(
         parcial ? h('div', { class: 'banner warn' }, AP.icon('clock', 18), h('span', null, 'El mes aún no termina: el informe llega hasta ' + U.fDateTime(d.hasta) + '. Lo ideal es generarlo el último día del mes, al final de la jornada, o al día siguiente.')) : null,
         h('div', { class: 'kpis' }, kpi(n0(c.ing.length), 'Ingresos permitidos', 'brand'), kpi(n0(c.personas), 'Personas distintas'), kpi(n0(c.negados.length), 'Ingresos negados', c.negados.length ? 'deny' : ''),
-          kpi(n0(c.nov.length), 'Novedades de portería', c.nov.length ? 'warn' : ''), kpi(n0(c.rondas.length), 'Marcaciones de ronda'), kpi(c.cumpProm == null ? '—' : c.cumpProm + ' %', 'Cumplimiento promedio de rondas', c.cumpProm != null && c.cumpProm < 90 ? 'warn' : 'ok'),
+          kpi(n0(c.nov.length), 'Novedades de portería', c.nov.length ? 'warn' : ''), kpi(n0(c.rondas.length - c.reportes - c.sup), 'Marcaciones del rondero'), kpi(n0(c.sup), 'Revistas de supervisión'), kpi(c.cumpProm == null ? '—' : c.cumpProm + ' %', 'Cumplimiento promedio de rondas', c.cumpProm != null && c.cumpProm < 90 ? 'warn' : 'ok'),
           kpi(n0(c.novR.length), 'Novedades de ronda', c.novR.length - c.verif ? 'warn' : ''), kpi(n0(c.verif) + ' / ' + n0(c.novR.length), 'Novedades verificadas')),
         im('dia', 'Ingresos por día, frente al mes anterior'), im('cats', 'Ingresos por categoría'), im('hora', 'Ingresos por hora del día'),
         im('cump', 'Cumplimiento promedio de las rondas por día'), im('puntos', 'Marcaciones por punto de control'), im('novTipo', 'Novedades de ronda por tipo'),

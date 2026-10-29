@@ -992,7 +992,7 @@
   // al leer el QR de la persona, y el regreso también desde "Elementos" en portería. La persona recibe aviso y recordatorios
   // por WhatsApp o correo.
   AP.route('/consola/elementos', function (qs) {
-    if (!guard('ver')) return;
+    if (!AP.Session.consulta()) { AP.go('/'); return; }
     var E = AP.Elem;
     var tab = qs.t || 'pendientes';
     var content = h('div', { class: 'stack' });

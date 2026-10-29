@@ -548,6 +548,17 @@
     return { num: p ? AP.waNum(p.Telefono) : '', texto: texto, persona: p, nombre: nombre };
   };
 
+  // Motivos de permiso que revelan datos de salud o de la vida íntima (citas de salud, maternidad, paternidad): en los
+  // perfiles de solo consulta (Analista y Supervisor) se muestran como reservados (dato sensible, art. 5 Ley 1581 de 2012)
+  AP.motivoReservado = function (motivo) {
+    var m = (AP.CAT.motivosPermiso || []).find(function (x) { return x.k === motivo; });
+    return /salud|m[ée]dic|maternidad|paternidad|parental/i.test(motivo || '') || !!(m && /reservada/.test(m.aus || ''));
+  };
+  AP.reservarPermiso = function (p) {
+    if (!p || !AP.Session.can('consulta') || AP.Session.can('ver') || !AP.motivoReservado(p.Motivo)) return p;
+    return Object.assign({}, p, { Motivo: 'Motivo reservado (dato sensible)', Remunerado: '', Detalle: '' });
+  };
+
   AP.pickImage = function (capture) {
     return new Promise(function (res) {
       var i = h('input', { type: 'file', accept: 'image/*', style: { display: 'none' } });

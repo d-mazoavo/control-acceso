@@ -19,6 +19,8 @@
   function nowIso() { return new Date().toISOString(); }
   // Director: consulta y edita · Gobierno Corporativo: solo consulta
   function guard() { if (!AP.Session.can('ver')) { AP.go('/'); return false; } return true; }
+  // Permisos y novedades: también el Analista y el Supervisor, en solo consulta
+  function guardConsulta() { if (!AP.Session.consulta()) { AP.go('/'); return false; } return true; }
   function ED() { return AP.Session.can('editar'); }
   async function personasHabilitadas() {
     var l = await AP.B.listAll('AP_Personas', { exclude: ['Foto', 'Observaciones'] });
@@ -361,7 +363,7 @@
   AP.decidirPermiso = decidirPermiso;
 
   AP.route('/consola/permisos', function (qs) {
-    if (!guard()) return;
+    if (!guardConsulta()) return;
     // Vigentes y programados, o el registro completo de los permisos otorgados en un rango de fechas
     var tab = qs.t === 'historial' || qs.t === 'registro' ? 'registro' : 'vigentes';
     var content = h('div', { class: 'stack' });
@@ -423,14 +425,14 @@
       try {
         if (tab === 'vigentes') {
           var todos = await AP.B.listRange('AP_Permisos', 'Hasta', U.addDays(new Date(), -1), null);
-          base = todos.filter(function (p) { return p.Estado !== 'Anulado' && p.Estado !== 'Rechazado' && new Date(p.Hasta).getTime() >= ahora; });
+          base = todos.filter(function (p) { return p.Estado !== 'Anulado' && p.Estado !== 'Rechazado' && new Date(p.Hasta).getTime() >= ahora; }).map(AP.reservarPermiso);
         } else {
           var a = U.fromLocal(desde.value, '00:00'), b = U.fromLocal(hasta.value, '23:59');
           if (!a || !b || b < a) { tbox.replaceChildren(); return AP.toast('Revise el rango de fechas.', 'warn'); }
           if ((b - a) / 86400000 > 400) { tbox.replaceChildren(); return AP.toast('Consulte máximo 400 días por vez.', 'warn'); }
           // Permisos cuya vigencia toca el rango: terminan después del inicio y empiezan antes del fin
           var l = await AP.B.listRange('AP_Permisos', 'Hasta', a, U.addDays(new Date(), 400));
-          base = l.filter(function (p) { return new Date(p.Desde).getTime() <= b.getTime() + 59999; });
+          base = l.filter(function (p) { return new Date(p.Desde).getTime() <= b.getTime() + 59999; }).map(AP.reservarPermiso);
         }
         base.sort(function (x, y) { return x.Desde < y.Desde ? 1 : -1; });
         pintarP();
@@ -463,7 +465,7 @@
 
   // =================== NOVEDADES ===================
   AP.route('/consola/novedades', function (qs) {
-    if (!guard()) return;
+    if (!guardConsulta()) return;
     var tab = qs.t || 'sin';
     var content = h('div', { class: 'stack' }, AP.spinner('Cargando…'));
     AP.consolaShell('/consola/novedades', 'Novedades por verificar', content);
