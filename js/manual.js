@@ -11,8 +11,8 @@
   AP.MANUAL = {
     titulo: 'Instructivo de uso de la aplicación Control de Acceso',
     codigo: 'Por asignar (Dirección de Calidad)',
-    version: '11',
-    fecha: '2026-10-29',
+    version: '12',
+    fecha: '2026-10-30',
     appVersion: '1.0.0',
     secciones: [
       { id: 'objetivo', titulo: 'Objetivo', roles: ['todos'], bloques: [
@@ -117,7 +117,7 @@
         ] }
       ] },
       { id: 'rondas', titulo: 'Rondas de seguridad (rondero y revistas de supervisión)', roles: ['Rondero', 'Administrador', 'Analista', 'Supervisor'], bloques: [
-        { p: 'Pasan ronda el rondero, el Director de Seguridad Integral, el Analista («Pasar ronda» en el menú de la consola) y el Supervisor («Pasar ronda» en la portería). El cumplimiento solo se exige al rondero: su panel muestra las revistas que cuentan sobre las exigidas, puntos completos, revistas pendientes y novedades reportadas, y por cada punto su avance (por ejemplo, 1/3) y desde qué hora cuenta la siguiente revista. Las marcaciones del Director, el Analista y el Supervisor son revistas de supervisión: exigen la foto del lugar y quedan registradas, pero no tienen meta ni cumplimiento.' },
+        { p: 'Pasan ronda el rondero, el Director de Seguridad Integral, el Analista y el Supervisor. El Director y el Analista tienen el botón «Pasar ronda» en el Panel, en Rondas y en el menú de la consola; el Supervisor, el botón «Pasar ronda (revista de supervisión, sin meta)» debajo de «Leer código QR» en la portería. Si no lo ven, actualicen la aplicación (Ctrl+F5 en el computador; en el celular, cerrarla y abrirla de nuevo) y confirmen con el Director que su usuario tenga el perfil Analista o Supervisor. El cumplimiento solo se exige al rondero: su panel muestra las revistas que cuentan sobre las exigidas, puntos completos, revistas pendientes y novedades reportadas, y por cada punto su avance (por ejemplo, 1/3) y desde qué hora cuenta la siguiente revista. Las marcaciones del Director, el Analista y el Supervisor son revistas de supervisión: exigen la foto del lugar y quedan registradas, pero no tienen meta ni cumplimiento.' },
         { ol: [
           'Oprima «Marcar punto de control» y lea el QR fijado en el punto.',
           'Se abre la cámara: tome la foto del lugar (obligatoria) y oprima «Usar esta foto». Sin esa foto no se puede registrar la marcación.',
@@ -316,7 +316,8 @@
       { version: '08', fecha: '2026-10-28', descripcion: 'Foto obligatoria del lugar en cada marcación de ronda, tomada en el momento con la cámara de la aplicación (sin galería), con fecha, hora, lugar y usuario impresos; «Reportar novedad» fuera de los puntos de control; el Director, el Analista y el Supervisor también pasan ronda; verificación de las novedades de ronda por el Director e informe de cada novedad en PDF o Word, en español o en inglés, con firma escaneada; informe mensual de seguridad con gráficas; archivo fotográfico mensual y liberación de espacio de las fotos de marcaciones sin novedad.' },
       { version: '09', fecha: '2026-10-28', descripcion: 'El cumplimiento de la ronda solo se exige al rondero: las marcaciones del Director, el Analista y el Supervisor son revistas de supervisión, con foto del lugar y sin meta. El Analista y el Supervisor consultan rondas, elementos, programación del servicio, novedades, planta y permisos (el supervisor desde «Consultas» en la portería), con el motivo de los permisos de salud, maternidad o paternidad reservado. El informe mensual separa las marcaciones del rondero de las revistas de supervisión.' },
       { version: '10', fecha: '2026-10-29', descripcion: 'Talento Humano registra permisos y vacaciones o ausencias de todo el personal propio, tenga o no jefe inmediato, y de los contratistas y demás terceros registra solo la autorización de acceso o la novedad «no asiste» que pide o informa su empleador (a ellos no se les registran permisos laborales ni vacaciones).' },
-      { version: '11', fecha: '2026-10-29', descripcion: 'El perfil del jefe se llama ahora «Jefe con personal a cargo» y sirve para cualquier jefe (de planta, de mantenimiento, de calidad…): cada uno ve y gestiona solo a sus subalternos. Talento Humano y el Director asignan los subalternos con «Asignar subalternos a un jefe», en Talento Humano › Personal.' }
+      { version: '11', fecha: '2026-10-29', descripcion: 'El perfil del jefe se llama ahora «Jefe con personal a cargo» y sirve para cualquier jefe (de planta, de mantenimiento, de calidad…): cada uno ve y gestiona solo a sus subalternos. Talento Humano y el Director asignan los subalternos con «Asignar subalternos a un jefe», en Talento Humano › Personal.' },
+      { version: '12', fecha: '2026-10-30', descripcion: 'Botón «Pasar ronda» más visible para el Director, el Analista y el Supervisor (Panel, Rondas y portería). Sus marcaciones siguen siendo revistas de supervisión, sin meta: solo los ronderos tienen metas y cumplimiento.' }
     ]
   };
 })();
