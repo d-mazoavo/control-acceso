@@ -1,5 +1,5 @@
 AVO PAK S.A.S. — CONTROL DE ACCESO
-Ajuste del 29 de octubre de 2026 (etiqueta de caché b14). La versión de la aplicación sigue siendo 1.0.0. Manual de uso: revisión 11.
+Ajuste del 29 de octubre de 2026 (etiqueta de caché b15). La versión de la aplicación sigue siendo 1.0.0. Manual de uso: revisión 12.
 Hay reglas nuevas de Firebase: se publican una vez en la consola (ver al final). Sin ellas, el Analista y el Supervisor no
 pueden abrir algunas consultas y el Director no puede liberar espacio de fotos.
 
@@ -37,12 +37,16 @@ QUÉ CAMBIA
    el Director los asignan con «Asignar subalternos a un jefe» (Talento Humano › Personal); si se marca personal de
    contratistas, la aplicación advierte el riesgo de subordinación. Los usuarios de jefe que ya existían siguen funcionando
    igual: no hay que volver a crearlos.
+10. Botón «Pasar ronda» visible para el Director y el Analista en el Panel y en Rondas (además del menú), y para el Supervisor
+    debajo de «Leer código QR» en la portería. Sus marcaciones son revistas de supervisión, sin meta: solo los ronderos tienen
+    metas y cumplimiento.
 
 ARCHIVOS QUE CAMBIAN
 index.html, sw.js, LEEME-ACTUALIZACION.txt, css/app.css y, en la carpeta js: camara.js, graficas.js, informes.js y
 views-informes.js (nuevos), vendor/jspdf.umd.min.js (nuevo), views-rondas.js, views-porteria.js, app.js, sync.js, schema.js,
 backend-firebase.js, docx.js, ui.js, views-turno.js, views-consola.js, views-consola2.js, views-horarios.js, views-planta.js,
-views-programacion.js, views-th.js, views-vigilantes.js, views-estadisticas.js, manual.js e i18n-en.js. Ya están publicados en GitHub: no hay que subir nada.
+views-programacion.js, views-th.js, views-vigilantes.js, views-estadisticas.js, views-porteria.js, views-rondas.js, views-consola.js,
+manual.js e i18n-en.js. Ya están publicados en GitHub: no hay que subir nada.
 
 ACTUALIZAR LA APLICACIÓN EN CADA EQUIPO
 - Computador: abra https://d-mazoavo.github.io/control-acceso/ y oprima Ctrl+F5 (o Ctrl+Mayús+R).

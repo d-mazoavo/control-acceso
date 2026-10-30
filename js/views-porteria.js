@@ -84,6 +84,8 @@
     var content = h('div', { class: 'stack' },
       h('a', { class: 'scan-cta', href: '#/escanear' }, h('span', { class: 'scan-ico' }, AP.icon('qr', 44)),
         h('span', null, h('strong', null, AP.t('Leer código QR')), h('small', null, AP.t('Ingreso y salida: siempre con lectura del QR')))),
+      // El supervisor (y el Director) pasan ronda sin salir de la portería: revista de supervisión, sin meta
+      AP.Session.can('rondas') ? h('a', { class: 'btn block', href: '#/rondas' }, AP.icon('route', 20), AP.t('Pasar ronda (revista de supervisión, sin meta)')) : null,
       h('div', { class: 'tiles' },
         tile('search', 'Buscar', 'Por documento o nombre', '/buscar'),
         tile('edit', 'Registro manual', 'No anunciado / sin QR / salidas', '/manual'),
@@ -93,7 +95,6 @@
         tile('users', 'Personas dentro', String(dentro.length) + (AP.Session.can('admin') ? '' : ' · solo consulta'), '/dentro', dentro.length ? 'accent' : ''),
         tile('badge', 'Autoridad', 'Visita de autoridad', '/manual?cat=Autoridad'),
         tile('truck', 'Vehículo de carga', 'Inspección y precintos', '/carga'),
-        AP.Session.can('rondas') ? tile('route', 'Pasar ronda', 'Puntos de control y novedades', '/rondas') : null,
         AP.Session.can('consulta') && !AP.Session.can('consola') ? tile('list', 'Consultas', 'Rondas, novedades, planta, permisos, elementos y programación', '/consola/rondas') : null,
         tile('history', 'Mi turno', AP.Sync.pendingCount() ? AP.Sync.pendingCount() + ' por enviar' : 'Registros del celular', '/turno')),
       solIng,

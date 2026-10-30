@@ -443,8 +443,10 @@
       return h('a', { class: t[0] === tab ? 'on' : '', href: '#/consola/rondas?t=' + t[0] }, t[1]);
     }));
     var box = h('div', { class: 'stack' });
-    AP.consolaShell('/consola/rondas', 'Rondas de seguridad', content,
-      tab === 'puntos' && ED ? h('button', { class: 'btn primary', type: 'button', onclick: function () { editarPunto(null); } }, AP.icon('plus', 18), 'Nuevo punto') : null);
+    AP.consolaShell('/consola/rondas', 'Rondas de seguridad', content, h('div', { class: 'row gap wrap' },
+      // Director, Analista y Supervisor pasan ronda desde aquí (revista de supervisión, sin meta)
+      AP.Session.can('rondas') ? h('a', { class: 'btn' + (tab === 'puntos' && ED ? '' : ' primary'), href: '#/rondas' }, AP.icon('qr', 18), 'Pasar ronda') : null,
+      tab === 'puntos' && ED ? h('button', { class: 'btn primary', type: 'button', onclick: function () { editarPunto(null); } }, AP.icon('plus', 18), 'Nuevo punto') : null));
     content.append(tabs, box);
     if (tab === 'puntos') puntos(); else if (tab === 'marcaciones') marcaciones(); else if (tab === 'novedades') AP.Rondas.tabNovedades(box); else if (tab === 'fotos') AP.Rondas.tabFotos(box); else cumplimientoTurnos();
 

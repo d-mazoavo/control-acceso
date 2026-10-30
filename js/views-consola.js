@@ -94,8 +94,9 @@
   AP.route('/consola/panel', function () {
     if (!guard()) return;
     var content = h('div', { class: 'stack' });
-    AP.consolaShell('/consola/panel', 'Panel de control', content,
-      h('button', { class: 'btn', type: 'button', onclick: function () { AP.render(); } }, AP.icon('sync', 18), 'Actualizar'));
+    AP.consolaShell('/consola/panel', 'Panel de control', content, h('div', { class: 'row gap wrap' },
+      AP.Session.can('rondas') ? h('a', { class: 'btn', href: '#/rondas' }, AP.icon('qr', 18), 'Pasar ronda') : null,
+      h('button', { class: 'btn', type: 'button', onclick: function () { AP.render(); } }, AP.icon('sync', 18), 'Actualizar')));
     load(content, async function () {
       var B = AP.B;
       var hoy0 = U.startOfDayCO();
