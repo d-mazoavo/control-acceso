@@ -1,5 +1,5 @@
 AVO PAK S.A.S. — CONTROL DE ACCESO
-Ajuste del 29 de octubre de 2026 (etiqueta de caché b15). La versión de la aplicación sigue siendo 1.0.0. Manual de uso: revisión 12.
+Ajuste del 31 de octubre de 2026 (etiqueta de caché b16). La versión de la aplicación sigue siendo 1.0.0. Manual de uso: revisión 13.
 Hay reglas nuevas de Firebase: se publican una vez en la consola (ver al final). Sin ellas, el Analista y el Supervisor no
 pueden abrir algunas consultas y el Director no puede liberar espacio de fotos.
 
@@ -40,13 +40,18 @@ QUÉ CAMBIA
 10. Botón «Pasar ronda» visible para el Director y el Analista en el Panel y en Rondas (además del menú), y para el Supervisor
     debajo de «Leer código QR» en la portería. Sus marcaciones son revistas de supervisión, sin meta: solo los ronderos tienen
     metas y cumplimiento.
+11. Llegada muy temprano (más de 30 minutos antes del turno o del horario de acceso): el vigilante ya no puede registrarla
+    como ingreso pendiente. La persona espera en la portería y, desde su hora habilitada, se lee de nuevo su QR; si debe entrar
+    antes, el vigilante envía la solicitud al Director, que la aprueba (se crea un permiso de «Ingreso anticipado») o la
+    rechaza. Si había una solicitud y la persona entra a su hora, la solicitud se cierra sola. Esta regla no requiere
+    publicar reglas nuevas de Firebase.
 
 ARCHIVOS QUE CAMBIAN
 index.html, sw.js, LEEME-ACTUALIZACION.txt, css/app.css y, en la carpeta js: camara.js, graficas.js, informes.js y
 views-informes.js (nuevos), vendor/jspdf.umd.min.js (nuevo), views-rondas.js, views-porteria.js, app.js, sync.js, schema.js,
 backend-firebase.js, docx.js, ui.js, views-turno.js, views-consola.js, views-consola2.js, views-horarios.js, views-planta.js,
 views-programacion.js, views-th.js, views-vigilantes.js, views-estadisticas.js, views-porteria.js, views-rondas.js, views-consola.js,
-manual.js e i18n-en.js. Ya están publicados en GitHub: no hay que subir nada.
+horarios.js, manual.js e i18n-en.js. Ya están publicados en GitHub: no hay que subir nada.
 
 ACTUALIZAR LA APLICACIÓN EN CADA EQUIPO
 - Computador: abra https://d-mazoavo.github.io/control-acceso/ y oprima Ctrl+F5 (o Ctrl+Mayús+R).

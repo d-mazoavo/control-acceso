@@ -11,8 +11,8 @@
   AP.MANUAL = {
     titulo: 'Instructivo de uso de la aplicación Control de Acceso',
     codigo: 'Por asignar (Dirección de Calidad)',
-    version: '12',
-    fecha: '2026-10-30',
+    version: '13',
+    fecha: '2026-10-31',
     appVersion: '1.0.0',
     secciones: [
       { id: 'objetivo', titulo: 'Objetivo', roles: ['todos'], bloques: [
@@ -27,7 +27,7 @@
           ['Credencial o QR', 'Código personal e intransferible de cada persona habilitada o de cada visita aprobada. No contiene datos personales: es un identificador aleatorio.'],
           ['Movimiento', 'Registro de un ingreso, una salida o un ingreso negado. Queda firmado por el servidor con el usuario y la hora, y no se modifica.'],
           ['Novedad', 'Situación que queda señalada para verificación del Director: llegada tardía, ingreso sin QR, salida no autorizada, ingreso en día no programado, entre otras.'],
-          ['Solicitud de ingreso', 'Caso que el vigilante no puede autorizar (llegada tardía desde {pendiente} minutos, fuera de turno, día no programado o de descanso, ausencia registrada por Talento Humano). Decide el Director desde la consola.'],
+          ['Solicitud de ingreso', 'Caso que el vigilante no puede autorizar (llegada tardía desde {pendiente} minutos, llegada más de {antelacion} minutos antes del turno, fuera de turno, día no programado o de descanso, ausencia registrada por Talento Humano). Decide el Director desde la consola.'],
           ['Permiso', 'Autorización registrada para ingresar tarde, salir antes, salir temporalmente o entrar y salir fuera de horario.'],
           ['Ausencia', 'Vacaciones, permiso de día completo, licencia u otra ausencia registrada por Talento Humano.'],
           ['Turno de planta', 'Turno con código, hora de entrada y hora de salida con el que el jefe con personal a cargo programa a su personal a cargo.'],
@@ -87,7 +87,7 @@
         ] },
         { h: 'Reglas de puntualidad (personal con horario o con turno de planta)' },
         { ul: [
-          'El ingreso se habilita desde {antelacion} minutos antes de la hora de entrada. Antes de eso aparece MUY TEMPRANO y el ingreso queda pendiente.',
+          'El ingreso se habilita desde {antelacion} minutos antes de la hora de entrada. Antes de eso aparece MUY TEMPRANO: el vigilante no puede autorizar el ingreso. Lo normal es que la persona espere en la portería y, desde su hora habilitada, se lea de nuevo su QR (si había una solicitud enviada, se cierra sola). Si debe entrar antes, oprima «Enviar a aprobación del Director».',
           'Entre 1 y {pendienteMenos1} minutos tarde: ingreso PENDIENTE de verificación.',
           'Desde {pendiente} minutos tarde, fuera de turno, en un día no programado o de descanso, o con ausencia registrada por Talento Humano: el vigilante NO puede autorizar ni registrar el ingreso como pendiente, y la persona no ingresa mientras el Director no decida. Oprima «Enviar a aprobación del Director» y espere la decisión en la pantalla; puede avisarle por WhatsApp o llamarlo. Si el Director aprueba, oprima «Registrar INGRESO»; si rechaza, «Registrar ingreso negado».',
           'Al operario lo rige la programación semanal del jefe con personal a cargo; a los demás, su horario general. Esto aplica al personal propio, a los contratistas y a toda persona con horario: en un día sin turno o de descanso decide el Director.',
@@ -317,7 +317,8 @@
       { version: '09', fecha: '2026-10-28', descripcion: 'El cumplimiento de la ronda solo se exige al rondero: las marcaciones del Director, el Analista y el Supervisor son revistas de supervisión, con foto del lugar y sin meta. El Analista y el Supervisor consultan rondas, elementos, programación del servicio, novedades, planta y permisos (el supervisor desde «Consultas» en la portería), con el motivo de los permisos de salud, maternidad o paternidad reservado. El informe mensual separa las marcaciones del rondero de las revistas de supervisión.' },
       { version: '10', fecha: '2026-10-29', descripcion: 'Talento Humano registra permisos y vacaciones o ausencias de todo el personal propio, tenga o no jefe inmediato, y de los contratistas y demás terceros registra solo la autorización de acceso o la novedad «no asiste» que pide o informa su empleador (a ellos no se les registran permisos laborales ni vacaciones).' },
       { version: '11', fecha: '2026-10-29', descripcion: 'El perfil del jefe se llama ahora «Jefe con personal a cargo» y sirve para cualquier jefe (de planta, de mantenimiento, de calidad…): cada uno ve y gestiona solo a sus subalternos. Talento Humano y el Director asignan los subalternos con «Asignar subalternos a un jefe», en Talento Humano › Personal.' },
-      { version: '12', fecha: '2026-10-30', descripcion: 'Botón «Pasar ronda» más visible para el Director, el Analista y el Supervisor (Panel, Rondas y portería). Sus marcaciones siguen siendo revistas de supervisión, sin meta: solo los ronderos tienen metas y cumplimiento.' }
+      { version: '12', fecha: '2026-10-30', descripcion: 'Botón «Pasar ronda» más visible para el Director, el Analista y el Supervisor (Panel, Rondas y portería). Sus marcaciones siguen siendo revistas de supervisión, sin meta: solo los ronderos tienen metas y cumplimiento.' },
+      { version: '13', fecha: '2026-10-31', descripcion: 'La llegada muy temprano (más de 30 minutos antes del turno o del horario de acceso) ya no se puede registrar como ingreso pendiente: la persona espera su hora habilitada o el vigilante envía la solicitud al Director, que la aprueba (permiso de «Ingreso anticipado») o la rechaza. Si la persona espera y entra a su hora, la solicitud se cierra sola. Nuevo tipo de permiso «Ingreso anticipado».' }
     ]
   };
 })();
