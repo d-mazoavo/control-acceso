@@ -47,7 +47,7 @@
         content.replaceChildren(
           h('div', { class: 'banner info' }, AP.icon('clock', 18), h('span', null,
             'Al leer el QR, la aplicación compara la hora con el turno programado de la persona: el ingreso se habilita desde ' + AP.Horario.cfg().minutosAntelacionTurno +
-            ' minutos antes de la hora de entrada (antes de eso se alerta MUY TEMPRANO y queda PENDIENTE); a tiempo hasta la hora de entrada; ' + AP.Horario.cfg().minutosPendiente +
+            ' minutos antes de la hora de entrada (antes de eso aparece MUY TEMPRANO: la persona espera su hora o el vigilante le envía la solicitud a usted); a tiempo hasta la hora de entrada; ' + AP.Horario.cfg().minutosPendiente +
             ' minutos o más después, el ingreso queda DENEGADO hasta que usted verifique; entre 1 y ' + (AP.Horario.cfg().minutosPendiente - 1) + ' minutos queda PENDIENTE. ' +
             'La salida antes de la hora de fin exige un permiso suyo; sin él se muestra como NO AUTORIZADA (sin retención física). Las personas sin horario registrado no tienen estas reglas.')),
           h('div', { class: 'banner info' }, AP.icon('calendar', 18), h('span', null,
@@ -316,7 +316,7 @@
               campoDesde, hastaCampo, ayudaSin,
               opt.jefe ? null : AP.field('Autorizado por *', autoriza, propio ? 'Por defecto, usted. Puede elegir a otro autorizador de la lista.' : 'Búsquelo en la lista de personas registradas (jefe inmediato, Talento Humano, etc.).', 'span2'),
               AP.field('Detalle', f.Detalle, null, 'span2')),
-            h('p', { class: 'help' }, 'Ingreso tardío: acepta el ingreso aunque pase la hora. Salida anticipada: la salida se muestra como AUTORIZADA desde la hora indicada (sin hora final). Salida temporal: AUTORIZADA dentro del lapso y debe regresar. Ingreso y salida fuera de horario: ambas. ' +
+            h('p', { class: 'help' }, 'Ingreso tardío: acepta el ingreso aunque pase la hora. Ingreso anticipado: acepta el ingreso antes de la hora habilitada (la salida se rige por su turno). Salida anticipada: la salida se muestra como AUTORIZADA desde la hora indicada (sin hora final). Salida temporal: AUTORIZADA dentro del lapso y debe regresar. Ingreso y salida fuera de horario: ambas. ' +
               'No registre diagnósticos ni datos de salud: son datos sensibles (art. 5 Ley 1581 de 2012); basta indicar que el permiso fue autorizado.'),
             h('div', { class: 'row gap wrap end' }, h('button', { class: 'btn', type: 'button', onclick: function () { close(); } }, 'Cancelar'), guardar));
         }
@@ -571,9 +571,9 @@
     }
   });
   // =================== SOLICITUDES DE INGRESO (decide el Director) ===================
-  // Llegadas tardías, ingresos fuera de turno y días no programados (cualquier persona): el vigilante no puede autorizarlos;
+  // Llegadas tardías, llegadas muy temprano, ingresos fuera de turno y días no programados (cualquier persona): el vigilante no puede autorizarlos;
   // envía la solicitud y el Director la aprueba (se crea un permiso de corta duración) o la rechaza, con justificación.
-  var TIPO_PERMISO = { 'Llegada tardía': 'Ingreso tardío', 'Fuera de turno': 'Ingreso y salida fuera de horario', 'Día no programado': 'Ingreso y salida fuera de horario', 'Ausencia registrada': 'Ingreso y salida fuera de horario' };
+  var TIPO_PERMISO = { 'Llegada tardía': 'Ingreso tardío', 'Llegada muy temprano': 'Ingreso anticipado', 'Fuera de turno': 'Ingreso y salida fuera de horario', 'Día no programado': 'Ingreso y salida fuera de horario', 'Ausencia registrada': 'Ingreso y salida fuera de horario' };
   function cargoDirector() { return (AP.Session.user.perfil && AP.Session.user.perfil.Cargo) || 'Director de Seguridad Integral'; }
   AP.solicitudesPendientes = function () { return (AP.Sync.solicitudes || []).filter(function (x) { return x.Estado === 'Pendiente'; }); };
 
@@ -629,7 +629,7 @@
         return h('a', { class: x[0] === tab ? 'on' : '', href: '#/consola/solicitudes?t=' + x[0] }, x[1]);
       }));
       content.replaceChildren(
-        h('div', { class: 'banner info' }, AP.icon('shield', 18), h('span', null, 'Aquí llegan, desde portería, las llegadas tardías (desde ' + AP.Horario.cfg().minutosPendiente + ' minutos), los ingresos fuera de turno, quienes llegan en un día sin turno programado o de descanso y quienes llegan durante una ausencia registrada por Talento Humano. ' +
+        h('div', { class: 'banner info' }, AP.icon('shield', 18), h('span', null, 'Aquí llegan, desde portería, las llegadas tardías (desde ' + AP.Horario.cfg().minutosPendiente + ' minutos), las llegadas muy temprano (más de ' + AP.Horario.cfg().minutosAntelacionTurno + ' minutos antes del turno) que no pueden esperar, los ingresos fuera de turno, quienes llegan en un día sin turno programado o de descanso y quienes llegan durante una ausencia registrada por Talento Humano. ' +
           'El vigilante no puede autorizarlos: espera su decisión. Al aprobar se registra un permiso a su nombre; al rechazar, el vigilante registra el ingreso negado con su justificación.')),
         tabs,
         h('div', { class: 'filters' }, qs2, AP.btnExcel(function () {
@@ -679,14 +679,15 @@
             ant.textContent = mias.length ? 'En los últimos 30 días esta persona tuvo ' + mias.length + ' solicitud(es) más' + (rech ? ' (' + rech + ' rechazada(s))' : '') + '.' : 'Sin otras solicitudes en los últimos 30 días.';
           }).catch(function () { ant.textContent = ''; });
           var dec = AP.segmented('Decision', [{ value: 'Aprobada', label: 'Aprobar', icon: 'check', cls: 'in' }, { value: 'Rechazada', label: 'Rechazar', icon: 'x', cls: 'deny' }], si ? 'Aprobada' : 'Rechazada', function () { pintarDec(); });
-          var tarde = x.Tipo === 'Llegada tardía';
+          var tarde = x.Tipo === 'Llegada tardía' || x.Tipo === 'Llegada muy temprano';
+          var tipoPerm = TIPO_PERMISO[x.Tipo] || 'Ingreso tardío';
           var ahora = new Date();
           var def = tarde ? new Date(ahora.getTime() + 60 * 60000) : (function () { var b = U.fromLocal(U.ymd(ahora), '18:00'); return b.getTime() - ahora.getTime() < 2 * 3600000 ? new Date(ahora.getTime() + 8 * 3600000) : b; })();
           var hasta = AP.input('hasta', U.toLocalInput(def), { type: 'datetime-local' });
           var just = AP.textarea('Justificacion', '', { rows: 3 });
           var vigBox = h('div', { class: 'stack sm' },
             AP.field(tarde ? 'El vigilante puede registrar el ingreso hasta *' : 'Autorizado a ingresar y salir hasta *', hasta,
-              tarde ? 'Se registra un permiso de «Ingreso tardío». La salida se rige por su turno.' : 'Se registra un permiso de «Ingreso y salida fuera de horario» hasta esa hora.'),
+              tarde ? 'Se registra un permiso de «' + tipoPerm + '». La salida se rige por su turno.' : 'Se registra un permiso de «Ingreso y salida fuera de horario» hasta esa hora.'),
             h('div', { class: 'presets' }, [['1 hora', 60], ['4 horas', 240], ['Hasta las 18:00', '18:00'], ['Hasta las 23:59', '23:59']].map(function (pr) {
               return h('button', { class: 'btn small', type: 'button', onclick: function () {
                 var b = typeof pr[1] === 'number' ? new Date(Date.now() + pr[1] * 60000) : U.fromLocal(U.ymd(), pr[1]);
@@ -721,7 +722,7 @@
                 var hitSol = AP.Sync.byToken && AP.Sync.byToken.get(x.Token);
                 var perSol = hitSol && hitSol.tipo === 'persona' ? hitSol.rec : {};
                 var perm = await AP.B.create('AP_Permisos', {
-                  Title: x.Title, Token: x.Token, NumDoc: x.NumDoc, Tipo: TIPO_PERMISO[x.Tipo] || 'Ingreso tardío', Desde: desde.toISOString(), Hasta: b.toISOString(), Estado: 'Vigente',
+                  Title: x.Title, Token: x.Token, NumDoc: x.NumDoc, Tipo: tipoPerm, Desde: desde.toISOString(), Hasta: b.toISOString(), Estado: 'Vigente',
                   Detalle: 'Aprobación de solicitud de portería (' + (x.Novedad || x.Tipo) + '). ' + j,
                   AutorizadoPor: yo.nombre + ' — ' + cargoDirector(), AutorizadoPorDoc: (yo.perfil && yo.perfil.NumDoc) || '', AutorizadoPorCargo: cargoDirector(), SolicitudId: x.id,
                   // Persona del permiso: Talento Humano y su jefe inmediato lo consultan

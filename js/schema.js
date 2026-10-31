@@ -281,7 +281,7 @@
     // dentro de los días y horas habilitados (conductores, contratistas), sin medir llegada tarde ni salida anticipada.
     modalidadesHorario: [['Turno', 'Turno con control de puntualidad y salida'], ['Libre', 'Acceso libre dentro del horario']],
     motivosCierreSesion: ['Se retiró sin cerrar el turno', 'Cambio de turno: el relevo ya ingresó', 'Celular perdido, dañado o en poder de otra persona', 'Otro'],
-    tiposPermiso: ['Ingreso tardío', 'Salida anticipada', 'Salida temporal (cita o diligencia)', 'Ingreso y salida fuera de horario'],
+    tiposPermiso: ['Ingreso tardío', 'Ingreso anticipado', 'Salida anticipada', 'Salida temporal (cita o diligencia)', 'Ingreso y salida fuera de horario'],
     // Permisos y licencias de uno o más días (no actúan en portería: al aprobarlos Talento Humano se crea la ausencia correspondiente)
     tipoDiaCompleto: 'Permiso o licencia de día completo',
     // Estados de un permiso solicitado por el jefe inmediato: queda «Por autorizar» hasta que Recursos Humanos decide

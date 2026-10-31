@@ -161,7 +161,7 @@
     if (p.Hasta) return new Date(p.Hasta);
     return U.fromLocal(U.ymd(new Date(p.Desde)), '23:59');
   };
-  var TIPOS_ENTRADA = ['Ingreso tardío', 'Ingreso y salida fuera de horario'];
+  var TIPOS_ENTRADA = ['Ingreso tardío', 'Ingreso anticipado', 'Ingreso y salida fuera de horario'];
   H.TIPOS_ENTRADA = TIPOS_ENTRADA;
   var TIPOS_SALIDA = ['Salida anticipada', 'Salida temporal (cita o diligencia)', 'Ingreso y salida fuera de horario'];
 
@@ -229,9 +229,11 @@
         return { nivel: 'deny', sinExcepcion: true, aprobacionDirector: true, tipoSolicitud: 'Fuera de turno', novedad: 'Ingreso fuera del horario de acceso', etiqueta: 'FUERA DE SU HORARIO DE ACCESO — REQUIERE APROBACIÓN DEL DIRECTOR',
           detalle: 'Su horario de acceso era ' + info + ' y ya terminó. Envíe la solicitud al Director de Seguridad Integral, que aprueba o rechaza el ingreso.', horarioInfo: info };
       }
+      // Antes de la ventana habilitada: el vigilante no autoriza; la persona espera su hora o decide el Director
       var faltan = Math.floor(j.start.getTime() / 60000) - Math.floor(tL / 60000);
-      return { nivel: 'warn', registrable: true, novedad: 'Ingreso antes del horario de acceso (' + faltan + ' min antes)', etiqueta: 'ANTES DE SU HORARIO — FALTAN ' + faltan + ' MIN',
-        detalle: 'Su horario de acceso inicia a las ' + j.rec.HoraEntrada + ' y el ingreso se habilita desde las ' + hm(new Date(j.start.getTime() - antL)) + '. Si lo deja ingresar, queda como novedad pendiente de verificación por el Director de Seguridad Integral.', horarioInfo: info };
+      return { nivel: 'deny', sinExcepcion: true, aprobacionDirector: true, tipoSolicitud: 'Llegada muy temprano', novedad: 'Ingreso antes del horario de acceso (' + faltan + ' min antes)',
+        etiqueta: 'ANTES DE SU HORARIO (FALTAN ' + faltan + ' MIN) — REQUIERE APROBACIÓN DEL DIRECTOR',
+        detalle: 'Su horario de acceso inicia a las ' + j.rec.HoraEntrada + ' y el ingreso se habilita desde las ' + hm(new Date(j.start.getTime() - antL)) + '. El vigilante no puede autorizarlo antes: la persona espera y, desde esa hora, se lee de nuevo su QR. Si necesita entrar antes, envíe la solicitud al Director de Seguridad Integral.', horarioInfo: info };
     }
     // Reingreso dentro de la misma jornada (salió y regresa): no se mide como llegada tardía
     if (ult && ult.Sentido === 'Salida' && new Date(ult.FechaHora).getTime() >= j.desde.getTime() - c.minutosAntelacionTurno * 60000 && now <= j.end) {
@@ -250,11 +252,13 @@
         detalle: 'Su turno era ' + info + ' y ya terminó. Envíe la solicitud al Director de Seguridad Integral, que aprueba o rechaza el ingreso.', horarioInfo: info };
     }
     if (delta <= 0) {
-      // Antes de la ventana habilitada (por defecto, 30 min antes de la entrada): alerta de llegada muy temprano
+      // Antes de la ventana habilitada (por defecto, 30 min antes de la entrada): el vigilante no puede autorizar el ingreso.
+      // La persona espera su hora (se lee de nuevo el QR) o, si debe entrar antes, decide el Director.
       if (ant > c.minutosAntelacionTurno) {
         var desde = new Date(j.desde.getTime() - c.minutosAntelacionTurno * 60000);
-        return { nivel: 'warn', registrable: true, novedad: 'Llegada muy temprano (' + ant + ' min antes del turno)', etiqueta: 'MUY TEMPRANO — FALTAN ' + ant + ' MIN PARA SU TURNO',
-          detalle: 'Su turno inicia a las ' + (j.desde < j.start ? hm(j.desde) + ' (horas extra)' : j.rec.HoraEntrada) + ' y el ingreso se habilita desde las ' + hm(desde) + '. Si lo deja ingresar, queda como novedad pendiente de verificación por el Director de Seguridad Integral.', horarioInfo: info };
+        return { nivel: 'deny', sinExcepcion: true, aprobacionDirector: true, tipoSolicitud: 'Llegada muy temprano', novedad: 'Llegada muy temprano (' + ant + ' min antes del turno)',
+          etiqueta: 'MUY TEMPRANO (FALTAN ' + ant + ' MIN) — REQUIERE APROBACIÓN DEL DIRECTOR',
+          detalle: 'Su turno inicia a las ' + (j.desde < j.start ? hm(j.desde) + ' (horas extra)' : j.rec.HoraEntrada) + ' y el ingreso se habilita desde las ' + hm(desde) + '. El vigilante no puede autorizarlo antes: la persona espera y, desde esa hora, se lee de nuevo su QR. Si necesita entrar antes, envíe la solicitud al Director de Seguridad Integral.', horarioInfo: info };
       }
       return { nivel: 'ok', etiqueta: 'HABILITADO — A TIEMPO', detalle: 'Turno ' + info + '.', horarioInfo: info };
     }

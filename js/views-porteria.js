@@ -26,6 +26,17 @@
   }
   AP.registrarMovimiento = registrar;
 
+  // Llegada muy temprano: si la persona esperó su hora y ya ingresó leyendo su QR, la solicitud pendiente se cierra sola
+  // y el Director ya no la ve por decidir (si no hay señal, queda pendiente y el Director la puede rechazar o dejar así)
+  var TIPO_TEMPRANO = 'Llegada muy temprano';
+  function cerrarSolicitudesTempranas(token) {
+    var hoy = U.ymd(), u = user();
+    (AP.Sync.solicitudes || []).filter(function (x) { return x.Token === token && x.Estado === 'Pendiente' && x.Tipo === TIPO_TEMPRANO && U.ymd(x.FechaSolicitud) === hoy; }).forEach(function (x) {
+      var obs = (x.Observaciones ? x.Observaciones + '\n' : '') + 'Cerrada en portería por ' + u.nombre + ' el ' + U.fDateTime(new Date()) + ': llegó la hora habilitada y la persona ingresó leyendo su QR, sin necesidad de aprobación.';
+      AP.B.update('AP_Solicitudes', x.id, { Estado: 'Cancelada', Observaciones: obs }).then(function () { x.Estado = 'Cancelada'; x.Observaciones = obs; }).catch(function () { /* sin señal: queda pendiente */ });
+    });
+  }
+
   function flash(ok, title, sub) {
     U.beep(ok ? 'ok' : 'deny');
     var el = h('div', { class: 'flash ' + (ok ? 'ok' : 'deny'), role: 'alert' }, AP.icon(ok ? 'check' : 'x', 72), h('strong', null, title), sub ? h('span', null, sub) : null);
@@ -64,7 +75,7 @@
         }))));
     }
     pintarSolicitudes();
-    // Solicitudes de ingreso enviadas hoy al Director (llegadas tardías, fuera de turno, día no programado)
+    // Solicitudes de ingreso enviadas hoy al Director (llegadas tardías o muy temprano, fuera de turno, día no programado)
     var solIng = h('div');
     function pintarSolIng() {
       var hoy = U.ymd();
@@ -463,7 +474,7 @@
       } else if (r.nivel === 'ok') {
         AP.add(acciones, h('button', { class: 'btn big block go-in', type: 'button', onclick: function () { guardar('Ingreso', 'Permitido'); } }, AP.icon('check', 22), 'Registrar INGRESO'));
       } else if (r.aprobacionDirector && r.token && rec.id) {
-        // Llegada tardía, fuera de turno, día no programado o ausencia registrada: decide el Director
+        // Llegada tardía o muy temprano, fuera de turno, día no programado o ausencia registrada: decide el Director
         var abierta = AP.solicitudAbierta(r.token);
         if (abierta) {
           AP.add(acciones,
@@ -472,7 +483,9 @@
             llamar);
         } else {
           AP.add(acciones,
-            h('p', { class: 'note' }, AP.TX.aprobacionDirector || 'Este ingreso no lo puede autorizar el vigilante. Envíe la solicitud: el Director de Seguridad Integral la aprueba o la rechaza y usted ve la decisión en esta pantalla.'),
+            h('p', { class: 'note' }, r.tipoSolicitud === TIPO_TEMPRANO
+              ? 'Este ingreso no lo puede autorizar el vigilante. Lo normal es que la persona espere en la portería hasta su hora habilitada y entonces se lea de nuevo su QR. Envíe la solicitud solo si debe entrar antes (por ejemplo, porque se lo pidió su jefe).'
+              : AP.TX.aprobacionDirector || 'Este ingreso no lo puede autorizar el vigilante. Envíe la solicitud: el Director de Seguridad Integral la aprueba o la rechaza y usted ve la decisión en esta pantalla.'),
             h('button', { class: 'btn big block primary', type: 'button', onclick: function (e) { enviarSolicitud(e.currentTarget); } }, AP.icon('inbox', 22), 'Enviar a aprobación del Director'),
             llamar);
         }
@@ -599,6 +612,7 @@
         Object.assign(f, ex);
         var mov = await registrar(f);
         if (AP.Notif) AP.Notif.movimiento(mov);
+        if (sent === 'Ingreso' && resultado === 'Permitido' && r.token && !r.solicitud) cerrarSolicitudesTempranas(r.token);
         await flash(resultado === 'Permitido', resultado === 'Negado' ? 'INGRESO NEGADO' : sent === 'Ingreso' ? 'INGRESO REGISTRADO' : 'SALIDA REGISTRADA', rec.Title);
         AP.State.result = null;
         if (esVisita && sent === 'Ingreso' && resultado === 'Permitido' && rec.Anfitrion && location.hash.indexOf('#/resultado') === 0) { avisarAnfitrion(mov); return; }
@@ -1017,7 +1031,13 @@
       var usada = AP.solicitudUsada(x);
       var vence = x.Estado === 'Aprobada' && x.VigenteHasta && new Date(x.VigenteHasta) <= new Date();
       var v;
-      if (x.Estado === 'Pendiente') v = ['warn', 'clock', 'ESPERANDO DECISIÓN DEL DIRECTOR', 'La persona NO ingresa todavía. Esta pantalla se actualiza sola cuando el Director decida.'];
+      // Llegada muy temprano: si ya llegó la hora habilitada, la persona entra leyendo de nuevo su QR (sin aprobación)
+      var temprano = x.Estado === 'Pendiente' && x.Tipo === TIPO_TEMPRANO;
+      var evT = temprano ? AP.Access.evaluate(x.Token) : null;
+      var yaHabilitado = !!(evT && evT.nivel === 'ok' && evT.sentido === 'Ingreso');
+      if (yaHabilitado) v = ['ok', 'check', 'YA SE HABILITÓ SU INGRESO', 'Llegó la hora habilitada: lea de nuevo el QR de la persona y registre el ingreso. Esta solicitud se cierra sola.'];
+      else if (x.Estado === 'Pendiente') v = ['warn', 'clock', 'ESPERANDO DECISIÓN DEL DIRECTOR', 'La persona NO ingresa todavía. Esta pantalla se actualiza sola cuando el Director decida.' +
+        (temprano ? ' Si la persona espera a su hora habilitada, desde esa hora lea de nuevo su QR: el ingreso se registra normal y esta solicitud se cierra sola.' : '')];
       else if (x.Estado === 'Aprobada') v = usada ? ['ok', 'check', 'INGRESO YA REGISTRADO', 'El ingreso aprobado ya quedó registrado.']
         : vence ? ['deny', 'x', 'APROBACIÓN VENCIDA', 'La aprobación permitía registrar el ingreso hasta las ' + U.fTime(x.VigenteHasta) + '. Comuníquese con el Director.']
           : ['ok', 'check', 'INGRESO APROBADO POR EL DIRECTOR', 'Registre el ingreso' + (x.VigenteHasta ? ' antes de las ' + U.fTime(x.VigenteHasta) : '') + '.'];
@@ -1033,7 +1053,9 @@
         x.Estado !== 'Pendiente' && x.FechaDecision ? kv('Decisión', U.fDateTime(x.FechaDecision) + (x.DecididoPorNombre ? ' · ' + x.DecididoPorNombre : '')) : null,
         x.Estado !== 'Pendiente' ? kv(x.Estado === 'Rechazada' ? 'Motivo del rechazo' : 'Justificación', x.Justificacion) : null);
       var acciones = h('div', { class: 'stack sm' });
-      if (x.Estado === 'Pendiente') {
+      if (yaHabilitado) {
+        AP.add(acciones, h('a', { class: 'btn big block go-in', href: '#/escanear' }, AP.icon('qr', 22), 'Leer de nuevo el QR'));
+      } else if (x.Estado === 'Pendiente') {
         AP.add(acciones,
           h('a', { class: 'btn block', href: AP.waLink(AP.WA_DIRECTOR, textoSolDirector(x)), target: '_blank', rel: 'noopener' }, AP.icon('whatsapp', 18), 'Avisar al Director por WhatsApp'),
           (AP.CFG.telefonos || {}).director ? h('a', { class: 'btn block', href: 'tel:' + AP.CFG.telefonos.director }, AP.icon('phone', 18), 'Llamar al Director') : null,
